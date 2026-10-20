@@ -1,23 +1,14 @@
 "use client"
 
 import { useEffect, useRef } from "react"
-import { drawRadiConcepts } from "@/characters/radiConcepts"
+import { drawOpeningScene } from "@/scenes/openingScene"
 import { useFilmStore } from "@/store/film"
 
-const paintConcepts = (canvas: HTMLCanvasElement) => {
-  const context = canvas.getContext("2d")
-  if (!context) return
-
+const resizeCanvas = (canvas: HTMLCanvasElement, context: CanvasRenderingContext2D) => {
   const ratio = window.devicePixelRatio || 1
-  const width = window.innerWidth
-  const height = window.innerHeight
-
-  canvas.width = Math.floor(width * ratio)
-  canvas.height = Math.floor(height * ratio)
+  canvas.width = Math.floor(window.innerWidth * ratio)
+  canvas.height = Math.floor(window.innerHeight * ratio)
   context.setTransform(ratio, 0, 0, ratio, 0, 0)
-  context.fillStyle = "#000000"
-  context.fillRect(0, 0, width, height)
-  drawRadiConcepts(context, width, height)
 }
 
 const readScrollProgress = () => {
@@ -31,22 +22,29 @@ export const FilmCanvas = () => {
 
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas) return
+    const context = canvas?.getContext("2d")
+    if (!canvas || !context) return
 
-    const draw = () => paintConcepts(canvas)
+    let animationFrameId = 0
+    const drawFrame = (timeMilliseconds: number) => {
+      drawOpeningScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000)
+      animationFrameId = requestAnimationFrame(drawFrame)
+    }
     const updateProgress = () => {
       useFilmStore.getState().setProgress(readScrollProgress())
     }
     const onResize = () => {
-      draw()
+      resizeCanvas(canvas, context)
       updateProgress()
     }
 
-    draw()
+    resizeCanvas(canvas, context)
     updateProgress()
+    animationFrameId = requestAnimationFrame(drawFrame)
     window.addEventListener("resize", onResize)
     window.addEventListener("scroll", updateProgress, { passive: true })
     return () => {
+      cancelAnimationFrame(animationFrameId)
       window.removeEventListener("resize", onResize)
       window.removeEventListener("scroll", updateProgress)
     }
