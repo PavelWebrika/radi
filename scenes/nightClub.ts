@@ -100,7 +100,7 @@ const CLUB_BLOCKS: ClubBlock[] = [
   },
 ]
 
-const partyColor = (index: number, time: number, alpha: number) => {
+export const partyColor = (index: number, time: number, alpha: number) => {
   const [red, green, blue] = PARTY_COLORS[(index + Math.floor(time * 4)) % PARTY_COLORS.length]
   return `rgba(${red}, ${green}, ${blue}, ${alpha})`
 }

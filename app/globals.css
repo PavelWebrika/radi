@@ -70,16 +70,3 @@ canvas {
 .film-scroll {
   height: 400vh;
 }
-
-.home-title {
-  position: fixed;
-  z-index: 1;
-  top: 24px;
-  left: 0;
-  right: 0;
-  margin: 0;
-  font-family: "Comic Sans MS", "Comic Sans", cursive;
-  font-size: 24px;
-  font-weight: normal;
-  text-align: center;
-}

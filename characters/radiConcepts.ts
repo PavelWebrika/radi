@@ -69,27 +69,30 @@ const [everydayConcept, popArtConcept, sunnyConcept, gaidaConcept] = originalCon
 
 const polishedPopArtConcept = polishConcept(popArtConcept, { shoes: "highTops" })
 
+const polishedNightClubConcept = polishConcept({
+  name: "Night Club Radi",
+  background: "#8a5cff",
+  look: {
+    hair: "braid",
+    expression: "tongue",
+    pose: "wave",
+    top: { color: "#d7263d", pattern: "lace" },
+    bottom: { kind: "skirt", color: "#d7263d", pattern: "lace" },
+    extras: ["heartNecklace"],
+    shoes: "partyHeels",
+  },
+})
+
 export const everydayRadiLook = polishConcept(everydayConcept).look
 export const popArtRadiLook = polishedPopArtConcept.look
+export const nightClubRadiLook = polishedNightClubConcept.look
 
 const radiConcepts: RadiConcept[] = [
   polishConcept(everydayConcept),
   polishedPopArtConcept,
   polishConcept(sunnyConcept),
   polishConcept(gaidaConcept, { hair: "tucked", extras: ["pendant", "gaida", "kalpak"], shoes: "tsarvuli" }),
-  polishConcept({
-    name: "Night Club Radi",
-    background: "#8a5cff",
-    look: {
-      hair: "braid",
-      expression: "tongue",
-      pose: "wave",
-      top: { color: "#d7263d", pattern: "lace" },
-      bottom: { kind: "skirt", color: "#d7263d", pattern: "lace" },
-      extras: ["heartNecklace"],
-      shoes: "partyHeels",
-    },
-  }),
+  polishedNightClubConcept,
   polishConcept({
     name: "Folk Dance Radi",
     background: "#7cc8ff",

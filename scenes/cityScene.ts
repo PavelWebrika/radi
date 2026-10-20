@@ -3,7 +3,7 @@ import { SHADE, SILVER, curvesPath, drawRadi, drawSunglasses, type Point } from 
 import { popArtRadiLook } from "@/characters/radiConcepts"
 import { drawKiraSide } from "@/characters/kira"
 import { drawRadiSide } from "@/characters/radiSide"
-import { clipToClubDoor, clubDoorCenterY, clubDoorWidth, clubDoorX, clubLeftX, clubPlacement, drawClubBuilding, drawClubLights, type ClubPlacement } from "@/scenes/nightClub"
+import { clipToClubDoor, clubDoorCenterY, clubDoorWidth, clubDoorX, clubLeftX, clubPlacement, drawClubBuilding, drawClubLights, partyColor, type ClubPlacement } from "@/scenes/nightClub"
 import { drawEveningSky, drawMoonAndStars, drawNightShade, drawSettingSun, eveningLight } from "@/scenes/nightfall"
 import { drawSceneryBack, drawSceneryFront, drawScenerySky } from "@/scenes/roadTrip"
 import {
@@ -67,15 +67,15 @@ const FLIP_HEIGHT_UNITS = 90
 const ZHUPKI_BUBBLE_START = 6.4
 const ZHUPKI_BUBBLE_END = 6.8
 const EXHAUST_PUFFS = 10
+const CAR_MUSIC_NOTES = ["♪", "♫", "♬", "♩", "♪", "♫"]
+const EXHAUST_PIPE_X = -117
+const EXHAUST_PIPE_Y = -15.5
 export const KIRA_POP_PROGRESS = 0.5
 const KIRA_LEAP_END = 0.35
 const KIRA_SETTLE_END = 0.7
 const KIRA_LEAP_Y = -46
 const KIRA_WOOF_START = 0.25
 const KIRA_WOOF_END = 1.9
-const KIRA_LOOK_BACK_START = 1.2
-const KIRA_LOOK_FORWARD_START = 2.4
-const KIRA_TURN_SECONDS = 0.25
 const KIRA_TRUNK_X = -68
 const KIRA_SEAT_Y = -24
 const KIRA_HIDDEN_Y = 40
@@ -93,8 +93,6 @@ const SPEED_BAR_MARGIN = 16
 
 export type DriveState = { progress: number; speed: number; kiraSeconds: number | null; arrivalSeconds: number | null }
 
-const smoothStep = (amount: number) => amount * amount * (3 - 2 * amount)
-
 const CLUB_CENTER_X = 0.84
 const CLUB_BASE = 0.83
 const ROAD_END_GROUND = "#ffc4e1"
@@ -108,6 +106,7 @@ const KIRA_JUMP_END = 2.3
 const KIRA_RUN_END = 3.7
 const SCENE_IRIS_START = 3.9
 const SCENE_IRIS_END = 5.2
+export const CITY_SCENE_END = SCENE_IRIS_END
 const ARRIVING_LOOK = {
   ...popArtRadiLook,
   expression: "grin" as const,
@@ -323,14 +322,14 @@ const driveView = (width: number, height: number, drive: DriveState | null) => {
   }
 }
 
-const drawExhaust = (context: Context, time: number, exhaust: number) => {
+export const drawExhaust = (context: Context, time: number, exhaust: number) => {
   if (exhaust <= 0) return
   for (let puff = 0; puff < EXHAUST_PUFFS; puff += 1) {
     const age = (time * 2.5 + puff / EXHAUST_PUFFS) % 1
     const alpha = exhaust * (1 - age) * 0.9
     const puffPath = ellipsePath(
-      -117 - age * (40 + 90 * exhaust),
-      -15.5 - age * 10 + Math.sin(puff * 2.3 + time * 3) * 3 * age,
+      -age * (40 + 90 * exhaust),
+      -age * 10 + Math.sin(puff * 2.3 + time * 3) * 3 * age,
       3 + age * (8 + 12 * exhaust),
       3 + age * (7 + 10 * exhaust),
     )
@@ -346,7 +345,10 @@ const drawCar = (context: Context, width: number, height: number, time: number, 
   context.translate(carX, groundY)
   context.scale(scale, scale)
   paintFill(context, SHADOW, ellipsePath(0, 0, 118, 4.5))
+  context.save()
+  context.translate(EXHAUST_PIPE_X, EXHAUST_PIPE_Y)
   drawExhaust(context, time, exhaust)
+  context.restore()
   context.rotate(pitch)
   context.lineWidth = 1.6
   paintShape(context, "#1d1d1d", (path) => path.roundRect(70, -12.5, 50, 3.5, 1.5))
@@ -384,9 +386,6 @@ const drawTrunkKira = (context: Context, width: number, height: number, time: nu
   const leap = easeOut(stageProgress(kiraSeconds, 0, KIRA_LEAP_END))
   const settle = easeOutBack(stageProgress(kiraSeconds, KIRA_LEAP_END, KIRA_SETTLE_END))
   const landingSquash = Math.sin(Math.PI * stageProgress(kiraSeconds, KIRA_LEAP_END, KIRA_SETTLE_END)) * 0.15
-  const turn = smoothStep(stageProgress(kiraSeconds, KIRA_LOOK_BACK_START, KIRA_LOOK_BACK_START + KIRA_TURN_SECONDS))
-    - smoothStep(stageProgress(kiraSeconds, KIRA_LOOK_FORWARD_START, KIRA_LOOK_FORWARD_START + KIRA_TURN_SECONDS))
-  const facing = Math.cos(Math.PI * turn)
   const feetY = settle > 0 ? mix(KIRA_LEAP_Y, KIRA_SEAT_Y, settle) : mix(KIRA_HIDDEN_Y, KIRA_LEAP_Y, leap)
   const { scale, carX, groundY } = carPlacement(width, height, CAR_ENTER_END)
   context.save()
@@ -396,14 +395,36 @@ const drawTrunkKira = (context: Context, width: number, height: number, time: nu
   context.rect(-200, -200, 400, 200 + KIRA_CLIP_Y)
   context.clip()
   context.translate(KIRA_TRUNK_X, feetY)
-  context.scale(facing * (1 + landingSquash), 1 - landingSquash)
+  context.scale(1 + landingSquash, 1 - landingSquash)
   drawKiraSide(context, 0, 0, KIRA_SCALE, {
     sit: 1,
     headReach: 0.25 + 0.25 * Math.sin(time * 2.6),
-    tongueWind: wind * Math.sign(facing),
+    tongueWind: wind,
     tonguePhase: time * 14,
     showTail: false,
   })
+  context.restore()
+}
+
+const drawCarMusic = (context: Context, width: number, height: number, time: number, volume: number) => {
+  if (volume <= 0) return
+  const { scale, carX, groundY } = carPlacement(width, height, CAR_ENTER_END)
+  context.save()
+  context.translate(carX, groundY)
+  context.scale(scale, scale)
+  context.font = '16px "Comic Sans MS", "Comic Sans", cursive'
+  context.textAlign = "center"
+  context.lineWidth = 3
+  context.strokeStyle = OUTLINE
+  for (let noteIndex = 0; noteIndex < CAR_MUSIC_NOTES.length; noteIndex += 1) {
+    const age = (time * 0.5 + noteIndex / CAR_MUSIC_NOTES.length) % 1
+    const noteX = 25 - age * 90 + Math.sin(age * 8 + noteIndex) * 6
+    const noteY = -70 - age * 70
+    context.globalAlpha = Math.sin(Math.PI * age) * volume
+    context.fillStyle = partyColor(noteIndex, time, 1)
+    context.strokeText(CAR_MUSIC_NOTES[noteIndex], noteX, noteY)
+    context.fillText(CAR_MUSIC_NOTES[noteIndex], noteX, noteY)
+  }
   context.restore()
 }
 
@@ -760,6 +781,7 @@ export const drawCityScene = (
     if (!isKiraOut && kiraSeconds !== null) drawWithCar(() => drawTrunkKira(context, width, height, time, kiraSeconds, wind))
     drawCarLayer()
     drawBenchLayer()
+    if (drive) drawWithCar(() => drawCarMusic(context, width, height, time, 1 - stageProgress(arrivalSeconds ?? 0, 0, RADI_EXIT_START)))
     if (kiraSeconds !== null) drawWithCar(() => drawKiraWoof(context, width, height, kiraSeconds))
     if (isRadiInFront && club) drawArrivingRadi(context, width, height, time, arrivalSeconds, carShift, club)
     if (isKiraOut) drawArrivingKira(context, width, height, time, arrivalSeconds, carShift)

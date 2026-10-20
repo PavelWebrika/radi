@@ -61,7 +61,13 @@ export type RadiMotion = {
   elbowBends: PerSide
 }
 
+export type RadiColors = { skin: string; hair: string; hairHighlight: string; eye: string; iris: string }
+
+const RADI_COLORS: RadiColors = { skin: SKIN, hair: HAIR, hairHighlight: HAIR_HIGHLIGHT, eye: EYE, iris: "#9a7444" }
+let activeColors = RADI_COLORS
+
 export type RadiLook = {
+  colors?: RadiColors
   hair: RadiHair
   expression: RadiExpression
   pose: RadiPose
@@ -149,7 +155,7 @@ const patternPainters: Record<RadiPattern, DecorateInside> = {
     }
   },
   lace: (context) => {
-    paintFill(context, SKIN, (path) => {
+    paintFill(context, activeColors.skin, (path) => {
       path.moveTo(-10, -50)
       path.lineTo(10, -50)
       path.lineTo(10, -46)
@@ -271,14 +277,15 @@ const facePath: BuildPath = (path) => {
 }
 
 const drawHairBack = (context: Context, hair: RadiHair, isPolished: boolean) => {
+  if (hair === "braid") drawBraid(context, isPolished)
   if (hair === "tucked" || hair === "braid") return
   if (hair === "bun") {
-    paintShape(context, HAIR, ellipsePath(0, -97, 8, 6.5), shadeIf(isPolished))
+    paintShape(context, activeColors.hair, ellipsePath(0, -97, 8, 6.5), shadeIf(isPolished))
     if (isPolished) paintLine(context, HAIR_STRAND, 0.7, curvesPath([[-5, -99, 0, -103, 5, -99]]))
     return
   }
   if (hair === "loose") {
-    paintShape(context, HAIR, (path) => {
+    paintShape(context, activeColors.hair, (path) => {
       path.moveTo(-27, -72)
       path.quadraticCurveTo(-31, -48, -22, -36)
       path.quadraticCurveTo(-11, -32, 0, -36)
@@ -290,7 +297,7 @@ const drawHairBack = (context: Context, hair: RadiHair, isPolished: boolean) => 
     return
   }
   if (hair === "sideTail") {
-    paintShape(context, HAIR, (path) => {
+    paintShape(context, activeColors.hair, (path) => {
       path.moveTo(17, -90)
       path.bezierCurveTo(38, -94, 46, -74, 40, -56)
       path.quadraticCurveTo(36, -44, 42, -34)
@@ -298,7 +305,7 @@ const drawHairBack = (context: Context, hair: RadiHair, isPolished: boolean) => 
       path.bezierCurveTo(30, -72, 26, -80, 21, -78)
       path.closePath()
     }, shadeIf(isPolished))
-    paintLine(context, HAIR_HIGHLIGHT, 1.2, curvesPath([[27, -86, 40, -80, 36, -60]]))
+    paintLine(context, activeColors.hairHighlight, 1.2, curvesPath([[27, -86, 40, -80, 36, -60]]))
     if (isPolished) paintLine(context, HAIR_STRAND, 0.7, curvesPath([[31, -80, 39, -70, 35, -50]]))
     return
   }
@@ -310,10 +317,10 @@ const drawHairBack = (context: Context, hair: RadiHair, isPolished: boolean) => 
   })
   for (const lockPath of lockPaths) paintLine(context, OUTLINE, OUTLINE_WIDTH * 2, lockPath)
   for (const lockPath of lockPaths) {
-    paintFill(context, HAIR, lockPath)
+    paintFill(context, activeColors.hair, lockPath)
     if (isPolished) paintShade(context, SHADE, lockPath)
   }
-  paintLine(context, HAIR_HIGHLIGHT, 1.2, linePath(27, -83, 42, -82))
+  paintLine(context, activeColors.hairHighlight, 1.2, linePath(27, -83, 42, -82))
 }
 
 const shoePainters: Record<RadiShoes, DrawShoe> = {
@@ -389,7 +396,7 @@ const drawLegs = (context: Context, shoes: RadiShoes, legLifts: PerSide, kneeBen
     const legX = side * 5
     context.save()
     context.translate(0, -legLifts[index])
-    paintTube(context, LEG_COVERS[shoes] ?? SKIN, 6, (path) => {
+    paintTube(context, LEG_COVERS[shoes] ?? activeColors.skin, 6, (path) => {
       path.moveTo(legX, -19)
       path.lineTo(legX + side * kneeBends[index], -12.5)
       path.lineTo(legX, -6)
@@ -538,29 +545,14 @@ const drawBraid = (context: Context, isPolished: boolean) => {
   const braidPaths = [...BRAID_LINKS.map(([linkX, linkY]) => ellipsePath(linkX, linkY, 3, 3.2)), braidTuftPath]
   for (const braidPath of braidPaths) paintLine(context, OUTLINE, OUTLINE_WIDTH * 2, braidPath)
   for (const braidPath of braidPaths) {
-    paintFill(context, HAIR, braidPath)
+    paintFill(context, activeColors.hair, braidPath)
     if (isPolished) paintShade(context, SHADE, braidPath)
   }
   paintLine(context, OUTLINE, 0.6, curvesPath(BRAID_LINKS.map(([linkX, linkY]) => [linkX - 2.4, linkY + 1, linkX, linkY + 3, linkX + 2.4, linkY + 1] as const)))
   if (isPolished) {
-    paintLine(context, HAIR_HIGHLIGHT, 0.8, curvesPath(BRAID_LINKS.map(([linkX, linkY]) => [linkX - 1.8, linkY - 1, linkX - 1, linkY - 2.2, linkX + 0.2, linkY - 2.4] as const)))
+    paintLine(context, activeColors.hairHighlight, 0.8, curvesPath(BRAID_LINKS.map(([linkX, linkY]) => [linkX - 1.8, linkY - 1, linkX - 1, linkY - 2.2, linkX + 0.2, linkY - 2.4] as const)))
   }
   paintShape(context, BLACK_FABRIC, ellipsePath(-5.4, -34.6, 2.2, 1.4))
-}
-
-const drawBraidBehindHead = (context: Context, isPolished: boolean) => {
-  const headShapes: BuildPath[] = [facePath, hairFrontPath("braid"), ...SIDES.map((side) => ellipsePath(side * 22.5, -66, 4, 5))]
-  context.save()
-  for (const buildHeadShape of headShapes) {
-    const headShape = new Path2D()
-    buildHeadShape(headShape)
-    const outsideHeadShape = new Path2D()
-    outsideHeadShape.rect(-60, -130, 120, 140)
-    outsideHeadShape.addPath(headShape)
-    context.clip(outsideHeadShape, "evenodd")
-  }
-  drawBraid(context, isPolished)
-  context.restore()
 }
 
 export const drawHairFlower = (context: Context, isPolished: boolean) => {
@@ -597,8 +589,8 @@ const drawGaidaBlowpipe = (context: Context, isPolished: boolean) => {
 }
 
 const drawHead = (context: Context, hair: RadiHair, hasKalpak: boolean, isPolished: boolean) => {
-  for (const side of SIDES) paintShape(context, SKIN, ellipsePath(side * 22.5, -66, 4, 5), shadeIf(isPolished))
-  paintShape(context, SKIN, facePath, {
+  for (const side of SIDES) paintShape(context, activeColors.skin, ellipsePath(side * 22.5, -66, 4, 5), shadeIf(isPolished))
+  paintShape(context, activeColors.skin, facePath, {
     ...shadeIf(isPolished),
     decorateInside: isPolished
       ? (faceContext) => {
@@ -613,7 +605,7 @@ const drawHead = (context: Context, hair: RadiHair, hasKalpak: boolean, isPolish
 export const createIrisGradient = (context: Context) => {
   const gradient = context.createLinearGradient(0, -69.5, 0, -58.5)
   gradient.addColorStop(0, "#3a2814")
-  gradient.addColorStop(1, "#9a7444")
+  gradient.addColorStop(1, activeColors.iris)
   return gradient
 }
 
@@ -626,7 +618,7 @@ const drawEye = (context: Context, side: number, isOpen: boolean, isPolished: bo
     })
     return
   }
-  paintShape(context, isPolished ? createIrisGradient(context) : EYE, ellipsePath(centerX, -64, 4.2, 5.5), {
+  paintShape(context, isPolished ? createIrisGradient(context) : activeColors.eye, ellipsePath(centerX, -64, 4.2, 5.5), {
     decorateInside: isPolished
       ? (irisContext) => {
           paintFill(irisContext, "rgba(0, 0, 0, 0.25)", ellipsePath(centerX, -69, 5, 2.6))
@@ -697,7 +689,7 @@ const drawFace = (context: Context, expression: RadiExpression, isPolished: bool
   for (const side of SIDES) {
     drawEye(context, side, !(expression === "tongue" && side === 1), isPolished)
     if (isAngry) {
-      paintFill(context, SKIN, (path) => {
+      paintFill(context, activeColors.skin, (path) => {
         path.moveTo(side * 4, -66.4)
         path.lineTo(side * 14, -70.2)
         path.lineTo(side * 14, -73)
@@ -708,7 +700,7 @@ const drawFace = (context: Context, expression: RadiExpression, isPolished: bool
       paintLine(context, OUTLINE, 1.8, linePath(side * 4.5, -69.4, side * 13, -73.4))
     } else {
       const browLift = expression === "surprised" ? 3 : 0
-      paintLine(context, HAIR, 1.2, (path) => {
+      paintLine(context, activeColors.hair, 1.2, (path) => {
         path.moveTo(side * 6, -72.5 - browLift)
         path.quadraticCurveTo(side * 9, -74.5 - browLift * 1.4, side * 12, -72.5 - browLift)
       })
@@ -743,13 +735,13 @@ export const drawSunglasses = (context: Context) => {
 }
 
 const drawHairFront = (context: Context, hair: RadiHair, isPolished: boolean) => {
-  paintShape(context, HAIR, hairFrontPath(hair), shadeIf(isPolished))
+  paintShape(context, activeColors.hair, hairFrontPath(hair), shadeIf(isPolished))
   if (hair === "ponytail" || hair === "sideTail") {
     paintShape(context, "#ff5fa2", ellipsePath(19.5, -87, 2.6, 3))
     if (isPolished) paintFill(context, "rgba(255, 255, 255, 0.6)", ellipsePath(18.7, -88.2, 0.7, 0.9))
   }
   if (isPolished) paintLine(context, HAIR_STRAND, 0.6, curvesPath(POLISHED_HAIR_STRANDS))
-  paintLine(context, HAIR_HIGHLIGHT, 1.4, curvesPath(HAIR_STREAKS))
+  paintLine(context, activeColors.hairHighlight, 1.4, curvesPath(HAIR_STREAKS))
 }
 
 const drawBandana = (context: Context, isPolished: boolean) => {
@@ -786,7 +778,7 @@ export const drawKalpak = (context: Context, isPolished: boolean) => {
 }
 
 const drawArms = (context: Context, look: RadiLook, hands: RadiHands, elbowBends: PerSide, isPolished: boolean) => {
-  const sleeveColor = look.extras.includes("denimJacket") ? DENIM : SKIN
+  const sleeveColor = look.extras.includes("denimJacket") ? DENIM : activeColors.skin
   SIDES.forEach((side, index) => {
     const [handX, handY] = hands[index]
     const shoulderX = side * 8.5
@@ -800,10 +792,10 @@ const drawArms = (context: Context, look: RadiLook, hands: RadiHands, elbowBends
       path.lineTo(handX, handY)
     }, isPolished)
     if (look.pose === "peace" && side === 1) {
-      paintTube(context, SKIN, 1.8, linePath(handX, handY, handX - 1.5, handY - 6))
-      paintTube(context, SKIN, 1.8, linePath(handX, handY, handX + 2.5, handY - 6))
+      paintTube(context, activeColors.skin, 1.8, linePath(handX, handY, handX - 1.5, handY - 6))
+      paintTube(context, activeColors.skin, 1.8, linePath(handX, handY, handX + 2.5, handY - 6))
     }
-    paintShape(context, SKIN, ellipsePath(handX, handY, 2.8, 2.8), shadeIf(isPolished))
+    paintShape(context, activeColors.skin, ellipsePath(handX, handY, 2.8, 2.8), shadeIf(isPolished))
   })
 }
 
@@ -823,6 +815,7 @@ export const drawRadi = (context: Context, look: RadiLook, feetX: number, feetY:
   const isPolished = look.polished === true
   const { faceTurn = 0, legLifts = [0, 0], kneeBends = [0, 0], hands = HAND_POSITIONS[look.pose], elbowBends = [0, 0] } = motion
 
+  activeColors = look.colors ?? RADI_COLORS
   context.save()
   context.translate(feetX, feetY)
   context.scale(scale, scale)
@@ -853,9 +846,9 @@ export const drawRadi = (context: Context, look: RadiLook, feetX: number, feetY:
   if (hasExtra("hairFlower")) drawHairFlower(context, isPolished)
   drawArms(context, look, hands, elbowBends, isPolished)
   if (hasExtra("puffSleeves")) drawPuffSleeves(context, isPolished)
-  if (look.hair === "braid") drawBraidBehindHead(context, isPolished)
   if (hasExtra("headphones")) drawHeadphones(context, isPolished)
   if (hasExtra("gaida")) drawGaidaBlowpipe(context, isPolished)
 
   context.restore()
+  activeColors = RADI_COLORS
 }

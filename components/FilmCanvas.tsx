@@ -2,7 +2,8 @@
 
 import { useEffect, useRef } from "react"
 import { drawRadiConcepts } from "@/characters/radiConcepts"
-import { anywayButtonLayout, drawCityScene, DRIVE_CRUISE_SECONDS, DRIVE_MAX_BOOST, DRIVE_READY_SECONDS, KIRA_POP_PROGRESS } from "@/scenes/cityScene"
+import { anywayButtonLayout, CITY_SCENE_END, drawCityScene, DRIVE_CRUISE_SECONDS, DRIVE_MAX_BOOST, DRIVE_READY_SECONDS, KIRA_POP_PROGRESS } from "@/scenes/cityScene"
+import { drawClubScene } from "@/scenes/clubScene"
 import { FILM_SCENES } from "@/scenes/filmScenes"
 import { drawOpeningScene, greetingButtonLayout, KIRA_SCENE_END, type BubbleButtonLayout } from "@/scenes/openingScene"
 import { useFilmStore } from "@/store/film"
@@ -54,6 +55,7 @@ export const FilmCanvas = () => {
     let driveBoost = 0
     let arrivalStartMilliseconds: number | null = null
     let kiraStartMilliseconds: number | null = null
+    let clubStartMilliseconds: number | null = null
     let lastTouchY: number | null = null
     const drawFrame = (timeMilliseconds: number) => {
       const elapsedSeconds = previousTimeMilliseconds === null ? 0 : (timeMilliseconds - previousTimeMilliseconds) / 1000
@@ -61,7 +63,10 @@ export const FilmCanvas = () => {
       const { progress: targetProgress, isShowingConcepts } = useFilmStore.getState()
       shownProgress += (targetProgress - shownProgress) * (1 - Math.exp(-elapsedSeconds * 6))
       const greetingLayout = greetingButtonLayout(window.innerWidth, window.innerHeight, shownProgress)
-      if (!greetingLayout) meetingStartMilliseconds = null
+      if (!greetingLayout) {
+        meetingStartMilliseconds = null
+        clubStartMilliseconds = null
+      }
       const meetingSeconds = meetingStartMilliseconds === null ? null : Math.max(0, timeMilliseconds - meetingStartMilliseconds) / 1000
       const citySeconds = meetingSeconds !== null && meetingSeconds >= KIRA_SCENE_END ? meetingSeconds - KIRA_SCENE_END : null
       if (citySeconds === null) anywayStartMilliseconds = null
@@ -85,17 +90,21 @@ export const FilmCanvas = () => {
       const drive = driveProgress === null
         ? null
         : { progress: driveProgress, speed: driveSpeed, kiraSeconds: secondsSince(kiraStartMilliseconds), arrivalSeconds: secondsSince(arrivalStartMilliseconds) }
+      if (drive?.arrivalSeconds != null && drive.arrivalSeconds >= CITY_SCENE_END) clubStartMilliseconds ??= timeMilliseconds
+      const clubSeconds = secondsSince(clubStartMilliseconds)
       if (isShowingConcepts) {
         context.fillStyle = "#000000"
         context.fillRect(0, 0, window.innerWidth, window.innerHeight)
         drawRadiConcepts(context, window.innerWidth, window.innerHeight)
+      } else if (clubSeconds !== null) {
+        drawClubScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, clubSeconds)
       } else if (citySeconds !== null) {
         drawCityScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, citySeconds, anywaySeconds, drive)
       } else {
         drawOpeningScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, shownProgress, meetingSeconds)
       }
       const moreLayout = isShowingConcepts || meetingSeconds !== null ? null : greetingLayout
-      const anywayLayout = isShowingConcepts || citySeconds === null ? null : anywayButtonLayout(window.innerWidth, window.innerHeight, citySeconds, anywaySeconds)
+      const anywayLayout = isShowingConcepts || citySeconds === null || clubSeconds !== null ? null : anywayButtonLayout(window.innerWidth, window.innerHeight, citySeconds, anywaySeconds)
       if (moreButtonRef.current) placeBubbleButton(moreButtonRef.current, moreLayout)
       if (anywayButtonRef.current) placeBubbleButton(anywayButtonRef.current, anywayLayout)
       animationFrameId = requestAnimationFrame(drawFrame)
@@ -132,6 +141,7 @@ export const FilmCanvas = () => {
       shownProgress = useFilmStore.getState().progress
       meetingStartMilliseconds = startSeconds === null ? null : performance.now() - startSeconds * 1000
       anywayStartMilliseconds = null
+      clubStartMilliseconds = sceneSelection.sceneId === "nightClub" ? performance.now() : null
     })
     const updateProgress = () => {
       useFilmStore.getState().setProgress(readScrollProgress())
