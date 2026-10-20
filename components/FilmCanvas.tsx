@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react"
 import { drawRadiConcepts } from "@/characters/radiConcepts"
 import { anywayButtonLayout, CITY_SCENE_END, drawCityScene, DRIVE_CRUISE_SECONDS, DRIVE_MAX_BOOST, DRIVE_READY_SECONDS, KIRA_POP_PROGRESS } from "@/scenes/cityScene"
-import { drawClubScene } from "@/scenes/clubScene"
+import { drawClubScene, letsDanceButtonLayout } from "@/scenes/clubScene"
 import { FILM_SCENES } from "@/scenes/filmScenes"
 import { drawOpeningScene, greetingButtonLayout, KIRA_SCENE_END, type BubbleButtonLayout } from "@/scenes/openingScene"
 import { useFilmStore } from "@/store/film"
@@ -38,6 +38,7 @@ export const FilmCanvas = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const moreButtonRef = useRef<HTMLButtonElement>(null)
   const anywayButtonRef = useRef<HTMLButtonElement>(null)
+  const letsDanceButtonRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -56,6 +57,7 @@ export const FilmCanvas = () => {
     let arrivalStartMilliseconds: number | null = null
     let kiraStartMilliseconds: number | null = null
     let clubStartMilliseconds: number | null = null
+    let letsDanceStartMilliseconds: number | null = null
     let lastTouchY: number | null = null
     const drawFrame = (timeMilliseconds: number) => {
       const elapsedSeconds = previousTimeMilliseconds === null ? 0 : (timeMilliseconds - previousTimeMilliseconds) / 1000
@@ -92,12 +94,14 @@ export const FilmCanvas = () => {
         : { progress: driveProgress, speed: driveSpeed, kiraSeconds: secondsSince(kiraStartMilliseconds), arrivalSeconds: secondsSince(arrivalStartMilliseconds) }
       if (drive?.arrivalSeconds != null && drive.arrivalSeconds >= CITY_SCENE_END) clubStartMilliseconds ??= timeMilliseconds
       const clubSeconds = secondsSince(clubStartMilliseconds)
+      if (clubSeconds === null) letsDanceStartMilliseconds = null
+      const letsDanceSeconds = secondsSince(letsDanceStartMilliseconds)
       if (isShowingConcepts) {
         context.fillStyle = "#000000"
         context.fillRect(0, 0, window.innerWidth, window.innerHeight)
         drawRadiConcepts(context, window.innerWidth, window.innerHeight)
       } else if (clubSeconds !== null) {
-        drawClubScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, clubSeconds)
+        drawClubScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, clubSeconds, letsDanceSeconds)
       } else if (citySeconds !== null) {
         drawCityScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, citySeconds, anywaySeconds, drive)
       } else {
@@ -107,6 +111,8 @@ export const FilmCanvas = () => {
       const anywayLayout = isShowingConcepts || citySeconds === null || clubSeconds !== null ? null : anywayButtonLayout(window.innerWidth, window.innerHeight, citySeconds, anywaySeconds)
       if (moreButtonRef.current) placeBubbleButton(moreButtonRef.current, moreLayout)
       if (anywayButtonRef.current) placeBubbleButton(anywayButtonRef.current, anywayLayout)
+      const letsDanceLayout = isShowingConcepts || clubSeconds === null ? null : letsDanceButtonLayout(window.innerWidth, window.innerHeight, clubSeconds, letsDanceSeconds)
+      if (letsDanceButtonRef.current) placeBubbleButton(letsDanceButtonRef.current, letsDanceLayout)
       animationFrameId = requestAnimationFrame(drawFrame)
     }
     const startMeetingKira = () => {
@@ -114,6 +120,9 @@ export const FilmCanvas = () => {
     }
     const startCoolRadi = () => {
       anywayStartMilliseconds = performance.now()
+    }
+    const startDancing = () => {
+      letsDanceStartMilliseconds ??= performance.now()
     }
     const pressGas = (scrollPixels: number) => {
       if (scrollPixels <= 0 || latestAnywaySeconds === null || latestAnywaySeconds < DRIVE_READY_SECONDS) return
@@ -142,6 +151,7 @@ export const FilmCanvas = () => {
       meetingStartMilliseconds = startSeconds === null ? null : performance.now() - startSeconds * 1000
       anywayStartMilliseconds = null
       clubStartMilliseconds = sceneSelection.sceneId === "nightClub" ? performance.now() : null
+      letsDanceStartMilliseconds = null
     })
     const updateProgress = () => {
       useFilmStore.getState().setProgress(readScrollProgress())
@@ -163,6 +173,8 @@ export const FilmCanvas = () => {
     moreButton?.addEventListener("click", startMeetingKira)
     const anywayButton = anywayButtonRef.current
     anywayButton?.addEventListener("click", startCoolRadi)
+    const letsDanceButton = letsDanceButtonRef.current
+    letsDanceButton?.addEventListener("click", startDancing)
     return () => {
       cancelAnimationFrame(animationFrameId)
       window.removeEventListener("resize", onResize)
@@ -172,6 +184,7 @@ export const FilmCanvas = () => {
       window.removeEventListener("touchmove", onTouchMove)
       moreButton?.removeEventListener("click", startMeetingKira)
       anywayButton?.removeEventListener("click", startCoolRadi)
+      letsDanceButton?.removeEventListener("click", startDancing)
       unsubscribeFromScenes()
     }
   }, [])
@@ -184,6 +197,9 @@ export const FilmCanvas = () => {
       </button>
       <button ref={anywayButtonRef} type="button" className="more-button" data-visible="false" tabIndex={-1}>
         Anyway...
+      </button>
+      <button ref={letsDanceButtonRef} type="button" className="more-button" data-visible="false" tabIndex={-1}>
+        {"Let's dance!"}
       </button>
     </>
   )
