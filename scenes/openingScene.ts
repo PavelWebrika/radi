@@ -66,7 +66,7 @@ const drawSky = (context: Context, width: number, height: number, horizonY: numb
   context.fillRect(0, 0, width, height)
 }
 
-const drawSun = (context: Context, width: number, height: number, time: number) => {
+export const drawSun = (context: Context, width: number, height: number, time: number) => {
   const centerX = width * 0.84
   const centerY = height * 0.17
   const radius = Math.min(width, height) * 0.075
@@ -191,7 +191,7 @@ const drawCloud = (context: Context, centerX: number, centerY: number, unit: num
   context.restore()
 }
 
-const drawClouds = (context: Context, width: number, height: number, time: number) => {
+export const drawClouds = (context: Context, width: number, height: number, time: number) => {
   const baseUnit = Math.min(width, height) * 0.07
   for (const cloud of CLOUDS) {
     const driftX = Math.sin(time * cloud.speed + cloud.phase) * width * 0.03
@@ -212,7 +212,7 @@ const drawBird = (context: Context, width: number, height: number, time: number)
   })
 }
 
-const paintComicBubble = (context: Context, bubbleParts: BuildPath[], outlineWidth: number, lines: readonly [string, string], centerX: number, centerY: number, fontSize: number) => {
+export const paintComicBubble = (context: Context, bubbleParts: BuildPath[], outlineWidth: number, lines: readonly [string, string], centerX: number, centerY: number, fontSize: number) => {
   context.save()
   context.translate(outlineWidth * 1.2, outlineWidth * 1.2)
   for (const bubblePart of bubbleParts) paintFill(context, "rgba(0, 0, 0, 0.18)", bubblePart)
@@ -291,17 +291,25 @@ const ESCAPE_STRIDES = 6
 const CHASE_START = ESCAPE_START + 0.3
 const CHASE_END = CHASE_START + 2.2
 const CHASE_HOP_COUNT = 8
+const IRIS_START = CHASE_END + 0.4
+const IRIS_FOCUS_END = IRIS_START + 1.8
+const IRIS_CLOSE_START = IRIS_FOCUS_END + 0.6
+const IRIS_CLOSE_END = IRIS_CLOSE_START + 0.4
 const HAPPY_HEARTS = [[-18, 110, 0.8], [0, 120, 1], [18, 110, 0.8]] as const
 
 type BubbleText = { lines: readonly [string, string]; heightRatio: number; textRatio: number }
 const GREETING_BUBBLE: BubbleText = { lines: ["Hello,", "I'm Radi!"], heightRatio: 1, textRatio: -0.18 }
 const MEETING_BUBBLE: BubbleText = { lines: ["Give me", "a minute!"], heightRatio: 0.7, textRatio: 0 }
 
-const clampToUnit = (amount: number) => Math.min(1, Math.max(0, amount))
-const stageProgress = (progress: number, start: number, end: number) => clampToUnit((progress - start) / (end - start))
-const easeOut = (amount: number) => 1 - (1 - amount) ** 2
-const easeOutBack = (amount: number) => 1 + 2.7 * (amount - 1) ** 3 + 1.7 * (amount - 1) ** 2
-const mix = (from: number, to: number, amount: number) => from + (to - from) * amount
+export const KIRA_SCENE_END = IRIS_CLOSE_END + 0.5
+
+export type BubbleButtonLayout = { centerX: number; centerY: number; width: number; fontSize: number } | null
+
+export const clampToUnit = (amount: number) => Math.min(1, Math.max(0, amount))
+export const stageProgress = (progress: number, start: number, end: number) => clampToUnit((progress - start) / (end - start))
+export const easeOut = (amount: number) => 1 - (1 - amount) ** 2
+export const easeOutBack = (amount: number) => 1 + 2.7 * (amount - 1) ** 3 + 1.7 * (amount - 1) ** 2
+export const mix = (from: number, to: number, amount: number) => from + (to - from) * amount
 
 const bounce = (phase: number) => {
   const arc = Math.sin(phase * Math.PI)
@@ -316,7 +324,7 @@ const isMoving = (stage: number) => stage > 0 && stage < 1
 const settle = (stage: number) => Math.min(1, stage * 6, (1 - stage) * 6)
 const settledStretch = (stretchY: number, stage: number) => 1 + (stretchY - 1) * settle(stage)
 
-const radiScale = (width: number, height: number) => Math.min(height * 0.34, width * 0.75) / 125
+export const radiScale = (width: number, height: number) => Math.min(height * 0.34, width * 0.75) / 125
 const radiFeetY = (height: number) => height * 0.88
 
 const greetingBubbleGeometry = (width: number, radiX: number, feetY: number, scale: number) => {
@@ -329,7 +337,7 @@ const greetingBubbleGeometry = (width: number, radiX: number, feetY: number, sca
   }
 }
 
-export const greetingButtonLayout = (width: number, height: number, progress: number) => {
+export const greetingButtonLayout = (width: number, height: number, progress: number): BubbleButtonLayout => {
   if (progress < WAVE_START) return null
   const { bubbleWidth, bubbleHeight, centerX, centerY } = greetingBubbleGeometry(width, width / 2, radiFeetY(height), radiScale(width, height))
   return { centerX, centerY: centerY + bubbleHeight * 0.2, width: bubbleWidth * 0.72, fontSize: Math.max(11, bubbleWidth * 0.065) }
@@ -486,6 +494,21 @@ const drawHappyHearts = (context: Context, radiX: number, feetY: number, scale: 
   })
 }
 
+const drawIrisOut = (context: Context, width: number, height: number, centerX: number, centerY: number, scale: number, meetingSeconds: number) => {
+  if (meetingSeconds < IRIS_START) return
+  const focus = 1 - (1 - stageProgress(meetingSeconds, IRIS_START, IRIS_FOCUS_END)) ** 3
+  const close = stageProgress(meetingSeconds, IRIS_CLOSE_START, IRIS_CLOSE_END)
+  paintIris(context, width, height, centerX, centerY, mix(Math.hypot(width, height), 16 * scale, focus) * (1 - close ** 2))
+}
+
+export const paintIris = (context: Context, width: number, height: number, centerX: number, centerY: number, radius: number) => {
+  const darkness = new Path2D()
+  darkness.rect(0, 0, width, height)
+  if (radius > 0) darkness.arc(centerX, centerY, radius, 0, Math.PI * 2)
+  context.fillStyle = "#000000"
+  context.fill(darkness, "evenodd")
+}
+
 const radiExpression = (isMeeting: boolean, meetingSeconds: number): RadiExpression => {
   if (isMeeting && meetingSeconds >= ANGRY_START) return "angry"
   if (isMeeting && meetingSeconds >= SURPRISE_START) return "surprised"
@@ -562,6 +585,10 @@ const drawSkippingRadi = (context: Context, width: number, height: number, time:
       : easeOutBack(stageProgress(progress, TURN_END, GREETING_END)),
     isMeeting ? MEETING_BUBBLE : GREETING_BUBBLE,
   )
+  if (isMeeting) {
+    const poopX = placeKira(width, standingX, scale, time, sceneSeconds).poopX - POOP_BEHIND_UNITS * scale
+    drawIrisOut(context, width, height, poopX, feetY - 7 * scale, scale, sceneSeconds)
+  }
 }
 
 export const drawOpeningScene = (context: Context, width: number, height: number, time: number, progress: number, meetingSeconds: number | null) => {

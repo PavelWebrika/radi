@@ -1,4 +1,5 @@
 import { create } from "zustand"
+import type { FilmSceneId } from "@/scenes/filmScenes"
 
 export type Chapter = {
   id: string
@@ -15,8 +16,10 @@ type FilmState = {
   activeChapterId: string | null
   soundOn: boolean
   isShowingConcepts: boolean
+  sceneSelection: { sceneId: FilmSceneId } | null
   setProgress: (progress: number) => void
   toggleConcepts: () => void
+  selectScene: (sceneId: FilmSceneId) => void
 }
 
 const findActiveChapterId = (chapters: Chapter[], progress: number) => {
@@ -40,4 +43,6 @@ export const useFilmStore = create<FilmState>((set) => ({
       activeChapterId: findActiveChapterId(state.chapters, progress),
     })),
   toggleConcepts: () => set((state) => ({ isShowingConcepts: !state.isShowingConcepts })),
+  sceneSelection: null,
+  selectScene: (sceneId) => set({ sceneSelection: { sceneId }, isShowingConcepts: false }),
 }))

@@ -2,7 +2,9 @@
 
 import { useEffect, useRef } from "react"
 import { drawRadiConcepts } from "@/characters/radiConcepts"
-import { drawOpeningScene, greetingButtonLayout } from "@/scenes/openingScene"
+import { anywayButtonLayout, drawCityScene } from "@/scenes/cityScene"
+import { FILM_SCENES } from "@/scenes/filmScenes"
+import { drawOpeningScene, greetingButtonLayout, KIRA_SCENE_END, type BubbleButtonLayout } from "@/scenes/openingScene"
 import { useFilmStore } from "@/store/film"
 
 const resizeCanvas = (canvas: HTMLCanvasElement, context: CanvasRenderingContext2D) => {
@@ -18,7 +20,7 @@ const readScrollProgress = () => {
   return Math.min(1, Math.max(0, window.scrollY / scrollableHeight))
 }
 
-const placeMoreButton = (button: HTMLButtonElement, layout: ReturnType<typeof greetingButtonLayout>) => {
+const placeBubbleButton = (button: HTMLButtonElement, layout: BubbleButtonLayout) => {
   button.dataset.visible = String(layout !== null)
   button.tabIndex = layout ? 0 : -1
   if (!layout) return
@@ -31,6 +33,7 @@ const placeMoreButton = (button: HTMLButtonElement, layout: ReturnType<typeof gr
 export const FilmCanvas = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const moreButtonRef = useRef<HTMLButtonElement>(null)
+  const anywayButtonRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -49,20 +52,34 @@ export const FilmCanvas = () => {
       const greetingLayout = greetingButtonLayout(window.innerWidth, window.innerHeight, shownProgress)
       if (!greetingLayout) meetingStartMilliseconds = null
       const meetingSeconds = meetingStartMilliseconds === null ? null : Math.max(0, timeMilliseconds - meetingStartMilliseconds) / 1000
+      const citySeconds = meetingSeconds !== null && meetingSeconds >= KIRA_SCENE_END ? meetingSeconds - KIRA_SCENE_END : null
       if (isShowingConcepts) {
         context.fillStyle = "#000000"
         context.fillRect(0, 0, window.innerWidth, window.innerHeight)
         drawRadiConcepts(context, window.innerWidth, window.innerHeight)
+      } else if (citySeconds !== null) {
+        drawCityScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, citySeconds)
       } else {
         drawOpeningScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, shownProgress, meetingSeconds)
       }
-      const buttonLayout = isShowingConcepts || meetingSeconds !== null ? null : greetingLayout
-      if (moreButtonRef.current) placeMoreButton(moreButtonRef.current, buttonLayout)
+      const moreLayout = isShowingConcepts || meetingSeconds !== null ? null : greetingLayout
+      const anywayLayout = isShowingConcepts || citySeconds === null ? null : anywayButtonLayout(window.innerWidth, window.innerHeight, citySeconds)
+      if (moreButtonRef.current) placeBubbleButton(moreButtonRef.current, moreLayout)
+      if (anywayButtonRef.current) placeBubbleButton(anywayButtonRef.current, anywayLayout)
       animationFrameId = requestAnimationFrame(drawFrame)
     }
     const startMeetingKira = () => {
       meetingStartMilliseconds = performance.now()
     }
+    const unsubscribeFromScenes = useFilmStore.subscribe(({ sceneSelection }, previousState) => {
+      if (!sceneSelection || sceneSelection === previousState.sceneSelection) return
+      const chosenScene = FILM_SCENES.find(({ id }) => id === sceneSelection.sceneId)
+      const startSeconds = chosenScene?.meetingStartSeconds ?? null
+      window.scrollTo({ top: startSeconds === null ? 0 : document.documentElement.scrollHeight, behavior: "instant" })
+      updateProgress()
+      shownProgress = useFilmStore.getState().progress
+      meetingStartMilliseconds = startSeconds === null ? null : performance.now() - startSeconds * 1000
+    })
     const updateProgress = () => {
       useFilmStore.getState().setProgress(readScrollProgress())
     }
@@ -83,6 +100,7 @@ export const FilmCanvas = () => {
       window.removeEventListener("resize", onResize)
       window.removeEventListener("scroll", updateProgress)
       moreButton?.removeEventListener("click", startMeetingKira)
+      unsubscribeFromScenes()
     }
   }, [])
 
@@ -91,6 +109,9 @@ export const FilmCanvas = () => {
       <canvas ref={canvasRef} />
       <button ref={moreButtonRef} type="button" className="more-button" data-visible="false" tabIndex={-1}>
         {"Don't you want to know more about me?"}
+      </button>
+      <button ref={anywayButtonRef} type="button" className="more-button" data-visible="false" tabIndex={-1}>
+        Anyway...
       </button>
     </>
   )
