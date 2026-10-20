@@ -1,4 +1,6 @@
 import { ellipsePath, linePath, paintFill, paintLine, paintShape, type BuildPath, type Context } from "@/characters/paint"
+import { drawRadi } from "@/characters/radi"
+import { everydayRadiLook } from "@/characters/radiConcepts"
 
 const OUTLINE = "#2b1d1a"
 const WHITE = "#ffffff"
@@ -209,38 +211,125 @@ const drawBird = (context: Context, width: number, height: number, time: number)
   })
 }
 
-const drawSpeechBubble = (context: Context, width: number, height: number, time: number) => {
-  const bubbleWidth = Math.min(width * 0.72, 560)
-  const bubbleHeight = bubbleWidth * 0.42
-  const centerX = width / 2
-  const centerY = height * 0.44 + Math.sin(time * 1.6) * height * 0.008
-  const outlineWidth = Math.max(4, bubbleWidth * 0.012)
-  const bubbleParts: BuildPath[] = [
-    ellipsePath(centerX, centerY, bubbleWidth / 2, bubbleHeight / 2),
-    (path) => {
-      path.moveTo(centerX - bubbleWidth * 0.08, centerY + bubbleHeight * 0.38)
-      path.lineTo(centerX - bubbleWidth * 0.16, centerY + bubbleHeight * 0.85)
-      path.lineTo(centerX + bubbleWidth * 0.06, centerY + bubbleHeight * 0.4)
-      path.closePath()
-    },
-  ]
+const paintComicBubble = (context: Context, bubbleParts: BuildPath[], outlineWidth: number, lines: readonly [string, string], centerX: number, centerY: number, fontSize: number) => {
   context.save()
   context.translate(outlineWidth * 1.2, outlineWidth * 1.2)
   for (const bubblePart of bubbleParts) paintFill(context, "rgba(0, 0, 0, 0.18)", bubblePart)
   context.restore()
   for (const bubblePart of bubbleParts) paintLine(context, OUTLINE, outlineWidth * 2, bubblePart)
   for (const bubblePart of bubbleParts) paintFill(context, WHITE, bubblePart)
-
-  const fontSize = bubbleWidth * 0.09
   context.font = `${fontSize}px "Comic Sans MS", "Comic Sans", cursive`
   context.textAlign = "center"
   context.textBaseline = "middle"
   context.fillStyle = OUTLINE
-  context.fillText("Scroll down", centerX, centerY - fontSize * 0.6)
-  context.fillText("to meet me!", centerX, centerY + fontSize * 0.6)
+  context.fillText(lines[0], centerX, centerY - fontSize * 0.6)
+  context.fillText(lines[1], centerX, centerY + fontSize * 0.6)
 }
 
-export const drawOpeningScene = (context: Context, width: number, height: number, time: number) => {
+const drawScrollHintBubble = (context: Context, width: number, height: number, time: number, opacity: number) => {
+  if (opacity <= 0) return
+  const bubbleWidth = Math.min(width * 0.72, 560)
+  const bubbleHeight = bubbleWidth * 0.42
+  const centerX = width / 2
+  const centerY = height * 0.38 + Math.sin(time * 1.6) * height * 0.008
+  const outlineWidth = Math.max(4, bubbleWidth * 0.012)
+  context.save()
+  context.globalAlpha = opacity
+  paintComicBubble(context, [ellipsePath(centerX, centerY, bubbleWidth / 2, bubbleHeight / 2)], outlineWidth, ["Scroll down", "to meet me!"], centerX, centerY, bubbleWidth * 0.09)
+  context.restore()
+}
+
+const WALK_END = 0.75
+const TURN_END = 0.85
+const GREETING_END = 0.93
+const WAVE_START = 0.95
+const HOP_COUNT = 12
+const RESTING_BOUNCE = { lift: 0, stretchY: 1 }
+
+const clampToUnit = (amount: number) => Math.min(1, Math.max(0, amount))
+const stageProgress = (progress: number, start: number, end: number) => clampToUnit((progress - start) / (end - start))
+const easeOut = (amount: number) => 1 - (1 - amount) ** 2
+const easeOutBack = (amount: number) => 1 + 2.7 * (amount - 1) ** 3 + 1.7 * (amount - 1) ** 2
+const mix = (from: number, to: number, amount: number) => from + (to - from) * amount
+
+const bounce = (phase: number) => {
+  const arc = Math.sin(phase * Math.PI)
+  const contact = Math.max(0, 1 - arc * 3)
+  return {
+    lift: 4 * phase * (1 - phase),
+    stretchY: 1 + 0.12 * Math.abs(Math.cos(phase * Math.PI)) * (1 - contact) - 0.2 * contact,
+  }
+}
+
+const isMoving = (stage: number) => stage > 0 && stage < 1
+const settle = (stage: number) => Math.min(1, stage * 6, (1 - stage) * 6)
+const settledStretch = (stretchY: number, stage: number) => 1 + (stretchY - 1) * settle(stage)
+
+const drawGreetingBubble = (context: Context, width: number, radiX: number, feetY: number, scale: number, popScale: number) => {
+  if (popScale <= 0) return
+  const bubbleWidth = Math.min(width * 0.38, 340)
+  const bubbleHeight = bubbleWidth * 0.5
+  const centerX = Math.min(width - bubbleWidth / 2 - 12, radiX + 44 * scale + bubbleWidth / 2)
+  const centerY = feetY - 112 * scale
+  context.save()
+  context.translate(centerX, centerY)
+  context.scale(popScale, popScale)
+  paintComicBubble(context, [
+    ellipsePath(0, 0, bubbleWidth / 2, bubbleHeight / 2),
+    (path) => {
+      path.moveTo(-bubbleWidth * 0.3, bubbleHeight * 0.25)
+      path.lineTo(-bubbleWidth * 0.52, bubbleHeight * 0.55)
+      path.lineTo(-bubbleWidth * 0.15, bubbleHeight * 0.38)
+      path.closePath()
+    },
+  ], Math.max(3, bubbleWidth * 0.012), ["Hello,", "I'm Radi!"], 0, 0, bubbleWidth * 0.13)
+  context.restore()
+}
+
+const drawSkippingRadi = (context: Context, width: number, height: number, time: number, progress: number) => {
+  const scale = Math.min(height * 0.34, width * 0.75) / 125
+  const feetY = height * 0.88
+  const walk = easeOut(stageProgress(progress, 0, WALK_END))
+  const turn = stageProgress(progress, WALK_END, TURN_END)
+  const radiX = mix(-45 * scale, width / 2, walk)
+
+  const hopsDone = walk * HOP_COUNT
+  const hopPhase = hopsDone - Math.floor(hopsDone)
+  const leadSide = Math.floor(hopsDone) % 2 === 0 ? 1 : -1
+  const walkBounce = isMoving(walk) ? bounce(hopPhase) : RESTING_BOUNCE
+  const turnBounce = isMoving(turn) ? bounce(turn) : RESTING_BOUNCE
+  const lift = walkBounce.lift * 18 + turnBounce.lift * 24
+  const stretchY = settledStretch(walkBounce.stretchY, walk) * settledStretch(turnBounce.stretchY, turn)
+
+  const knee = isMoving(walk) ? Math.sin(hopPhase * Math.PI) * 9 : 0
+  const tuck = turnBounce.lift * 6
+  const armPump = isMoving(walk) ? Math.sin(hopPhase * Math.PI) * leadSide : 0
+  const cheer = turnBounce.lift * 14
+  const raise = easeOut(stageProgress(progress, GREETING_END, WAVE_START))
+  const isWaving = progress >= WAVE_START
+  const waveSwing = isWaving ? Math.sin(time * 7) * 6 : 0
+  const lean = isMoving(walk)
+    ? (0.12 + Math.sin(hopPhase * Math.PI * 2) * 0.05) * settle(walk)
+    : isWaving ? Math.sin(time * 3.5) * 0.04 : 0
+
+  paintFill(context, "rgba(0, 0, 0, 0.15)", ellipsePath(radiX, feetY, 22 * scale * (1 - lift / 60), 3 * scale))
+  context.save()
+  context.translate(radiX, feetY - lift * scale)
+  context.rotate(lean)
+  context.scale(1 / stretchY, stretchY)
+  drawRadi(context, everydayRadiLook, 0, 0, scale, {
+    faceTurn: 1 - easeOut(turn),
+    legLifts: leadSide === 1 ? [knee + tuck, knee * 0.2 + tuck] : [knee * 0.2 + tuck, knee + tuck],
+    hands: [
+      [-14 - Math.abs(armPump) * 3 - cheer * 0.5, -33 - armPump * 10 - cheer],
+      [mix(14 + Math.abs(armPump) * 3 + cheer * 0.5, 27 + waveSwing, raise), mix(-33 + armPump * 10 - cheer, -57 + Math.abs(waveSwing) * 0.4, raise)],
+    ],
+  })
+  context.restore()
+  drawGreetingBubble(context, width, radiX, feetY, scale, easeOutBack(stageProgress(progress, TURN_END, GREETING_END)))
+}
+
+export const drawOpeningScene = (context: Context, width: number, height: number, time: number, progress: number) => {
   const horizonY = height * 0.6
   context.lineJoin = "round"
   context.lineCap = "round"
@@ -253,5 +342,6 @@ export const drawOpeningScene = (context: Context, width: number, height: number
   drawFlowers(context, width, height)
   drawClouds(context, width, height, time)
   drawBird(context, width, height, time)
-  drawSpeechBubble(context, width, height, time)
+  drawScrollHintBubble(context, width, height, time, 1 - stageProgress(progress, 0, 0.08))
+  drawSkippingRadi(context, width, height, time, progress)
 }

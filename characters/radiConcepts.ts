@@ -65,6 +65,8 @@ const polishConcept = (concept: RadiConcept, lookChanges: Partial<RadiLook> = {}
 
 const [everydayConcept, popArtConcept, sunnyConcept, gaidaConcept] = originalConcepts
 
+export const everydayRadiLook = polishConcept(everydayConcept).look
+
 const radiConcepts: RadiConcept[] = [
   polishConcept(everydayConcept),
   polishConcept(popArtConcept, { shoes: "highTops" }),

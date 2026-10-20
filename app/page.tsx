@@ -5,6 +5,7 @@ const HomePage = () => {
     <>
       <FilmCanvas />
       <h1 className="home-title">RADI</h1>
+      <div className="film-scroll" />
     </>
   )
 }

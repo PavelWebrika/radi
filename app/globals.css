@@ -15,6 +15,10 @@ canvas {
   background: #000000;
 }
 
+.film-scroll {
+  height: 400vh;
+}
+
 .home-title {
   position: fixed;
   z-index: 1;

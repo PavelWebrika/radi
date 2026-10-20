@@ -26,8 +26,14 @@ export const FilmCanvas = () => {
     if (!canvas || !context) return
 
     let animationFrameId = 0
+    let shownProgress = readScrollProgress()
+    let previousTimeMilliseconds: number | null = null
     const drawFrame = (timeMilliseconds: number) => {
-      drawOpeningScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000)
+      const elapsedSeconds = previousTimeMilliseconds === null ? 0 : (timeMilliseconds - previousTimeMilliseconds) / 1000
+      previousTimeMilliseconds = timeMilliseconds
+      const targetProgress = useFilmStore.getState().progress
+      shownProgress += (targetProgress - shownProgress) * (1 - Math.exp(-elapsedSeconds * 6))
+      drawOpeningScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, shownProgress)
       animationFrameId = requestAnimationFrame(drawFrame)
     }
     const updateProgress = () => {
