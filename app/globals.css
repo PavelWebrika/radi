@@ -15,6 +15,26 @@ canvas {
   background: #000000;
 }
 
+.concepts-button {
+  position: fixed;
+  z-index: 2;
+  top: 16px;
+  right: 16px;
+  padding: 8px 16px;
+  border: 3px solid #2b1d1a;
+  border-radius: 999px;
+  background: #ffd23f;
+  color: #2b1d1a;
+  font-family: "Comic Sans MS", "Comic Sans", cursive;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.concepts-button:hover,
+.concepts-button:focus-visible {
+  background: #ffe066;
+}
+
 .more-button {
   position: fixed;
   z-index: 1;

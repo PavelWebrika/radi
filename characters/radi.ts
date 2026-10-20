@@ -1,29 +1,29 @@
 import { ellipsePath, linePath, paintFill, paintLine, paintShade, paintShape, type BuildPath, type Context, type DecorateInside } from "@/characters/paint"
 
-const OUTLINE = "#2b1d1a"
-const OUTLINE_WIDTH = 1.6
-const SKIN = "#f5cfb0"
-const HAIR = "#b8873e"
-const HAIR_HIGHLIGHT = "#f0d088"
-const HAIR_STRAND = "rgba(110, 62, 18, 0.45)"
-const EYE = "#5e4425"
-const PUPIL = "#2a1a0f"
-const BLUSH = "rgba(255, 110, 140, 0.45)"
-const MOUTH = "#8a2a2a"
-const TONGUE = "#ff7f9a"
-const WHITE = "#ffffff"
-const DENIM = "#5b8fc9"
-const WOOD = "#6b3f22"
-const BLACK_FABRIC = "#1d1d1d"
+export const OUTLINE = "#2b1d1a"
+export const OUTLINE_WIDTH = 1.6
+export const SKIN = "#f5cfb0"
+export const HAIR = "#b8873e"
+export const HAIR_HIGHLIGHT = "#f0d088"
+export const HAIR_STRAND = "rgba(110, 62, 18, 0.45)"
+export const EYE = "#5e4425"
+export const PUPIL = "#2a1a0f"
+export const BLUSH = "rgba(255, 110, 140, 0.45)"
+export const MOUTH = "#8a2a2a"
+export const TONGUE = "#ff7f9a"
+export const WHITE = "#ffffff"
+export const DENIM = "#5b8fc9"
+export const WOOD = "#6b3f22"
+export const BLACK_FABRIC = "#1d1d1d"
 const KALPAK_FUR = "#1f1d22"
-const HIGH_TOP_RED = "#e23b3b"
-const TSARVULI_LEATHER = "#8a5a32"
+export const HIGH_TOP_RED = "#e23b3b"
+export const TSARVULI_LEATHER = "#8a5a32"
 const WOOL_WRAP = "#f4efe4"
 const GOLD = "#e8c547"
-const SILVER = "#d5d9de"
-const FOLK_YELLOW = "#f2cf3a"
+export const SILVER = "#d5d9de"
+export const FOLK_YELLOW = "#f2cf3a"
 const LEAF_GREEN = "#3f9b4f"
-const SHADE = "rgba(90, 40, 30, 0.22)"
+export const SHADE = "rgba(90, 40, 30, 0.22)"
 const SIDES = [-1, 1] as const
 
 type RadiPattern = "mandala" | "flowers" | "comic" | "tieDye" | "folk" | "lace" | "sukman"
@@ -40,15 +40,15 @@ type RadiExtra =
   | "pafti"
   | "puffSleeves"
   | "hairFlower"
-type RadiHair = "ponytail" | "sideTail" | "loose" | "tucked" | "braid" | "bun"
-type RadiExpression = "grin" | "tongue" | "puff"
+export type RadiHair = "ponytail" | "sideTail" | "loose" | "tucked" | "braid" | "bun"
+export type RadiExpression = "grin" | "tongue" | "puff"
 type RadiPose = "wave" | "peace" | "hold"
-type RadiShoes = "sneakers" | "highTops" | "tsarvuli" | "partyHeels" | "folkFlats"
+export type RadiShoes = "sneakers" | "highTops" | "tsarvuli" | "partyHeels" | "folkFlats"
 type DrawShoe = (context: Context, side: number, isPolished: boolean) => void
 type RadiTop = { color: string; pattern?: RadiPattern }
-type RadiBottom = { kind: "skirt" | "shorts"; color: string; pattern?: RadiPattern }
+export type RadiBottom = { kind: "skirt" | "shorts"; color: string; pattern?: RadiPattern }
 type CurveLine = readonly [number, number, number, number, number, number]
-type Point = readonly [number, number]
+export type Point = readonly [number, number]
 type RadiHands = readonly [Point, Point]
 
 type PerSide = readonly [number, number]
@@ -72,16 +72,16 @@ export type RadiLook = {
   polished?: boolean
 }
 
-const shadeIf = (isPolished: boolean) => (isPolished ? { shade: SHADE } : {})
+export const shadeIf = (isPolished: boolean) => (isPolished ? { shade: SHADE } : {})
 
-const curvesPath = (curves: readonly CurveLine[]): BuildPath => (path) => {
+export const curvesPath = (curves: readonly CurveLine[]): BuildPath => (path) => {
   for (const [startX, startY, controlX, controlY, endX, endY] of curves) {
     path.moveTo(startX, startY)
     path.quadraticCurveTo(controlX, controlY, endX, endY)
   }
 }
 
-const paintTube = (context: Context, color: string, thickness: number, buildPath: BuildPath, isPolished = false) => {
+export const paintTube = (context: Context, color: string, thickness: number, buildPath: BuildPath, isPolished = false) => {
   paintLine(context, OUTLINE, thickness + OUTLINE_WIDTH * 2, buildPath)
   paintLine(context, color, thickness, buildPath)
   if (isPolished) {
@@ -190,7 +190,7 @@ const patternPainters: Record<RadiPattern, DecorateInside> = {
   },
 }
 
-const decorationFor = (pattern?: RadiPattern) => (pattern ? patternPainters[pattern] : undefined)
+export const decorationFor = (pattern?: RadiPattern) => (pattern ? patternPainters[pattern] : undefined)
 
 const HAIR_STREAKS: readonly CurveLine[] = [
   [-14, -86, -15, -90, -10, -92.5],
@@ -382,7 +382,7 @@ const shoePainters: Record<RadiShoes, DrawShoe> = {
   },
 }
 
-const LEG_COVERS: Partial<Record<RadiShoes, string>> = { tsarvuli: WOOL_WRAP, folkFlats: WHITE }
+export const LEG_COVERS: Partial<Record<RadiShoes, string>> = { tsarvuli: WOOL_WRAP, folkFlats: WHITE }
 
 const drawLegs = (context: Context, shoes: RadiShoes, legLifts: PerSide, kneeBends: PerSide, isPolished: boolean) => {
   SIDES.forEach((side, index) => {
@@ -422,9 +422,9 @@ const drawBottom = (context: Context, bottom: RadiBottom, isPolished: boolean) =
   }, { ...shadeIf(isPolished), decorateInside: decorationFor(bottom.pattern) })
 }
 
-const drawTorso = (context: Context, top: RadiTop, isPolished: boolean) => {
+export const drawTorso = (context: Context, top: RadiTop, isPolished: boolean, halfWidth = 9) => {
   const pattern = decorationFor(top.pattern)
-  paintShape(context, top.color, (path) => path.roundRect(-9, -49, 18, 19, 5), {
+  paintShape(context, top.color, (path) => path.roundRect(-halfWidth, -49, halfWidth * 2, 19, 5), {
     ...shadeIf(isPolished),
     decorateInside: isPolished
       ? (torsoContext) => {
@@ -563,7 +563,7 @@ const drawBraidBehindHead = (context: Context, isPolished: boolean) => {
   context.restore()
 }
 
-const drawHairFlower = (context: Context, isPolished: boolean) => {
+export const drawHairFlower = (context: Context, isPolished: boolean) => {
   for (const [leafX, leafY] of [[21.5, -89.5], [13.5, -93.5]]) {
     paintShape(context, LEAF_GREEN, (path) => path.ellipse(leafX, leafY, 3.2, 1.4, 0.46, 0, Math.PI * 2), shadeIf(isPolished))
   }
@@ -610,7 +610,7 @@ const drawHead = (context: Context, hair: RadiHair, hasKalpak: boolean, isPolish
   })
 }
 
-const createIrisGradient = (context: Context) => {
+export const createIrisGradient = (context: Context) => {
   const gradient = context.createLinearGradient(0, -69.5, 0, -58.5)
   gradient.addColorStop(0, "#3a2814")
   gradient.addColorStop(1, "#9a7444")
@@ -727,7 +727,7 @@ const drawBandana = (context: Context, isPolished: boolean) => {
   paintFill(context, WHITE, ellipsePath(0, -88.2, 0.6, 0.6))
 }
 
-const drawKalpak = (context: Context, isPolished: boolean) => {
+export const drawKalpak = (context: Context, isPolished: boolean) => {
   paintShape(context, KALPAK_FUR, kalpakPath, {
     ...shadeIf(isPolished),
     decorateInside: (hatContext) => {

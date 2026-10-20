@@ -1,4 +1,6 @@
+import { drawKiraFront, drawKiraSide } from "@/characters/kira"
 import { drawRadi, type RadiLook } from "@/characters/radi"
+import { drawRadiSide } from "@/characters/radiSide"
 
 type RadiConcept = {
   name: string
@@ -100,14 +102,39 @@ const radiConcepts: RadiConcept[] = [
   }),
 ]
 
-const CHARACTER_HEIGHT_UNITS = 125
-const CHARACTER_WIDTH_UNITS = 116
+type DrawFigure = (context: CanvasRenderingContext2D, feetX: number, feetY: number, scale: number) => void
+
+type ConceptPanel = {
+  name: string
+  background: string
+  heightUnits: number
+  sideShadowUnits: number
+  drawFront: DrawFigure
+  drawSide: DrawFigure
+}
+
+const conceptPanels: ConceptPanel[] = [
+  ...radiConcepts.map(({ name, background, look }): ConceptPanel => ({
+    name,
+    background,
+    heightUnits: 125,
+    sideShadowUnits: 22,
+    drawFront: (context, feetX, feetY, scale) => drawRadi(context, look, feetX, feetY, scale),
+    drawSide: (context, feetX, feetY, scale) => drawRadiSide(context, look, feetX, feetY, scale),
+  })),
+  { name: "Kira", background: "#ffb3c7", heightUnits: 80, sideShadowUnits: 40, drawFront: drawKiraFront, drawSide: drawKiraSide },
+]
+
+const FRONT_HALF_WIDTH_UNITS = 58
+const SIDE_BACK_UNITS = 55
+const SIDE_FRONT_UNITS = 35
+const PAIR_WIDTH_UNITS = FRONT_HALF_WIDTH_UNITS * 2 + SIDE_BACK_UNITS + SIDE_FRONT_UNITS
 const PANEL_TOP = 72
 const PANEL_GAP = 16
 
 const drawConceptPanel = (
   context: CanvasRenderingContext2D,
-  concept: RadiConcept,
+  panel: ConceptPanel,
   label: string,
   panelX: number,
   panelY: number,
@@ -116,44 +143,49 @@ const drawConceptPanel = (
 ) => {
   const fontSize = Math.min(28, Math.max(14, Math.min(panelWidth, panelHeight) * 0.07))
   const labelSpace = fontSize * 2.4
-  const feetX = panelX + panelWidth / 2
+  const centerX = panelX + panelWidth / 2
   const feetY = panelY + panelHeight - labelSpace
   const characterScale = Math.min(
-    (panelHeight - labelSpace - 20) / CHARACTER_HEIGHT_UNITS,
-    panelWidth / CHARACTER_WIDTH_UNITS,
+    (panelHeight - labelSpace - 20) / panel.heightUnits,
+    panelWidth / PAIR_WIDTH_UNITS,
   )
+  const frontFeetX = centerX - (PAIR_WIDTH_UNITS / 2 - FRONT_HALF_WIDTH_UNITS) * characterScale
+  const sideFeetX = frontFeetX + (FRONT_HALF_WIDTH_UNITS + SIDE_BACK_UNITS) * characterScale
 
   context.beginPath()
   context.roundRect(panelX, panelY, panelWidth, panelHeight, 18)
-  context.fillStyle = concept.background
+  context.fillStyle = panel.background
   context.fill()
   context.lineWidth = 4
   context.strokeStyle = "#2b1d1a"
   context.stroke()
 
-  context.beginPath()
-  context.ellipse(feetX, feetY, 22 * characterScale, 3 * characterScale, 0, 0, Math.PI * 2)
   context.fillStyle = "rgba(0, 0, 0, 0.15)"
-  context.fill()
+  for (const [shadowX, shadowUnits] of [[frontFeetX, 22], [sideFeetX, panel.sideShadowUnits]]) {
+    context.beginPath()
+    context.ellipse(shadowX, feetY, shadowUnits * characterScale, 3 * characterScale, 0, 0, Math.PI * 2)
+    context.fill()
+  }
 
-  drawRadi(context, concept.look, feetX, feetY, characterScale)
+  panel.drawFront(context, frontFeetX, feetY, characterScale)
+  panel.drawSide(context, sideFeetX, feetY, characterScale)
 
   context.font = `${fontSize}px "Comic Sans MS", "Comic Sans", cursive`
   context.textAlign = "center"
   context.textBaseline = "middle"
   context.fillStyle = "#2b1d1a"
-  context.fillText(label, feetX, panelY + panelHeight - labelSpace / 2)
+  context.fillText(label, centerX, panelY + panelHeight - labelSpace / 2)
 }
 
 export const drawRadiConcepts = (context: CanvasRenderingContext2D, width: number, height: number) => {
-  const columns = width >= 900 ? 4 : 2
-  const rows = Math.ceil(radiConcepts.length / columns)
+  const columns = width >= 1200 ? 4 : width >= 900 ? 3 : 2
+  const rows = Math.ceil(conceptPanels.length / columns)
   const panelWidth = (width - PANEL_GAP * (columns + 1)) / columns
   const panelHeight = (height - PANEL_TOP - PANEL_GAP * rows) / rows
 
-  radiConcepts.forEach((concept, index) => {
+  conceptPanels.forEach((panel, index) => {
     const panelX = PANEL_GAP + (index % columns) * (panelWidth + PANEL_GAP)
     const panelY = PANEL_TOP + Math.floor(index / columns) * (panelHeight + PANEL_GAP)
-    drawConceptPanel(context, concept, `${index + 1}. ${concept.name}`, panelX, panelY, panelWidth, panelHeight)
+    drawConceptPanel(context, panel, `${index + 1}. ${panel.name}`, panelX, panelY, panelWidth, panelHeight)
   })
 }

@@ -1,0 +1,422 @@
+import { ellipsePath, linePath, paintFill, paintLine, paintShade, paintShape, type BuildPath, type Context } from "@/characters/paint"
+import {
+  BLACK_FABRIC,
+  BLUSH,
+  DENIM,
+  EYE,
+  FOLK_YELLOW,
+  HAIR,
+  HAIR_HIGHLIGHT,
+  HAIR_STRAND,
+  HIGH_TOP_RED,
+  LEG_COVERS,
+  MOUTH,
+  OUTLINE,
+  OUTLINE_WIDTH,
+  PUPIL,
+  SHADE,
+  SILVER,
+  SKIN,
+  TONGUE,
+  TSARVULI_LEATHER,
+  WHITE,
+  WOOD,
+  createIrisGradient,
+  curvesPath,
+  decorationFor,
+  drawHairFlower,
+  drawKalpak,
+  drawTorso,
+  paintTube,
+  shadeIf,
+  type RadiBottom,
+  type RadiExpression,
+  type RadiHair,
+  type RadiLook,
+  type RadiShoes,
+} from "@/characters/radi"
+
+type DrawSideShoe = (context: Context, legX: number, isPolished: boolean) => void
+
+const SIDE_PONYTAIL_LOCKS = [
+  [-19, -88, -52, -98, -23, -78],
+  [-20, -87, -56, -82, -22, -76.5],
+  [-21, -86, -52, -66, -20, -77],
+] as const
+
+const SIDE_BRAID_LINKS = [
+  [-20.5, -58, 3.4],
+  [-21, -53.6, 3.3],
+  [-19.8, -49.2, 3.1],
+  [-17.8, -45, 2.9],
+  [-15.3, -41.2, 2.7],
+  [-12.8, -37.8, 2.5],
+] as const
+
+const sideHeadPath: BuildPath = (path) => {
+  path.moveTo(-2, -93)
+  path.bezierCurveTo(14, -93, 23, -83, 23, -70)
+  path.quadraticCurveTo(25.2, -64.5, 23, -61.5)
+  path.bezierCurveTo(22.5, -54, 18, -46, 10, -44.2)
+  path.quadraticCurveTo(6, -43.4, 2, -45)
+  path.bezierCurveTo(-6, -48, -12, -52, -16, -56)
+  path.bezierCurveTo(-21, -60, -23, -64, -23, -70)
+  path.bezierCurveTo(-23, -84, -14, -93, -2, -93)
+  path.closePath()
+}
+
+const sideHairCapPath: BuildPath = (path) => {
+  path.moveTo(20.5, -78)
+  path.bezierCurveTo(19, -101, -19, -103, -24.5, -78)
+  path.quadraticCurveTo(-26, -62, -19, -52)
+  path.quadraticCurveTo(-11, -58, -8, -66)
+  path.quadraticCurveTo(-4, -73, 4, -74)
+  path.quadraticCurveTo(14, -75, 20.5, -78)
+  path.closePath()
+}
+
+const sideLooseHairPath: BuildPath = (path) => {
+  path.moveTo(23.8, -76.5)
+  path.bezierCurveTo(21, -100, -19, -104, -25, -80)
+  path.bezierCurveTo(-28, -66, -29, -52, -27, -40)
+  path.quadraticCurveTo(-23, -37.5, -20, -40.5)
+  path.quadraticCurveTo(-17, -37, -13, -40)
+  path.quadraticCurveTo(-10, -38, -8.5, -41.5)
+  path.bezierCurveTo(-11, -50, -9, -60, -7, -66)
+  path.quadraticCurveTo(-3, -72.5, 5, -73.5)
+  path.lineTo(9, -74.8)
+  path.lineTo(12, -76.8)
+  path.lineTo(15.5, -74.8)
+  path.lineTo(18.5, -77)
+  path.lineTo(21.5, -75)
+  path.closePath()
+}
+
+const drawSideHairBack = (context: Context, hair: RadiHair, isPolished: boolean) => {
+  if (hair === "bun") {
+    paintShape(context, HAIR, ellipsePath(-10, -96, 7.5, 6.5), shadeIf(isPolished))
+    return
+  }
+  if (hair === "ponytail") {
+    const lockPaths = SIDE_PONYTAIL_LOCKS.map(([baseStartX, baseStartY, tipX, tipY, baseEndX, baseEndY]): BuildPath => (path) => {
+      path.moveTo(baseStartX, baseStartY)
+      path.lineTo(tipX, tipY)
+      path.lineTo(baseEndX, baseEndY)
+      path.closePath()
+    })
+    for (const lockPath of lockPaths) paintLine(context, OUTLINE, OUTLINE_WIDTH * 2, lockPath)
+    for (const lockPath of lockPaths) {
+      paintFill(context, HAIR, lockPath)
+      if (isPolished) paintShade(context, SHADE, lockPath)
+    }
+    paintLine(context, HAIR_HIGHLIGHT, 1.2, linePath(-27, -83, -42, -82))
+    return
+  }
+  if (hair === "braid") {
+    const braidPaths: BuildPath[] = [
+      ...SIDE_BRAID_LINKS.map(([linkX, linkY, radius], index): BuildPath => (path) =>
+        path.ellipse(linkX, linkY, radius * 0.95, radius * 1.1, index % 2 === 0 ? 0.35 : -0.35, 0, Math.PI * 2)),
+      (path) => {
+        path.moveTo(-13.6, -35.6)
+        path.quadraticCurveTo(-13, -31.5, -9.5, -29.5)
+        path.quadraticCurveTo(-10.6, -32.5, -10, -35.8)
+        path.closePath()
+      },
+    ]
+    for (const braidPath of braidPaths) paintLine(context, OUTLINE, OUTLINE_WIDTH * 2, braidPath)
+    for (const braidPath of braidPaths) {
+      paintFill(context, HAIR, braidPath)
+      if (isPolished) paintShade(context, SHADE, braidPath)
+    }
+    paintLine(context, OUTLINE, 0.6, curvesPath(SIDE_BRAID_LINKS.map(([linkX, linkY, radius], index) => {
+      const [startDrop, endDrop] = index % 2 === 0 ? [0.2, 1.1] : [1.1, 0.2]
+      return [linkX - radius * 0.85, linkY + radius * startDrop, linkX, linkY + radius * 0.9, linkX + radius * 0.85, linkY + radius * endDrop] as const
+    })))
+    if (isPolished) {
+      paintLine(context, HAIR_HIGHLIGHT, 0.7, curvesPath(SIDE_BRAID_LINKS.map(([linkX, linkY, radius]) => [linkX - radius * 0.6, linkY - radius * 0.3, linkX - radius * 0.3, linkY - radius * 0.8, linkX + radius * 0.2, linkY - radius * 0.8] as const)))
+    }
+    paintShape(context, BLACK_FABRIC, (path) => path.ellipse(-11.9, -35.6, 2.3, 1.3, -0.5, 0, Math.PI * 2))
+  }
+}
+
+const drawSideHairFront = (context: Context, hair: RadiHair, isPolished: boolean) => {
+  const isLoose = hair === "loose"
+  paintShape(context, HAIR, isLoose ? sideLooseHairPath : sideHairCapPath, shadeIf(isPolished))
+  paintLine(context, HAIR_HIGHLIGHT, 1.4, curvesPath([[10, -86, 6, -92, -2, -94], [-8, -88, -14, -90, -19, -84]]))
+  if (isLoose) paintLine(context, HAIR_HIGHLIGHT, 1.2, curvesPath([[-21, -74, -26, -60, -23, -46]]))
+  if (isPolished) paintLine(context, HAIR_STRAND, 0.6, curvesPath([[16, -80, 12, -90, 2, -95], [-12, -80, -20, -84, -22, -72]]))
+  if (isPolished && isLoose) paintLine(context, HAIR_STRAND, 0.7, curvesPath([[-15, -62, -17, -52, -14, -43], [-24, -60, -26, -50, -24, -42]]))
+  if (hair === "sideTail") {
+    paintShape(context, HAIR, (path) => {
+      path.moveTo(-2, -90)
+      path.bezierCurveTo(-14, -94, -26, -80, -24, -62)
+      path.quadraticCurveTo(-23, -48, -28, -38)
+      path.quadraticCurveTo(-16, -44, -16, -58)
+      path.bezierCurveTo(-16, -72, -10, -84, -5, -86)
+      path.closePath()
+    }, shadeIf(isPolished))
+    paintLine(context, HAIR_HIGHLIGHT, 1.2, curvesPath([[-9, -89, -20, -84, -20, -64]]))
+  }
+  const tieCenter = hair === "sideTail" ? [-3.5, -88.5] : hair === "ponytail" ? [-22, -83] : null
+  if (tieCenter) {
+    paintShape(context, "#ff5fa2", ellipsePath(tieCenter[0], tieCenter[1], 2.6, 3))
+    if (isPolished) paintFill(context, "rgba(255, 255, 255, 0.6)", ellipsePath(tieCenter[0] - 0.8, tieCenter[1] - 1.2, 0.7, 0.9))
+  }
+}
+
+const sideShoePainters: Record<RadiShoes, DrawSideShoe> = {
+  sneakers: (context, legX, isPolished) => {
+    const toeX = legX + 2.5
+    paintShape(context, WHITE, ellipsePath(toeX, -3, 6, 3.3), {
+      ...shadeIf(isPolished),
+      decorateInside: isPolished ? (shoeContext) => paintFill(shoeContext, "#ddd6cf", (path) => path.rect(toeX - 7, -1.4, 14, 3)) : undefined,
+    })
+    paintLine(context, OUTLINE, 0.6, curvesPath([[toeX - 1.5, -5.4, toeX, -5.9, toeX + 1.5, -5.4], [toeX, -4.6, toeX + 1.5, -5.1, toeX + 3, -4.6]]))
+  },
+  highTops: (context, legX, isPolished) => {
+    const toeX = legX + 2.5
+    paintShape(context, HIGH_TOP_RED, (path) => path.roundRect(legX - 3.5, -10, 7, 8, 2), shadeIf(isPolished))
+    paintShape(context, WHITE, ellipsePath(legX - 0.5, -7.5, 1.1, 1.1))
+    paintShape(context, HIGH_TOP_RED, ellipsePath(toeX, -3, 6, 3.3), {
+      ...shadeIf(isPolished),
+      decorateInside: (shoeContext) => {
+        paintFill(shoeContext, WHITE, (path) => path.rect(toeX - 7, -1.6, 14, 3))
+        paintFill(shoeContext, WHITE, ellipsePath(toeX + 4, -2.4, 2.6, 1.8))
+      },
+    })
+  },
+  tsarvuli: (context, legX, isPolished) => {
+    const toeX = legX + 2.5
+    for (const crossY of [-15, -10]) {
+      paintLine(context, OUTLINE, 0.9, linePath(legX - 3, crossY - 2.5, legX + 3, crossY + 2.5))
+      paintLine(context, OUTLINE, 0.9, linePath(legX + 3, crossY - 2.5, legX - 3, crossY + 2.5))
+    }
+    paintShape(context, TSARVULI_LEATHER, ellipsePath(toeX, -3, 6.2, 3.3), shadeIf(isPolished))
+    paintLine(context, OUTLINE, 0.6, curvesPath([[toeX + 3, -5.2, toeX + 3.8, -4, toeX + 4.4, -2.6]]))
+    paintShape(context, "#e0453a", ellipsePath(toeX + 3.5, -5.6, 1.2, 1.2))
+  },
+  partyHeels: (context, legX, isPolished) => {
+    const toeX = legX + 2.5
+    paintShape(context, BLACK_FABRIC, (path) => path.rect(legX - 3, -1.8, 1.8, 1.8))
+    paintTube(context, BLACK_FABRIC, 0.9, linePath(legX - 3, -7.5, legX + 3, -7.5), isPolished)
+    paintShape(context, BLACK_FABRIC, ellipsePath(toeX, -3.4, 5.6, 3), shadeIf(isPolished))
+    paintFill(context, "rgba(255, 255, 255, 0.45)", ellipsePath(toeX + 1, -4.6, 1.8, 0.7))
+    for (const [sparkleX, sparkleY] of [[2.5, -3.6], [-1, -2.6], [4, -2.2]]) paintFill(context, SILVER, ellipsePath(toeX + sparkleX, sparkleY, 0.45, 0.45))
+  },
+  folkFlats: (context, legX, isPolished) => {
+    const toeX = legX + 2.5
+    paintShape(context, BLACK_FABRIC, ellipsePath(toeX, -3, 5.8, 3.1), shadeIf(isPolished))
+    paintFill(context, "rgba(255, 255, 255, 0.35)", ellipsePath(toeX + 1, -4.2, 1.8, 0.7))
+    paintTube(context, BLACK_FABRIC, 0.9, linePath(legX - 3, -6.5, legX + 3, -6.5), isPolished)
+    paintFill(context, SILVER, ellipsePath(legX + 2.4, -6.5, 0.6, 0.6))
+  },
+}
+
+const drawSideLegs = (context: Context, shoes: RadiShoes, isPolished: boolean) => {
+  for (const legX of [-2.5, 2.5]) {
+    paintTube(context, LEG_COVERS[shoes] ?? SKIN, 6, linePath(legX, -19, legX, -6), isPolished)
+    sideShoePainters[shoes](context, legX, isPolished)
+  }
+}
+
+const drawSideBottom = (context: Context, bottom: RadiBottom, isPolished: boolean) => {
+  paintShape(context, bottom.color, (path) => {
+    path.moveTo(-7, -32)
+    path.lineTo(7, -32)
+    if (bottom.kind === "skirt") {
+      path.lineTo(12, -18)
+      path.quadraticCurveTo(0, -16, -11, -18)
+    } else {
+      path.lineTo(8, -19)
+      path.lineTo(-8, -19)
+    }
+    path.closePath()
+  }, { ...shadeIf(isPolished), decorateInside: decorationFor(bottom.pattern) })
+}
+
+const drawSideEye = (context: Context, isOpen: boolean, isPolished: boolean) => {
+  if (!isOpen) {
+    paintLine(context, OUTLINE, 1.6, (path) => {
+      path.moveTo(11, -63)
+      path.quadraticCurveTo(13.5, -68, 16, -63)
+    })
+    return
+  }
+  paintShape(context, isPolished ? createIrisGradient(context) : EYE, ellipsePath(13.5, -64, 2.8, 5.2), {
+    decorateInside: isPolished ? (irisContext) => paintFill(irisContext, "rgba(0, 0, 0, 0.25)", ellipsePath(13.5, -69, 3.5, 2.6)) : undefined,
+  })
+  paintFill(context, PUPIL, ellipsePath(14, -63.2, 1.5, 3))
+  paintFill(context, WHITE, ellipsePath(12.9, -66.2, 1.1, 1.4))
+  paintFill(context, WHITE, ellipsePath(14.6, -61.6, 0.5, 0.6))
+  if (isPolished) {
+    paintLine(context, OUTLINE, 1.2, (path) => {
+      path.moveTo(11, -67)
+      path.quadraticCurveTo(13.5, -71, 16, -67.5)
+    })
+  }
+  paintLine(context, OUTLINE, 1.2, linePath(15.6, -67.5, 18, -69.5))
+}
+
+const toPath2D = (buildPath: BuildPath) => {
+  const path = new Path2D()
+  buildPath(path)
+  return path
+}
+
+const puffedCheekPath = ellipsePath(18, -54, 6, 5)
+
+const drawPuffedCheek = (context: Context) => {
+  const outsideHead = new Path2D()
+  outsideHead.rect(-60, -130, 120, 140)
+  outsideHead.addPath(toPath2D(sideHeadPath))
+  context.save()
+  context.clip(outsideHead, "evenodd")
+  paintLine(context, OUTLINE, OUTLINE_WIDTH * 2, puffedCheekPath)
+  context.restore()
+  paintFill(context, SKIN, puffedCheekPath)
+}
+
+const drawSideMouth = (context: Context, expression: RadiExpression, isPolished: boolean) => {
+  if (expression === "puff") {
+    paintShape(context, MOUTH, ellipsePath(23.6, -53.5, 1.2, 1.6))
+    return
+  }
+  context.save()
+  context.clip(toPath2D(sideHeadPath))
+  paintShape(context, MOUTH, (path) => {
+    path.moveTo(15.8, -55.2)
+    path.quadraticCurveTo(19, -56.2, 25, -56.4)
+    path.lineTo(25, -49)
+    path.quadraticCurveTo(19, -50.5, 15.8, -55.2)
+    path.closePath()
+  }, {
+    decorateInside: (mouthContext) => {
+      paintFill(mouthContext, WHITE, (path) => path.rect(15, -57, 11, 2.3))
+      if (isPolished) paintFill(mouthContext, "rgba(0, 0, 0, 0.2)", (path) => path.rect(15, -54.7, 11, 0.7))
+      paintFill(mouthContext, TONGUE, ellipsePath(20.5, -50.6, 3, 1.4))
+    },
+  })
+  context.restore()
+  context.stroke(toPath2D(sideHeadPath))
+  paintLine(context, OUTLINE, 0.8, curvesPath([[15.4, -54.4, 14.6, -55.4, 15.2, -56.4]]))
+}
+
+const drawSideHead = (context: Context, expression: RadiExpression, isPolished: boolean) => {
+  paintShape(context, SKIN, sideHeadPath, shadeIf(isPolished))
+  if (expression === "puff") drawPuffedCheek(context)
+  paintShape(context, SKIN, ellipsePath(-3, -64, 3.5, 4.5), shadeIf(isPolished))
+  paintLine(context, OUTLINE, 0.7, curvesPath([[-4.5, -66, -2, -65, -3, -62]]))
+  drawSideEye(context, expression !== "tongue", isPolished)
+  paintLine(context, HAIR, 1.2, curvesPath([[10.5, -72.5, 13.5, -74.5, 16.5, -72.8]]))
+  paintFill(context, BLUSH, ellipsePath(13, -56.5, 3.4, 2.4))
+  if (isPolished) paintFill(context, "rgba(255, 255, 255, 0.7)", ellipsePath(11.6, -57.5, 0.8, 0.6))
+  drawSideMouth(context, expression, isPolished)
+}
+
+const drawSideGaida = (context: Context, isPolished: boolean) => {
+  paintShape(context, "#efe3c4", ellipsePath(11, -38, 6.5, 6), shadeIf(isPolished))
+  paintShape(context, WOOD, (path) => path.roundRect(11.5, -34, 3, 23, 1.5), shadeIf(isPolished))
+  if (isPolished) for (const holeY of [-29, -24, -19, -14]) paintFill(context, "#2a1608", ellipsePath(13, holeY, 0.6, 0.6))
+  paintShape(context, WOOD, ellipsePath(13, -10.5, 3, 1.6), shadeIf(isPolished))
+}
+
+const drawSideExtrasOnBody = (context: Context, look: RadiLook, isPolished: boolean) => {
+  const hasExtra = (extra: RadiLook["extras"][number]) => look.extras.includes(extra)
+  if (hasExtra("apron")) {
+    paintShape(context, FOLK_YELLOW, (path) => {
+      path.moveTo(4.5, -31)
+      path.lineTo(7, -31)
+      path.lineTo(12.3, -17.8)
+      path.lineTo(8.5, -17)
+      path.closePath()
+    }, {
+      ...shadeIf(isPolished),
+      decorateInside: (apronContext) => {
+        for (const stripeY of [-27, -21.5]) paintFill(apronContext, "#8f9a8c", (path) => path.rect(0, stripeY, 15, 1.5))
+      },
+    })
+  }
+  if (hasExtra("pafti")) {
+    paintShape(context, BLACK_FABRIC, (path) => path.roundRect(-7.5, -33.5, 15, 3, 1), shadeIf(isPolished))
+    paintShape(context, SILVER, ellipsePath(6, -32, 2.2, 2.3), shadeIf(isPolished))
+  }
+  if (hasExtra("denimJacket")) {
+    paintShape(context, DENIM, (path) => path.roundRect(-7.5, -49.5, 11.5, 19.5, 5), shadeIf(isPolished))
+    paintShape(context, DENIM, (path) => {
+      path.moveTo(-2, -49.5)
+      path.lineTo(4, -49.5)
+      path.lineTo(1, -45)
+      path.closePath()
+    }, shadeIf(isPolished))
+  }
+  if (hasExtra("pendant")) {
+    paintLine(context, OUTLINE, 0.6, linePath(1, -47.5, 5.5, -41.5))
+    paintShape(context, "#2ec4b6", ellipsePath(6, -40.5, 1.5, 2))
+  }
+  if (hasExtra("heartNecklace")) {
+    paintLine(context, SILVER, 0.5, linePath(1, -47.5, 5.8, -42.5))
+    paintShape(context, SILVER, (path) => {
+      path.moveTo(6.2, -39.4)
+      path.bezierCurveTo(4.4, -40.6, 4.8, -42.5, 6.2, -41.6)
+      path.bezierCurveTo(7.6, -42.5, 8, -40.6, 6.2, -39.4)
+      path.closePath()
+    }, shadeIf(isPolished))
+  }
+  if (hasExtra("gaida")) drawSideGaida(context, isPolished)
+}
+
+const drawSideHeadwear = (context: Context, look: RadiLook, isPolished: boolean) => {
+  if (look.extras.includes("bandana")) {
+    paintTube(context, BLACK_FABRIC, 1.8, curvesPath([[-25, -81, -30, -77, -29, -71], [-24.5, -80.5, -27, -75, -25, -70]]), isPolished)
+    paintShape(context, BLACK_FABRIC, (path) => {
+      path.moveTo(20.6, -83.2)
+      path.quadraticCurveTo(0, -86, -23, -84.5)
+      path.lineTo(-25.2, -79.5)
+      path.quadraticCurveTo(0, -80.5, 21.8, -78)
+      path.closePath()
+    }, shadeIf(isPolished))
+    paintShape(context, BLACK_FABRIC, ellipsePath(-25, -82, 2.5, 2.2), shadeIf(isPolished))
+  }
+  if (look.extras.includes("kalpak")) drawKalpak(context, isPolished)
+  if (look.extras.includes("hairFlower")) {
+    context.save()
+    context.translate(-15.5, 0)
+    drawHairFlower(context, isPolished)
+    context.restore()
+  }
+}
+
+const drawSideArm = (context: Context, look: RadiLook, isPolished: boolean) => {
+  const isHolding = look.pose === "hold"
+  const [handX, handY] = isHolding ? [10, -35] : [3, -31]
+  paintTube(context, look.extras.includes("denimJacket") ? DENIM : SKIN, 4.5, linePath(0, -41.5, handX, handY), isPolished)
+  paintShape(context, SKIN, ellipsePath(handX, handY, 2.8, 2.8), shadeIf(isPolished))
+  if (look.extras.includes("puffSleeves")) {
+    paintShape(context, WHITE, ellipsePath(0, -39.9, 3.8, 3.4), shadeIf(isPolished))
+    paintShape(context, FOLK_YELLOW, ellipsePath(0, -41.3, 4, 3.5), shadeIf(isPolished))
+  }
+  if (look.extras.includes("gaida")) paintTube(context, WOOD, 1.6, linePath(23, -52.5, 13, -43), isPolished)
+}
+
+export const drawRadiSide = (context: Context, look: RadiLook, feetX: number, feetY: number, scale: number) => {
+  const isPolished = look.polished === true
+  context.save()
+  context.translate(feetX, feetY)
+  context.scale(scale, scale)
+  context.lineJoin = "round"
+  context.lineCap = "round"
+  context.lineWidth = OUTLINE_WIDTH
+  context.strokeStyle = OUTLINE
+
+  drawSideHairBack(context, look.hair, isPolished)
+  drawSideLegs(context, look.shoes ?? "sneakers", isPolished)
+  drawSideBottom(context, look.bottom, isPolished)
+  drawTorso(context, look.top, isPolished, 7)
+  drawSideExtrasOnBody(context, look, isPolished)
+  drawSideHead(context, look.expression, isPolished)
+  drawSideHairFront(context, look.hair, isPolished)
+  drawSideHeadwear(context, look, isPolished)
+  drawSideArm(context, look, isPolished)
+
+  context.restore()
+}

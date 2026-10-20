@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef } from "react"
+import { drawRadiConcepts } from "@/characters/radiConcepts"
 import { drawOpeningScene, greetingButtonLayout } from "@/scenes/openingScene"
 import { useFilmStore } from "@/store/film"
 
@@ -42,10 +43,17 @@ export const FilmCanvas = () => {
     const drawFrame = (timeMilliseconds: number) => {
       const elapsedSeconds = previousTimeMilliseconds === null ? 0 : (timeMilliseconds - previousTimeMilliseconds) / 1000
       previousTimeMilliseconds = timeMilliseconds
-      const targetProgress = useFilmStore.getState().progress
+      const { progress: targetProgress, isShowingConcepts } = useFilmStore.getState()
       shownProgress += (targetProgress - shownProgress) * (1 - Math.exp(-elapsedSeconds * 6))
-      drawOpeningScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, shownProgress)
-      if (moreButtonRef.current) placeMoreButton(moreButtonRef.current, greetingButtonLayout(window.innerWidth, window.innerHeight, shownProgress))
+      if (isShowingConcepts) {
+        context.fillStyle = "#000000"
+        context.fillRect(0, 0, window.innerWidth, window.innerHeight)
+        drawRadiConcepts(context, window.innerWidth, window.innerHeight)
+      } else {
+        drawOpeningScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, shownProgress)
+      }
+      const buttonLayout = isShowingConcepts ? null : greetingButtonLayout(window.innerWidth, window.innerHeight, shownProgress)
+      if (moreButtonRef.current) placeMoreButton(moreButtonRef.current, buttonLayout)
       animationFrameId = requestAnimationFrame(drawFrame)
     }
     const updateProgress = () => {

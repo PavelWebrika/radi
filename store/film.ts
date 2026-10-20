@@ -14,7 +14,9 @@ type FilmState = {
   progress: number
   activeChapterId: string | null
   soundOn: boolean
+  isShowingConcepts: boolean
   setProgress: (progress: number) => void
+  toggleConcepts: () => void
 }
 
 const findActiveChapterId = (chapters: Chapter[], progress: number) => {
@@ -31,9 +33,11 @@ export const useFilmStore = create<FilmState>((set) => ({
   progress: 0,
   activeChapterId: null,
   soundOn: false,
+  isShowingConcepts: false,
   setProgress: (progress) =>
     set((state) => ({
       progress,
       activeChapterId: findActiveChapterId(state.chapters, progress),
     })),
+  toggleConcepts: () => set((state) => ({ isShowingConcepts: !state.isShowingConcepts })),
 }))
