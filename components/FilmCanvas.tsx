@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef } from "react"
-import { drawOpeningScene } from "@/scenes/openingScene"
+import { drawOpeningScene, greetingButtonLayout } from "@/scenes/openingScene"
 import { useFilmStore } from "@/store/film"
 
 const resizeCanvas = (canvas: HTMLCanvasElement, context: CanvasRenderingContext2D) => {
@@ -17,8 +17,19 @@ const readScrollProgress = () => {
   return Math.min(1, Math.max(0, window.scrollY / scrollableHeight))
 }
 
+const placeMoreButton = (button: HTMLButtonElement, layout: ReturnType<typeof greetingButtonLayout>) => {
+  button.dataset.visible = String(layout !== null)
+  button.tabIndex = layout ? 0 : -1
+  if (!layout) return
+  button.style.left = `${layout.centerX}px`
+  button.style.top = `${layout.centerY}px`
+  button.style.width = `${layout.width}px`
+  button.style.fontSize = `${layout.fontSize}px`
+}
+
 export const FilmCanvas = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const moreButtonRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -34,6 +45,7 @@ export const FilmCanvas = () => {
       const targetProgress = useFilmStore.getState().progress
       shownProgress += (targetProgress - shownProgress) * (1 - Math.exp(-elapsedSeconds * 6))
       drawOpeningScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, shownProgress)
+      if (moreButtonRef.current) placeMoreButton(moreButtonRef.current, greetingButtonLayout(window.innerWidth, window.innerHeight, shownProgress))
       animationFrameId = requestAnimationFrame(drawFrame)
     }
     const updateProgress = () => {
@@ -56,5 +68,12 @@ export const FilmCanvas = () => {
     }
   }, [])
 
-  return <canvas ref={canvasRef} />
+  return (
+    <>
+      <canvas ref={canvasRef} />
+      <button ref={moreButtonRef} type="button" className="more-button" data-visible="false" tabIndex={-1}>
+        {"Don't you want to know more about me?"}
+      </button>
+    </>
+  )
 }

@@ -51,10 +51,14 @@ type CurveLine = readonly [number, number, number, number, number, number]
 type Point = readonly [number, number]
 type RadiHands = readonly [Point, Point]
 
+type PerSide = readonly [number, number]
+
 export type RadiMotion = {
   faceTurn: number
-  legLifts: readonly [number, number]
+  legLifts: PerSide
+  kneeBends: PerSide
   hands: RadiHands
+  elbowBends: PerSide
 }
 
 export type RadiLook = {
@@ -380,11 +384,16 @@ const shoePainters: Record<RadiShoes, DrawShoe> = {
 
 const LEG_COVERS: Partial<Record<RadiShoes, string>> = { tsarvuli: WOOL_WRAP, folkFlats: WHITE }
 
-const drawLegs = (context: Context, shoes: RadiShoes, legLifts: readonly [number, number], isPolished: boolean) => {
+const drawLegs = (context: Context, shoes: RadiShoes, legLifts: PerSide, kneeBends: PerSide, isPolished: boolean) => {
   SIDES.forEach((side, index) => {
+    const legX = side * 5
     context.save()
     context.translate(0, -legLifts[index])
-    paintShape(context, LEG_COVERS[shoes] ?? SKIN, (path) => path.roundRect(side * 5 - 3, -22, 6, 19, 3), shadeIf(isPolished))
+    paintTube(context, LEG_COVERS[shoes] ?? SKIN, 6, (path) => {
+      path.moveTo(legX, -19)
+      path.lineTo(legX + side * kneeBends[index], -12.5)
+      path.lineTo(legX, -6)
+    }, isPolished)
     shoePainters[shoes](context, side, isPolished)
     context.restore()
   })
@@ -734,11 +743,20 @@ const drawKalpak = (context: Context, isPolished: boolean) => {
   })
 }
 
-const drawArms = (context: Context, look: RadiLook, hands: RadiHands, isPolished: boolean) => {
+const drawArms = (context: Context, look: RadiLook, hands: RadiHands, elbowBends: PerSide, isPolished: boolean) => {
   const sleeveColor = look.extras.includes("denimJacket") ? DENIM : SKIN
   SIDES.forEach((side, index) => {
     const [handX, handY] = hands[index]
-    paintTube(context, sleeveColor, 4.5, linePath(side * 8.5, -42.5, handX, handY), isPolished)
+    const shoulderX = side * 8.5
+    const shoulderY = -42.5
+    const bendPerUnit = elbowBends[index] / (Math.hypot(handX - shoulderX, handY - shoulderY) || 1)
+    const elbowX = (shoulderX + handX) / 2 + side * (handY - shoulderY) * bendPerUnit
+    const elbowY = (shoulderY + handY) / 2 - side * (handX - shoulderX) * bendPerUnit
+    paintTube(context, sleeveColor, 4.5, (path) => {
+      path.moveTo(shoulderX, shoulderY)
+      path.lineTo(elbowX, elbowY)
+      path.lineTo(handX, handY)
+    }, isPolished)
     if (look.pose === "peace" && side === 1) {
       paintTube(context, SKIN, 1.8, linePath(handX, handY, handX - 1.5, handY - 6))
       paintTube(context, SKIN, 1.8, linePath(handX, handY, handX + 2.5, handY - 6))
@@ -761,7 +779,7 @@ const drawHeadphones = (context: Context, isPolished: boolean) => {
 export const drawRadi = (context: Context, look: RadiLook, feetX: number, feetY: number, scale: number, motion: Partial<RadiMotion> = {}) => {
   const hasExtra = (extra: RadiExtra) => look.extras.includes(extra)
   const isPolished = look.polished === true
-  const { faceTurn = 0, legLifts = [0, 0], hands = HAND_POSITIONS[look.pose] } = motion
+  const { faceTurn = 0, legLifts = [0, 0], kneeBends = [0, 0], hands = HAND_POSITIONS[look.pose], elbowBends = [0, 0] } = motion
 
   context.save()
   context.translate(feetX, feetY)
@@ -772,7 +790,7 @@ export const drawRadi = (context: Context, look: RadiLook, feetX: number, feetY:
   context.strokeStyle = OUTLINE
 
   drawHairBack(context, look.hair, isPolished)
-  drawLegs(context, look.shoes ?? "sneakers", legLifts, isPolished)
+  drawLegs(context, look.shoes ?? "sneakers", legLifts, kneeBends, isPolished)
   drawBottom(context, look.bottom, isPolished)
   drawTorso(context, look.top, isPolished)
   if (hasExtra("apron")) drawApron(context, isPolished)
@@ -791,7 +809,7 @@ export const drawRadi = (context: Context, look: RadiLook, feetX: number, feetY:
   if (hasExtra("bandana")) drawBandana(context, isPolished)
   if (hasExtra("kalpak")) drawKalpak(context, isPolished)
   if (hasExtra("hairFlower")) drawHairFlower(context, isPolished)
-  drawArms(context, look, hands, isPolished)
+  drawArms(context, look, hands, elbowBends, isPolished)
   if (hasExtra("puffSleeves")) drawPuffSleeves(context, isPolished)
   if (look.hair === "braid") drawBraidBehindHead(context, isPolished)
   if (hasExtra("headphones")) drawHeadphones(context, isPolished)

@@ -15,6 +15,31 @@ canvas {
   background: #000000;
 }
 
+.more-button {
+  position: fixed;
+  z-index: 1;
+  transform: translate(-50%, -50%);
+  padding: 0;
+  border: none;
+  background: none;
+  color: #e63946;
+  font-family: "Comic Sans MS", "Comic Sans", cursive;
+  line-height: 1.2;
+  text-align: center;
+  cursor: pointer;
+  transition: opacity 0.3s;
+}
+
+.more-button:hover,
+.more-button:focus-visible {
+  text-decoration: underline;
+}
+
+.more-button[data-visible="false"] {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .film-scroll {
   height: 400vh;
 }

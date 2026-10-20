@@ -265,12 +265,28 @@ const isMoving = (stage: number) => stage > 0 && stage < 1
 const settle = (stage: number) => Math.min(1, stage * 6, (1 - stage) * 6)
 const settledStretch = (stretchY: number, stage: number) => 1 + (stretchY - 1) * settle(stage)
 
+const radiScale = (width: number, height: number) => Math.min(height * 0.34, width * 0.75) / 125
+const radiFeetY = (height: number) => height * 0.88
+
+const greetingBubbleGeometry = (width: number, radiX: number, feetY: number, scale: number) => {
+  const bubbleWidth = Math.min(width * 0.38, 340)
+  return {
+    bubbleWidth,
+    bubbleHeight: bubbleWidth * 0.7,
+    centerX: Math.min(width - bubbleWidth / 2 - 12, radiX + 44 * scale + bubbleWidth / 2),
+    centerY: feetY - 112 * scale,
+  }
+}
+
+export const greetingButtonLayout = (width: number, height: number, progress: number) => {
+  if (progress < WAVE_START) return null
+  const { bubbleWidth, bubbleHeight, centerX, centerY } = greetingBubbleGeometry(width, width / 2, radiFeetY(height), radiScale(width, height))
+  return { centerX, centerY: centerY + bubbleHeight * 0.2, width: bubbleWidth * 0.72, fontSize: Math.max(11, bubbleWidth * 0.065) }
+}
+
 const drawGreetingBubble = (context: Context, width: number, radiX: number, feetY: number, scale: number, popScale: number) => {
   if (popScale <= 0) return
-  const bubbleWidth = Math.min(width * 0.38, 340)
-  const bubbleHeight = bubbleWidth * 0.5
-  const centerX = Math.min(width - bubbleWidth / 2 - 12, radiX + 44 * scale + bubbleWidth / 2)
-  const centerY = feetY - 112 * scale
+  const { bubbleWidth, bubbleHeight, centerX, centerY } = greetingBubbleGeometry(width, radiX, feetY, scale)
   context.save()
   context.translate(centerX, centerY)
   context.scale(popScale, popScale)
@@ -282,13 +298,13 @@ const drawGreetingBubble = (context: Context, width: number, radiX: number, feet
       path.lineTo(-bubbleWidth * 0.15, bubbleHeight * 0.38)
       path.closePath()
     },
-  ], Math.max(3, bubbleWidth * 0.012), ["Hello,", "I'm Radi!"], 0, 0, bubbleWidth * 0.13)
+  ], Math.max(3, bubbleWidth * 0.012), ["Hello,", "I'm Radi!"], 0, -bubbleHeight * 0.18, bubbleWidth * 0.12)
   context.restore()
 }
 
 const drawSkippingRadi = (context: Context, width: number, height: number, time: number, progress: number) => {
-  const scale = Math.min(height * 0.34, width * 0.75) / 125
-  const feetY = height * 0.88
+  const scale = radiScale(width, height)
+  const feetY = radiFeetY(height)
   const walk = easeOut(stageProgress(progress, 0, WALK_END))
   const turn = stageProgress(progress, WALK_END, TURN_END)
   const radiX = mix(-45 * scale, width / 2, walk)
@@ -320,6 +336,8 @@ const drawSkippingRadi = (context: Context, width: number, height: number, time:
   drawRadi(context, everydayRadiLook, 0, 0, scale, {
     faceTurn: 1 - easeOut(turn),
     legLifts: leadSide === 1 ? [knee + tuck, knee * 0.2 + tuck] : [knee * 0.2 + tuck, knee + tuck],
+    kneeBends: leadSide === 1 ? [knee * 0.5 + tuck * 0.8, knee * 0.1 + tuck * 0.8] : [knee * 0.1 + tuck * 0.8, knee * 0.5 + tuck * 0.8],
+    elbowBends: [0, mix(0, -3 + waveSwing * 0.4, raise)],
     hands: [
       [-14 - Math.abs(armPump) * 3 - cheer * 0.5, -33 - armPump * 10 - cheer],
       [mix(14 + Math.abs(armPump) * 3 + cheer * 0.5, 27 + waveSwing, raise), mix(-33 + armPump * 10 - cheer, -57 + Math.abs(waveSwing) * 0.4, raise)],
