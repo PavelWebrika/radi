@@ -1,0 +1,29 @@
+html,
+body {
+  margin: 0;
+  background: #000000;
+  color: #ffffff;
+  font-family: "Comic Sans MS", "Comic Sans", cursive;
+}
+
+canvas {
+  display: block;
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  background: #000000;
+}
+
+.home-title {
+  position: fixed;
+  z-index: 1;
+  top: 24px;
+  left: 0;
+  right: 0;
+  margin: 0;
+  font-family: "Comic Sans MS", "Comic Sans", cursive;
+  font-size: 24px;
+  font-weight: normal;
+  text-align: center;
+}
