@@ -1,9 +1,10 @@
 "use client"
 
 import { useEffect, useRef } from "react"
+import { drawRadiConcepts } from "@/characters/radiConcepts"
 import { useFilmStore } from "@/store/film"
 
-const paintBlack = (canvas: HTMLCanvasElement) => {
+const paintConcepts = (canvas: HTMLCanvasElement) => {
   const context = canvas.getContext("2d")
   if (!context) return
 
@@ -16,6 +17,7 @@ const paintBlack = (canvas: HTMLCanvasElement) => {
   context.setTransform(ratio, 0, 0, ratio, 0, 0)
   context.fillStyle = "#000000"
   context.fillRect(0, 0, width, height)
+  drawRadiConcepts(context, width, height)
 }
 
 const readScrollProgress = () => {
@@ -31,7 +33,7 @@ export const FilmCanvas = () => {
     const canvas = canvasRef.current
     if (!canvas) return
 
-    const draw = () => paintBlack(canvas)
+    const draw = () => paintConcepts(canvas)
     const updateProgress = () => {
       useFilmStore.getState().setProgress(readScrollProgress())
     }
