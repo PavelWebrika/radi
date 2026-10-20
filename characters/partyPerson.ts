@@ -7,7 +7,7 @@ type PartyTop = "tee" | "tank" | "shirt" | "crop" | "hoodie" | "blazer"
 type PartyBottom = "jeans" | "shorts" | "skirt"
 type PartyShoes = "sneakers" | "boots" | "heels" | "loafers"
 type PartyBuild = "slim" | "broad" | "curvy"
-type PartyFace = "smile" | "laugh" | "vibing"
+type PartyFace = "smile" | "laugh" | "vibing" | "amazed"
 type PartyExtra = "beard" | "stubble" | "mustache" | "glasses" | "sunglasses" | "cap" | "earrings" | "chain" | "drink" | "sequins"
 type BuildShape = { torso: number; hip: number }
 
@@ -29,7 +29,7 @@ export type PartyPerson = {
   extras: PartyExtra[]
 }
 
-export type PartyPose = { hands: readonly [Point, Point]; bounce: number; sway: number; headTilt: number; footLifts: readonly [number, number] }
+export type PartyPose = { hands: readonly [Point, Point]; bounce: number; sway: number; headTilt: number; footLifts: readonly [number, number]; lookUp: number }
 
 const SIDES = [-1, 1] as const
 const BUILDS: Record<PartyBuild, BuildShape> = {
@@ -290,8 +290,9 @@ const drawHairBack = (context: Context, { hair, hairColor, accentColor }: PartyP
   }
 }
 
-const drawEyes = (context: Context, person: PartyPerson) => {
+const drawEyes = (context: Context, person: PartyPerson, lookUp: number) => {
   const { eyes, eyeColor, skin, face } = person
+  const gazeY = EYE_Y - lookUp * 1.6
   for (const side of SIDES) {
     const eyeX = side * 8.5
     if (face === "vibing") {
@@ -302,14 +303,14 @@ const drawEyes = (context: Context, person: PartyPerson) => {
       continue
     }
     if (eyes === "dot") {
-      paintFill(context, OUTLINE, ellipsePath(eyeX, EYE_Y, 2.2, 2.8))
-      paintFill(context, WHITE, ellipsePath(eyeX + 0.8, EYE_Y - 1.2, 0.8, 0.8))
+      paintFill(context, OUTLINE, ellipsePath(eyeX, gazeY, 2.2, 2.8))
+      paintFill(context, WHITE, ellipsePath(eyeX + 0.8, gazeY - 1.2, 0.8, 0.8))
       continue
     }
     paintShape(context, WHITE, ellipsePath(eyeX, EYE_Y, 4.5, 4.5))
-    paintFill(context, eyeColor, ellipsePath(eyeX + 0.5, EYE_Y + 0.5, 2.8, 2.8))
-    paintFill(context, OUTLINE, ellipsePath(eyeX + 0.5, EYE_Y + 0.5, 1.3, 1.3))
-    paintFill(context, WHITE, ellipsePath(eyeX + 1.4, EYE_Y - 0.6, 0.8, 0.8))
+    paintFill(context, eyeColor, ellipsePath(eyeX + 0.5, gazeY + 0.5, 2.8, 2.8))
+    paintFill(context, OUTLINE, ellipsePath(eyeX + 0.5, gazeY + 0.5, 1.3, 1.3))
+    paintFill(context, WHITE, ellipsePath(eyeX + 1.4, gazeY - 0.6, 0.8, 0.8))
     if (eyes === "sleepy") {
       paintShape(context, skin, (path) => {
         path.moveTo(eyeX - 4.8, EYE_Y - 0.5)
@@ -325,7 +326,7 @@ const drawEyes = (context: Context, person: PartyPerson) => {
   }
 }
 
-const drawFace = (context: Context, person: PartyPerson) => {
+const drawFace = (context: Context, person: PartyPerson, lookUp: number) => {
   const { skin, hairColor, face } = person
   for (const side of SIDES) paintShape(context, skin, ellipsePath(side * 22, -64, 3.5, 4.5))
   paintShape(context, skin, headPath)
@@ -335,13 +336,16 @@ const drawFace = (context: Context, person: PartyPerson) => {
   }
   if (hasExtra(person, "beard")) paintShape(context, hairColor, beardPath)
   if (hasExtra(person, "stubble")) paintFill(context, "rgba(60, 40, 30, 0.22)", beardPath)
-  drawEyes(context, person)
-  for (const side of SIDES) paintLine(context, hairColor, 1.6, linePath(side * 5, -71, side * 12, face === "laugh" ? -73.5 : -72))
+  drawEyes(context, person, lookUp)
+  const browLift = face === "amazed" ? 3 : 0
+  for (const side of SIDES) paintLine(context, hairColor, 1.6, linePath(side * 5, -71 - browLift, side * 12, (face === "laugh" ? -73.5 : -72) - browLift))
   paintLine(context, OUTLINE, 1, (path) => {
     path.moveTo(0.5, -60)
     path.quadraticCurveTo(-1.5, -57.5, 1, -57)
   })
-  if (face === "laugh") {
+  if (face === "amazed") {
+    paintShape(context, "#7a2230", ellipsePath(0, -51, 3.2, 4.2))
+  } else if (face === "laugh") {
     paintShape(context, "#7a2230", (path) => {
       path.moveTo(-6, -53)
       path.quadraticCurveTo(0, -44, 6, -53)
@@ -455,7 +459,7 @@ export const drawPartyPerson = (context: Context, person: PartyPerson, feetX: nu
   drawTop(context, person, build)
   drawArms(context, person, build, pose.hands)
   withHeadTilt(() => {
-    drawFace(context, person)
+    drawFace(context, person, pose.lookUp)
     drawHairFront(context, person)
     drawHeadwear(context, person)
   })

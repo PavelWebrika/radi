@@ -28,7 +28,19 @@ const FIST_RAISE_START = 16.3
 const FIST_RAISE_END = 16.7
 const LAUNCH_START = 17
 const LAUNCH_END = 18.2
-const LAUNCH_BURST_SECONDS = 0.6
+const LAUNCH_KICK_SECONDS = 0.25
+const CROWD_AMAZED_START = 16.4
+const CROWD_AMAZED_END = 17
+const SHOCKWAVE_COUNT = 3
+const SHOCKWAVE_GAP = 0.12
+const SHOCKWAVE_SECONDS = 0.6
+const DEBRIS_COUNT = 14
+const DEBRIS_SECONDS = 1.2
+const SONIC_BOOM_START = 17.7
+const SONIC_BOOM_SECONDS = 0.45
+const SHAKE_SECONDS = 0.6
+const SHAKE_STRENGTH = 12
+const FLASH_SECONDS = 0.35
 const IRIS_OUT_START = 18.5
 const IRIS_OUT_END = 19.8
 const GROOVE_RATE = Math.PI * 2
@@ -41,6 +53,7 @@ const LIGHT_SPECKS = 40
 const BEAM_COUNT = 8
 const RESTING_HANDS: RadiHands = [[-14, -32], [14, -32]]
 const SUPERHERO_HANDS: RadiHands = [[-15, -34], [27, -64]]
+const AMAZED_HANDS: readonly RadiHands[] = [[[-19, -56], [19, -56]], [[-14, -32], [22, -68]]]
 const DJ_DESK_TOP = 0.32
 const DJ_SCALE = 0.6
 const DANCERS: readonly Dancer[] = [
@@ -212,7 +225,18 @@ const radiDanceMotion = (danceSeconds: number, energy: number) => {
 const bubblePopScale = (clubSeconds: number, start: number, end: number) =>
   easeOutBack(stageProgress(clubSeconds, start, start + BUBBLE_POP_SECONDS)) * (1 - stageProgress(clubSeconds, end - BUBBLE_HIDE_SECONDS, end))
 
-const launchHeight = (clubSeconds: number, feetY: number, scale: number) => stageProgress(clubSeconds, LAUNCH_START, LAUNCH_END) ** 2 * (feetY + 20 * scale)
+const launchHeight = (clubSeconds: number, feetY: number, scale: number) => stageProgress(clubSeconds, LAUNCH_START, LAUNCH_END) ** 2.5 * (feetY + 20 * scale)
+
+const drawPowerAura = (context: Context, radiX: number, feetY: number, scale: number, time: number, glow: number) => {
+  if (glow <= 0) return
+  const centerY = feetY - 50 * scale
+  const radius = 75 * scale * (1 + Math.sin(time * 20) * 0.08)
+  const aura = context.createRadialGradient(radiX, centerY, 0, radiX, centerY, radius)
+  aura.addColorStop(0, `rgba(255, 255, 220, ${0.55 * glow})`)
+  aura.addColorStop(0.5, `rgba(255, 120, 200, ${0.25 * glow})`)
+  aura.addColorStop(1, "rgba(255, 120, 200, 0)")
+  paintFill(context, aura, ellipsePath(radiX, centerY, radius, radius))
+}
 
 const drawClubRadi = (context: Context, radiX: number, feetY: number, scale: number, time: number, clubSeconds: number) => {
   const isSmiling = clubSeconds < FUN_BUBBLE_END || clubSeconds >= OPEN_EYES_START
@@ -223,13 +247,44 @@ const drawClubRadi = (context: Context, radiX: number, feetY: number, scale: num
   }
   const { hop, motion } = radiDanceMotion(clubSeconds - DANCE_START, 1 - stageProgress(clubSeconds, DANCE_STOP_START, DANCE_STOP_END))
   const hands = mixHands(motion.hands, SUPERHERO_HANDS, stageProgress(clubSeconds, FIST_RAISE_START, FIST_RAISE_END))
-  drawRadi(context, look, radiX, feetY - hop * scale - launchHeight(clubSeconds, feetY, scale), scale, { ...motion, hands })
+  const hasLaunched = clubSeconds >= LAUNCH_START
+  const crouch = hasLaunched ? 0 : stageProgress(clubSeconds, FIST_RAISE_END, LAUNCH_START)
+  const stretch = hasLaunched ? 0.12 + 0.25 * (1 - stageProgress(clubSeconds, LAUNCH_START, LAUNCH_START + LAUNCH_KICK_SECONDS)) : 0
+  const bodyFeetY = feetY - hop * scale - launchHeight(clubSeconds, feetY, scale)
+  drawPowerAura(context, radiX, bodyFeetY, scale, time, hasLaunched ? 1 : crouch * 0.8)
+  context.save()
+  context.translate(radiX, bodyFeetY)
+  context.scale(1 + crouch * 0.12 - stretch * 0.5, 1 - crouch * 0.18 + stretch)
+  drawRadi(context, look, 0, 0, scale, { ...motion, kneeBends: [motion.kneeBends[0] + crouch * 3, motion.kneeBends[1] + crouch * 3], hands })
+  context.restore()
 }
 
 const drawTakeoff = (context: Context, radiX: number, feetY: number, scale: number, time: number, clubSeconds: number) => {
-  const burst = stageProgress(clubSeconds, LAUNCH_START, LAUNCH_START + LAUNCH_BURST_SECONDS)
-  if (burst > 0 && burst < 1) paintLine(context, `rgba(255, 255, 255, ${1 - burst})`, 3 * scale, ellipsePath(radiX, feetY, (30 + burst * 60) * scale, (8 + burst * 14) * scale))
-  if (clubSeconds < LAUNCH_START) return
+  const sinceLaunch = clubSeconds - LAUNCH_START
+  if (sinceLaunch < 0) return
+  for (let ringIndex = 0; ringIndex < SHOCKWAVE_COUNT; ringIndex += 1) {
+    const wave = stageProgress(sinceLaunch, ringIndex * SHOCKWAVE_GAP, ringIndex * SHOCKWAVE_GAP + SHOCKWAVE_SECONDS)
+    if (wave <= 0 || wave >= 1) continue
+    paintLine(context, `rgba(255, 255, 255, ${1 - wave})`, (4 - ringIndex) * scale, ellipsePath(radiX, feetY, (20 + wave * 110) * scale, (6 + wave * 26) * scale))
+  }
+  if (sinceLaunch < DEBRIS_SECONDS) {
+    for (let pieceIndex = 0; pieceIndex < DEBRIS_COUNT; pieceIndex += 1) {
+      const angle = Math.PI * (1.08 + (pieceIndex / (DEBRIS_COUNT - 1)) * 0.84)
+      const speed = 70 + ((pieceIndex * 37) % 60)
+      const pieceSize = (3 + (pieceIndex % 3)) * scale
+      context.save()
+      context.translate(radiX + Math.cos(angle) * speed * sinceLaunch * scale, feetY + (Math.sin(angle) * speed * sinceLaunch + 160 * sinceLaunch ** 2) * scale)
+      context.rotate(sinceLaunch * (8 + pieceIndex))
+      context.globalAlpha = 1 - sinceLaunch / DEBRIS_SECONDS
+      paintFill(context, partyColor(pieceIndex, time, 1), (path) => path.rect(-pieceSize / 2, -pieceSize / 2, pieceSize, pieceSize))
+      context.restore()
+    }
+  }
+  const boom = stageProgress(clubSeconds, SONIC_BOOM_START, SONIC_BOOM_START + SONIC_BOOM_SECONDS)
+  if (boom > 0 && boom < 1) {
+    const boomY = feetY - launchHeight(SONIC_BOOM_START, feetY, scale) - 40 * scale
+    paintLine(context, `rgba(255, 255, 255, ${0.9 * (1 - boom)})`, 3 * scale, ellipsePath(radiX, boomY, (25 + boom * 80) * scale, (8 + boom * 22) * scale))
+  }
   context.save()
   context.translate(radiX, feetY - launchHeight(clubSeconds, feetY, scale))
   context.rotate(-Math.PI / 2)
@@ -247,23 +302,25 @@ const partyHands = (move: PartyMove, groove: number): PartyPose["hands"] => {
   return [[-15, -30 + beat * 4], [15, -30 - beat * 4]]
 }
 
-const partyPose = (move: PartyMove, groove: number): PartyPose => {
-  const beat = Math.sin(groove)
+const partyPose = (move: PartyMove, groove: number, amazement: number, amazedHands: RadiHands): PartyPose => {
+  const beat = Math.sin(groove) * (1 - amazement)
   return {
-    hands: partyHands(move, groove),
+    hands: mixHands(partyHands(move, groove), amazedHands, amazement),
     bounce: Math.abs(beat) * 2,
     sway: beat * 2,
-    headTilt: Math.sin(groove * 0.5) * 0.12,
+    headTilt: Math.sin(groove * 0.5) * 0.12 * (1 - amazement),
     footLifts: [Math.max(0, beat) * 3, Math.max(0, -beat) * 3],
+    lookUp: amazement,
   }
 }
 
-const drawCrowd = (context: Context, width: number, height: number, time: number, scale: number, isFront: boolean) => {
-  for (const dancer of DANCERS) {
-    if (dancer.isFront !== isFront) continue
-    const pose = partyPose(dancer.move, time * GROOVE_RATE + dancer.phase)
-    drawPartyPerson(context, dancer.person, width * dancer.x, height * (isFront ? 1.08 : 0.66), scale * (isFront ? 1.15 : 0.62), pose)
-  }
+const drawCrowd = (context: Context, width: number, height: number, time: number, scale: number, isFront: boolean, amazement: number) => {
+  DANCERS.forEach((dancer, dancerIndex) => {
+    if (dancer.isFront !== isFront) return
+    const pose = partyPose(dancer.move, time * GROOVE_RATE + dancer.phase, amazement, AMAZED_HANDS[dancerIndex % AMAZED_HANDS.length])
+    const person: PartyPerson = amazement > 0.5 ? { ...dancer.person, face: "amazed" } : dancer.person
+    drawPartyPerson(context, person, width * dancer.x, height * (isFront ? 1.08 : 0.66), scale * (isFront ? 1.15 : 0.62), pose)
+  })
 }
 
 const drawDjBooth = (context: Context, width: number, height: number, time: number, scale: number) => {
@@ -375,18 +432,30 @@ const drawRadiBubble = (context: Context, width: number, radiX: number, feetY: n
 export const drawClubScene = (context: Context, width: number, height: number, time: number, sceneSeconds: number, letsDanceSeconds: number | null) => {
   const clubSeconds = letsDanceSeconds === null ? Math.min(sceneSeconds, FUN_BUBBLE_HOLD) : FUN_BUBBLE_HOLD + letsDanceSeconds
   const { scale, radiX, feetY } = clubRadiPosition(width, height)
+  const sinceLaunch = clubSeconds - LAUNCH_START
+  const shake = sinceLaunch >= 0 ? (1 - stageProgress(sinceLaunch, 0, SHAKE_SECONDS)) * SHAKE_STRENGTH : 0
+  const flash = sinceLaunch >= 0 ? 0.8 * (1 - stageProgress(sinceLaunch, 0, FLASH_SECONDS)) : 0
+  const amazement = stageProgress(clubSeconds, CROWD_AMAZED_START, CROWD_AMAZED_END)
+  if (shake > 0) {
+    context.fillStyle = "#0d0626"
+    context.fillRect(0, 0, width, height)
+  }
+  context.save()
+  context.translate(Math.sin(time * 90) * shake, Math.cos(time * 73) * shake)
   drawClubRoom(context, width, height, time)
   drawDanceFloor(context, width, height, time)
   drawDjBooth(context, width, height, time, scale)
   const { ballX, ballY } = drawDiscoBall(context, width, height, time)
-  drawCrowd(context, width, height, time, scale, false)
+  drawCrowd(context, width, height, time, scale, false, amazement)
   drawSpotlight(context, radiX, feetY, scale, time)
   drawTakeoff(context, radiX, feetY, scale, time, clubSeconds)
   drawClubRadi(context, radiX, feetY, scale, time, clubSeconds)
   drawLightBeams(context, width, height, time, ballX, ballY)
-  drawCrowd(context, width, height, time, scale, true)
+  drawCrowd(context, width, height, time, scale, true, amazement)
   drawRadiBubble(context, width, radiX, feetY, scale, bubblePopScale(clubSeconds, FUN_BUBBLE_START, FUN_BUBBLE_END), ["And I like to have fun", "and dance!"], FUN_BUBBLE_TEXT_OFFSET)
   drawRadiBubble(context, width, radiX, feetY, scale, bubblePopScale(clubSeconds, ONLY_DANCE_BUBBLE_START, ONLY_DANCE_BUBBLE_END), ["But this is not the only", "type of dancing I like!"])
+  context.restore()
+  if (flash > 0) paintFill(context, `rgba(255, 255, 255, ${flash})`, (path) => path.rect(0, 0, width, height))
   const fullRadius = Math.hypot(width, height)
   const irisCenterY = feetY - 60 * scale
   if (clubSeconds < IRIS_IN_END) paintIris(context, width, height, radiX, irisCenterY, mix(0, fullRadius, stageProgress(clubSeconds, 0, IRIS_IN_END) ** 2))
