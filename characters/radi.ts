@@ -41,7 +41,7 @@ type RadiExtra =
   | "puffSleeves"
   | "hairFlower"
 export type RadiHair = "ponytail" | "sideTail" | "loose" | "tucked" | "braid" | "bun"
-export type RadiExpression = "grin" | "tongue" | "puff"
+export type RadiExpression = "grin" | "tongue" | "puff" | "surprised" | "angry"
 type RadiPose = "wave" | "peace" | "hold"
 export type RadiShoes = "sneakers" | "highTops" | "tsarvuli" | "partyHeels" | "folkFlats"
 type DrawShoe = (context: Context, side: number, isPolished: boolean) => void
@@ -652,6 +652,26 @@ const drawMouth = (context: Context, expression: RadiExpression, isPolished: boo
     paintShape(context, MOUTH, ellipsePath(2.5, -54, 1.8, 1.8))
     return
   }
+  if (expression === "surprised") {
+    paintShape(context, MOUTH, ellipsePath(0, -51.5, 3.4, 4.4), {
+      decorateInside: (mouthContext) => paintFill(mouthContext, TONGUE, ellipsePath(0, -47.8, 2.8, 1.8)),
+    })
+    return
+  }
+  if (expression === "angry") {
+    paintShape(context, MOUTH, (path) => {
+      path.moveTo(-5.5, -50)
+      path.quadraticCurveTo(0, -57, 5.5, -50)
+      path.quadraticCurveTo(0, -52.4, -5.5, -50)
+      path.closePath()
+    }, {
+      decorateInside: (mouthContext) => {
+        mouthContext.fillStyle = WHITE
+        mouthContext.fillRect(-7, -55.4, 14, 2.4)
+      },
+    })
+    return
+  }
   paintShape(context, MOUTH, (path) => {
     path.moveTo(-6, -55)
     path.quadraticCurveTo(0, -54, 6, -55)
@@ -673,17 +693,39 @@ const drawMouth = (context: Context, expression: RadiExpression, isPolished: boo
 
 const drawFace = (context: Context, expression: RadiExpression, isPolished: boolean) => {
   const blushSize = expression === "puff" && !isPolished ? 1.4 : 1
+  const isAngry = expression === "angry"
   for (const side of SIDES) {
     drawEye(context, side, !(expression === "tongue" && side === 1), isPolished)
-    paintLine(context, HAIR, 1.2, (path) => {
-      path.moveTo(side * 6, -72.5)
-      path.quadraticCurveTo(side * 9, -74.5, side * 12, -72.5)
-    })
-    paintFill(context, BLUSH, ellipsePath(side * 14, -57, 4 * blushSize, 2.4 * blushSize))
+    if (isAngry) {
+      paintFill(context, SKIN, (path) => {
+        path.moveTo(side * 4, -66.4)
+        path.lineTo(side * 14, -70.2)
+        path.lineTo(side * 14, -73)
+        path.lineTo(side * 4, -73)
+        path.closePath()
+      })
+      paintLine(context, OUTLINE, 1.2, linePath(side * 4.2, -66.4, side * 13.8, -70.2))
+      paintLine(context, OUTLINE, 1.8, linePath(side * 4.5, -69.4, side * 13, -73.4))
+    } else {
+      const browLift = expression === "surprised" ? 3 : 0
+      paintLine(context, HAIR, 1.2, (path) => {
+        path.moveTo(side * 6, -72.5 - browLift)
+        path.quadraticCurveTo(side * 9, -74.5 - browLift * 1.4, side * 12, -72.5 - browLift)
+      })
+    }
+    paintFill(context, isAngry ? "rgba(240, 60, 60, 0.5)" : BLUSH, ellipsePath(side * 14, -57, 4 * blushSize, 2.4 * blushSize))
     if (isPolished) paintFill(context, "rgba(255, 255, 255, 0.7)", ellipsePath(side * 14 - 1.6, -58, 0.8, 0.6))
   }
   paintLine(context, OUTLINE, 0.8, linePath(0, -59.5, 0.8, -58.5))
   drawMouth(context, expression, isPolished)
+  if (isAngry) {
+    paintLine(context, HIGH_TOP_RED, 1.3, curvesPath([
+      [12.5, -84, 15, -82.5, 15.2, -80],
+      [17.5, -85, 17.8, -82.5, 20.2, -82],
+      [13, -78.2, 15.6, -78.4, 16.4, -76],
+      [18.6, -80.2, 18.4, -77.6, 21, -77.4],
+    ]))
+  }
 }
 
 const drawSunglasses = (context: Context) => {

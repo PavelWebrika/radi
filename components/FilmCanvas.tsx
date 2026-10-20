@@ -40,21 +40,28 @@ export const FilmCanvas = () => {
     let animationFrameId = 0
     let shownProgress = readScrollProgress()
     let previousTimeMilliseconds: number | null = null
+    let meetingStartMilliseconds: number | null = null
     const drawFrame = (timeMilliseconds: number) => {
       const elapsedSeconds = previousTimeMilliseconds === null ? 0 : (timeMilliseconds - previousTimeMilliseconds) / 1000
       previousTimeMilliseconds = timeMilliseconds
       const { progress: targetProgress, isShowingConcepts } = useFilmStore.getState()
       shownProgress += (targetProgress - shownProgress) * (1 - Math.exp(-elapsedSeconds * 6))
+      const greetingLayout = greetingButtonLayout(window.innerWidth, window.innerHeight, shownProgress)
+      if (!greetingLayout) meetingStartMilliseconds = null
+      const meetingSeconds = meetingStartMilliseconds === null ? null : Math.max(0, timeMilliseconds - meetingStartMilliseconds) / 1000
       if (isShowingConcepts) {
         context.fillStyle = "#000000"
         context.fillRect(0, 0, window.innerWidth, window.innerHeight)
         drawRadiConcepts(context, window.innerWidth, window.innerHeight)
       } else {
-        drawOpeningScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, shownProgress)
+        drawOpeningScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, shownProgress, meetingSeconds)
       }
-      const buttonLayout = isShowingConcepts ? null : greetingButtonLayout(window.innerWidth, window.innerHeight, shownProgress)
+      const buttonLayout = isShowingConcepts || meetingSeconds !== null ? null : greetingLayout
       if (moreButtonRef.current) placeMoreButton(moreButtonRef.current, buttonLayout)
       animationFrameId = requestAnimationFrame(drawFrame)
+    }
+    const startMeetingKira = () => {
+      meetingStartMilliseconds = performance.now()
     }
     const updateProgress = () => {
       useFilmStore.getState().setProgress(readScrollProgress())
@@ -69,10 +76,13 @@ export const FilmCanvas = () => {
     animationFrameId = requestAnimationFrame(drawFrame)
     window.addEventListener("resize", onResize)
     window.addEventListener("scroll", updateProgress, { passive: true })
+    const moreButton = moreButtonRef.current
+    moreButton?.addEventListener("click", startMeetingKira)
     return () => {
       cancelAnimationFrame(animationFrameId)
       window.removeEventListener("resize", onResize)
       window.removeEventListener("scroll", updateProgress)
+      moreButton?.removeEventListener("click", startMeetingKira)
     }
   }, [])
 

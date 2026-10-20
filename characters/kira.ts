@@ -5,6 +5,27 @@ const FUR = "#fbfaf6"
 const FAR_FUR = "#e4e0d8"
 const SPOT = "#2a2522"
 const SIDE_SHIFT_UNITS = 7
+const DEGREES_PER_RADIAN = 180 / Math.PI
+
+const TREAT = "#d9a066"
+const TREAT_IN_MOUTH = { x: 36, y: -45 }
+const TREAT_PARTS: BuildPath[] = [
+  (path) => path.roundRect(-4.5, -1.6, 9, 3.2, 1.2),
+  ...[-1, 1].flatMap((sideX) => [-1, 1].map((sideY) => ellipsePath(sideX * 4.6, sideY * 1.7, 1.9, 1.9))),
+]
+
+export type KiraMotion = { sit: number; legSwing: number; tailWag: number; headReach: number; lick: number; treatInMouth: number }
+
+export const drawTreat = (context: Context, centerX: number, centerY: number, size: number, angle: number) => {
+  if (size <= 0) return
+  context.save()
+  context.translate(centerX, centerY)
+  context.rotate(angle)
+  context.scale(size, size)
+  for (const treatPart of TREAT_PARTS) paintLine(context, OUTLINE, OUTLINE_WIDTH * 2, treatPart)
+  for (const treatPart of TREAT_PARTS) paintFill(context, TREAT, treatPart)
+  context.restore()
+}
 const SPOTS_ON_SIDE_BODY = [[-28, -30, 1.6, 1.4], [-6, -29, 1.3, 1.1], [-22, -34, 1.1, 1], [2, -37, 1.2, 1.1], [-33, -35, 1, 0.9]] as const
 const SPOTS_ON_FRONT_CHEST = [[-5, -28, 1.4, 1.2], [6, -22, 1.2, 1], [2, -31, 1, 0.9]] as const
 
@@ -34,24 +55,28 @@ const paintInside = (context: Context, buildPath: BuildPath, decorateInside: Dec
 const paintFurShape = (context: Context, fill: string, buildPath: BuildPath, decorateInside?: DecorateInside) =>
   paintShape(context, fill, buildPath, { decorateInside, shade: SHADE })
 
-const drawTongue = (context: Context, centerX: number, topY: number) => {
+const drawTongue = (context: Context, centerX: number, topY: number, length = 8, angle = 0) => {
+  context.save()
+  context.translate(centerX, topY)
+  context.rotate(angle)
   paintFurShape(context, TONGUE, (path) => {
-    path.moveTo(centerX - 3, topY)
-    path.quadraticCurveTo(centerX, topY - 0.8, centerX + 3, topY)
-    path.quadraticCurveTo(centerX + 3.6, topY + 7.6, centerX, topY + 8)
-    path.quadraticCurveTo(centerX - 3.6, topY + 7.6, centerX - 3, topY)
+    path.moveTo(-3, 0)
+    path.quadraticCurveTo(0, -0.8, 3, 0)
+    path.quadraticCurveTo(3.6, length * 0.95, 0, length)
+    path.quadraticCurveTo(-3.6, length * 0.95, -3, 0)
     path.closePath()
   })
-  paintLine(context, OUTLINE, 0.6, linePath(centerX, topY + 0.8, centerX, topY + 5.5))
+  paintLine(context, OUTLINE, 0.6, linePath(0, 0.8, 0, length * 0.69))
+  context.restore()
 }
 
 const paintSpots = (context: Context, spots: readonly (readonly [number, number, number, number])[]) => {
   for (const [spotX, spotY, radiusX, radiusY] of spots) paintFill(context, SPOT, ellipsePath(spotX, spotY, radiusX, radiusY))
 }
 
-const drawLeg = (context: Context, fill: string, buildLeg: BuildPath, pawX: number, pawRadius: number) => {
+const drawLeg = (context: Context, fill: string, buildLeg: BuildPath, pawX: number, pawY: number, pawRadius: number) => {
   paintTube(context, fill, 5, buildLeg, true)
-  paintFurShape(context, fill, ellipsePath(pawX, -2.4, pawRadius, pawRadius * 0.68))
+  paintFurShape(context, fill, ellipsePath(pawX, pawY, pawRadius, pawRadius * 0.68))
 }
 
 const drawEye = (context: Context, centerX: number, centerY: number) => {
@@ -67,52 +92,116 @@ const drawNose = (context: Context, centerX: number, centerY: number, radiusX: n
 }
 
 const sideBodyPath: BuildPath = (path) => path.roundRect(-36, -40, 42, 16, 8)
-const sideNeckPath = linePath(0, -34, 8, -46)
 const sideSkullPath = ellipsePath(12, -52, 15, 13.5)
 const sideMuzzlePath = ellipsePath(28.5, -46.5, 12, 6.2)
 
-const drawSideBodyAndHead = (context: Context) => {
-  paintLine(context, OUTLINE, 10 + OUTLINE_WIDTH * 2, sideNeckPath)
-  for (const furPath of [sideBodyPath, sideSkullPath, sideMuzzlePath]) paintLine(context, OUTLINE, OUTLINE_WIDTH * 2, furPath)
-  paintLine(context, FUR, 10, sideNeckPath)
-  for (const furPath of [sideBodyPath, sideSkullPath, sideMuzzlePath]) {
-    paintFill(context, FUR, furPath)
-    paintShade(context, SHADE, furPath)
-  }
-  paintInside(context, sideBodyPath, (bodyContext) => {
-    paintFill(bodyContext, SPOT, ellipsePath(-15, -40.5, 10, 5.5))
-    paintSpots(bodyContext, SPOTS_ON_SIDE_BODY)
-  })
-  paintSpots(context, [[31, -45, 0.5, 0.5], [33.5, -46.5, 0.5, 0.5], [29, -47.5, 0.5, 0.5], [14.5, -62.5, 1.3, 1.1]])
+const paintTransformed = (context: Context, matrix: DOMMatrix, drawKira: DrawKira) => {
+  context.save()
+  context.transform(matrix.a, matrix.b, matrix.c, matrix.d, matrix.e, matrix.f)
+  drawKira(context)
+  context.restore()
 }
 
-export const drawKiraSide = (context: Context, feetX: number, feetY: number, scale: number) => {
+const sittingTilt = (sit: number) =>
+  new DOMMatrix().translate(0, sit * 12).translate(-30, -30).rotate(-sit * 0.55 * DEGREES_PER_RADIAN).translate(30, 30)
+
+const sideHeadShift = (tilt: DOMMatrix, headReach: number, lick: number) => {
+  const headAnchor = tilt.transformPoint({ x: 8, y: -46 })
+  return new DOMMatrix().translate(headAnchor.x - 8 + headReach * 10, headAnchor.y + 46 - headReach * 9 - lick * 3)
+}
+
+const drawSideLeg = (context: Context, fill: string, hip: DOMPoint, controlX: number, controlY: number, pawX: number, pawY: number, spotRadius: number) => {
+  drawLeg(context, fill, curvesPath([[hip.x, hip.y, controlX, controlY, pawX, pawY]]), pawX + 1.6, pawY + 1.1, 3.3)
+  if (spotRadius > 0) paintFill(context, SPOT, ellipsePath((hip.x + controlX * 2 + pawX) / 4, (hip.y + controlY * 2 + pawY) / 4, spotRadius, spotRadius * 0.85))
+}
+
+const drawFrontLeg = (context: Context, fill: string, tilt: DOMMatrix, legX: number, swing: number, sit: number, spotRadius = 0) => {
+  const hip = tilt.transformPoint({ x: legX, y: -30 })
+  const pawX = legX - sit * 4 + swing * 7
+  const pawY = -3.5 - Math.max(0, swing) * 4
+  drawSideLeg(context, fill, hip, (hip.x + pawX) / 2 + 0.6, (hip.y + pawY) / 2, pawX, pawY, spotRadius)
+}
+
+const drawHindLeg = (context: Context, fill: string, tilt: DOMMatrix, legX: number, swing: number, sit: number, spotRadius = 0) => {
+  const hip = tilt.transformPoint({ x: legX, y: -30 })
+  const standingPawX = legX + 0.6 - swing * 7
+  const standingPawY = -3.5 - Math.max(0, -swing) * 4
+  drawSideLeg(
+    context,
+    fill,
+    hip,
+    legX - 2.2 - swing * 3 + sit * (19.2 + swing * 3),
+    -15 + sit * 2,
+    standingPawX + sit * (legX + 9 - standingPawX),
+    standingPawY + sit * (-3.5 - standingPawY),
+    spotRadius,
+  )
+}
+
+const drawSideBodyAndHead = (context: Context, tilt: DOMMatrix, headShift: DOMMatrix) => {
+  const neckStart = tilt.transformPoint({ x: 0, y: -34 })
+  const neckEnd = headShift.transformPoint({ x: 8, y: -46 })
+  const neckPath = linePath(neckStart.x, neckStart.y, neckEnd.x, neckEnd.y)
+  paintLine(context, OUTLINE, 10 + OUTLINE_WIDTH * 2, neckPath)
+  paintTransformed(context, tilt, (bodyContext) => paintLine(bodyContext, OUTLINE, OUTLINE_WIDTH * 2, sideBodyPath))
+  paintTransformed(context, headShift, (headContext) => {
+    for (const headPath of [sideSkullPath, sideMuzzlePath]) paintLine(headContext, OUTLINE, OUTLINE_WIDTH * 2, headPath)
+  })
+  paintLine(context, FUR, 10, neckPath)
+  paintTransformed(context, tilt, (bodyContext) => {
+    paintFill(bodyContext, FUR, sideBodyPath)
+    paintShade(bodyContext, SHADE, sideBodyPath)
+    paintInside(bodyContext, sideBodyPath, (insideContext) => {
+      paintFill(insideContext, SPOT, ellipsePath(-15, -40.5, 10, 5.5))
+      paintSpots(insideContext, SPOTS_ON_SIDE_BODY)
+    })
+  })
+  paintTransformed(context, headShift, (headContext) => {
+    for (const headPath of [sideSkullPath, sideMuzzlePath]) {
+      paintFill(headContext, FUR, headPath)
+      paintShade(headContext, SHADE, headPath)
+    }
+    paintSpots(headContext, [[31, -45, 0.5, 0.5], [33.5, -46.5, 0.5, 0.5], [29, -47.5, 0.5, 0.5], [14.5, -62.5, 1.3, 1.1]])
+  })
+}
+
+export const drawKiraSide = (context: Context, feetX: number, feetY: number, scale: number, { sit = 0, legSwing = 0, tailWag = 0, headReach = 0, lick = 0, treatInMouth = 0 }: Partial<KiraMotion> = {}) => {
+  const tilt = sittingTilt(sit)
+  const headShift = sideHeadShift(tilt, headReach, lick)
+  const wagTilt = tilt.multiply(new DOMMatrix().translate(-35, -36).rotate(tailWag * DEGREES_PER_RADIAN).translate(35, 36))
   drawInUnits(context, feetX - SIDE_SHIFT_UNITS * scale, feetY, scale, (kiraContext) => {
-    drawLeg(kiraContext, FAR_FUR, curvesPath([[-27, -30, -29.2, -15, -26.4, -3.5]]), -25.4, 3.3)
-    drawLeg(kiraContext, FAR_FUR, curvesPath([[1, -30, 1.6, -15, 1, -3.5]]), 2.6, 3.3)
-    drawLeg(kiraContext, FUR, curvesPath([[-31, -30, -33.2, -15, -30.4, -3.5]]), -29.4, 3.3)
-    drawLeg(kiraContext, FUR, curvesPath([[-3, -30, -2.4, -15, -3, -3.5]]), -1.4, 3.3)
-    paintSpots(kiraContext, [[-31.8, -18, 1.2, 1], [-2.8, -12, 1, 0.9]])
-    paintFurShape(kiraContext, FUR, (path) => {
+    drawHindLeg(kiraContext, FAR_FUR, tilt, -27, legSwing * 0.7, sit)
+    drawFrontLeg(kiraContext, FAR_FUR, tilt, 1, legSwing * 0.7, sit)
+    drawHindLeg(kiraContext, FUR, tilt, -31, legSwing, sit, 1.2)
+    drawFrontLeg(kiraContext, FUR, tilt, -3, legSwing, sit, 1)
+    paintTransformed(kiraContext, wagTilt, (tailContext) => paintFurShape(tailContext, FUR, (path) => {
       path.moveTo(-35, -38.5)
       path.quadraticCurveTo(-42, -40.5, -48.5, -48)
       path.quadraticCurveTo(-42, -37, -35.5, -33.5)
       path.closePath()
+    }))
+    drawSideBodyAndHead(kiraContext, tilt, headShift)
+    paintTransformed(kiraContext, headShift, (headContext) => {
+      paintFurShape(headContext, SPOT, (path) => {
+        path.moveTo(8, -63)
+        path.quadraticCurveTo(-1, -64, -0.5, -52)
+        path.quadraticCurveTo(0, -45.5, 4, -46.5)
+        path.quadraticCurveTo(7.5, -54, 11, -61)
+        path.closePath()
+      })
+      drawEye(headContext, 18, -54.5)
+      paintFill(headContext, BLUSH, ellipsePath(20, -47.5, 2.6, 1.6))
+      drawNose(headContext, 39.5, -48.8, 2.6, 2.1)
+      drawTongue(headContext, 33, -43.6, 8 + lick * 7, -lick * 1.2)
+      paintLine(headContext, OUTLINE, 0.9, curvesPath([[38.5, -45.5, 33, -41.5, 26, -43.5]]))
+      drawTreat(headContext, TREAT_IN_MOUTH.x, TREAT_IN_MOUTH.y, treatInMouth, 0)
     })
-    drawSideBodyAndHead(kiraContext)
-    paintFurShape(kiraContext, SPOT, (path) => {
-      path.moveTo(8, -63)
-      path.quadraticCurveTo(-1, -64, -0.5, -52)
-      path.quadraticCurveTo(0, -45.5, 4, -46.5)
-      path.quadraticCurveTo(7.5, -54, 11, -61)
-      path.closePath()
-    })
-    drawEye(kiraContext, 18, -54.5)
-    paintFill(kiraContext, BLUSH, ellipsePath(20, -47.5, 2.6, 1.6))
-    drawNose(kiraContext, 39.5, -48.8, 2.6, 2.1)
-    drawTongue(kiraContext, 33, -43.6)
-    paintLine(kiraContext, OUTLINE, 0.9, curvesPath([[38.5, -45.5, 33, -41.5, 26, -43.5]]))
   })
+}
+
+export const kiraSideMouthPoint = ({ sit = 0, headReach = 0, lick = 0 }: Partial<KiraMotion>) => {
+  const mouth = sideHeadShift(sittingTilt(sit), headReach, lick).transformPoint(TREAT_IN_MOUTH)
+  return { x: mouth.x - SIDE_SHIFT_UNITS, y: mouth.y }
 }
 
 const frontSkullPath = ellipsePath(0, -52, 17, 14.5)
@@ -134,9 +223,9 @@ export const drawKiraFront = (context: Context, feetX: number, feetY: number, sc
       path.quadraticCurveTo(14.5, -27, 8, -24)
       path.closePath()
     })
-    for (const side of [-1, 1]) drawLeg(kiraContext, FAR_FUR, linePath(side * 9.5, -22, side * 10, -3.5), side * 10, 3.2)
+    for (const side of [-1, 1]) drawLeg(kiraContext, FAR_FUR, linePath(side * 9.5, -22, side * 10, -3.5), side * 10, -2.4, 3.2)
     paintFurShape(kiraContext, FUR, ellipsePath(0, -26, 11.5, 10.5), (chestContext) => paintSpots(chestContext, SPOTS_ON_FRONT_CHEST))
-    for (const side of [-1, 1]) drawLeg(kiraContext, FUR, linePath(side * 5, -24, side * 5.5, -3.5), side * 5.5, 3.6)
+    for (const side of [-1, 1]) drawLeg(kiraContext, FUR, linePath(side * 5, -24, side * 5.5, -3.5), side * 5.5, -2.4, 3.6)
     paintSpots(kiraContext, [[-5.2, -13, 1.1, 1], [5.6, -9, 1, 0.9]])
 
     for (const headPath of [frontSkullPath, frontMuzzlePath]) paintLine(kiraContext, OUTLINE, OUTLINE_WIDTH * 2, headPath)
