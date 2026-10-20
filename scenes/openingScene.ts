@@ -466,7 +466,7 @@ const drawTossedTreat = (context: Context, width: number, radiX: number, feetY: 
   )
 }
 
-const mixPoint = (from: Point, to: Point, amount: number): Point => [mix(from[0], to[0], amount), mix(from[1], to[1], amount)]
+export const mixPoint = (from: Point, to: Point, amount: number): Point => [mix(from[0], to[0], amount), mix(from[1], to[1], amount)]
 
 const heartPath = (size: number): BuildPath => (path) => {
   path.moveTo(0, size * 0.4)

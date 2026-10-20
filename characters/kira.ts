@@ -14,7 +14,17 @@ const TREAT_PARTS: BuildPath[] = [
   ...[-1, 1].flatMap((sideX) => [-1, 1].map((sideY) => ellipsePath(sideX * 4.6, sideY * 1.7, 1.9, 1.9))),
 ]
 
-export type KiraMotion = { sit: number; legSwing: number; tailWag: number; headReach: number; lick: number; treatInMouth: number }
+export type KiraMotion = {
+  sit: number
+  legSwing: number
+  tailWag: number
+  headReach: number
+  lick: number
+  treatInMouth: number
+  tongueWind: number
+  tonguePhase: number
+  showTail: boolean
+}
 
 export const drawTreat = (context: Context, centerX: number, centerY: number, size: number, angle: number) => {
   if (size <= 0) return
@@ -165,7 +175,14 @@ const drawSideBodyAndHead = (context: Context, tilt: DOMMatrix, headShift: DOMMa
   })
 }
 
-export const drawKiraSide = (context: Context, feetX: number, feetY: number, scale: number, { sit = 0, legSwing = 0, tailWag = 0, headReach = 0, lick = 0, treatInMouth = 0 }: Partial<KiraMotion> = {}) => {
+export const drawKiraSide = (
+  context: Context,
+  feetX: number,
+  feetY: number,
+  scale: number,
+  { sit = 0, legSwing = 0, tailWag = 0, headReach = 0, lick = 0, treatInMouth = 0, tongueWind = 0, tonguePhase = 0, showTail = true }: Partial<KiraMotion> = {},
+) => {
+  const tongueSwing = tongueWind * (1.1 + 0.25 * Math.sin(tonguePhase))
   const tilt = sittingTilt(sit)
   const headShift = sideHeadShift(tilt, headReach, lick)
   const wagTilt = tilt.multiply(new DOMMatrix().translate(-35, -36).rotate(tailWag * DEGREES_PER_RADIAN).translate(35, 36))
@@ -174,12 +191,14 @@ export const drawKiraSide = (context: Context, feetX: number, feetY: number, sca
     drawFrontLeg(kiraContext, FAR_FUR, tilt, 1, legSwing * 0.7, sit)
     drawHindLeg(kiraContext, FUR, tilt, -31, legSwing, sit, 1.2)
     drawFrontLeg(kiraContext, FUR, tilt, -3, legSwing, sit, 1)
-    paintTransformed(kiraContext, wagTilt, (tailContext) => paintFurShape(tailContext, FUR, (path) => {
-      path.moveTo(-35, -38.5)
-      path.quadraticCurveTo(-42, -40.5, -48.5, -48)
-      path.quadraticCurveTo(-42, -37, -35.5, -33.5)
-      path.closePath()
-    }))
+    if (showTail) {
+      paintTransformed(kiraContext, wagTilt, (tailContext) => paintFurShape(tailContext, FUR, (path) => {
+        path.moveTo(-35, -38.5)
+        path.quadraticCurveTo(-42, -40.5, -48.5, -48)
+        path.quadraticCurveTo(-42, -37, -35.5, -33.5)
+        path.closePath()
+      }))
+    }
     drawSideBodyAndHead(kiraContext, tilt, headShift)
     paintTransformed(kiraContext, headShift, (headContext) => {
       paintFurShape(headContext, SPOT, (path) => {
@@ -192,7 +211,7 @@ export const drawKiraSide = (context: Context, feetX: number, feetY: number, sca
       drawEye(headContext, 18, -54.5)
       paintFill(headContext, BLUSH, ellipsePath(20, -47.5, 2.6, 1.6))
       drawNose(headContext, 39.5, -48.8, 2.6, 2.1)
-      drawTongue(headContext, 33, -43.6, 8 + lick * 7, -lick * 1.2)
+      drawTongue(headContext, 33, -43.6, 8 + lick * 7 + Math.abs(tongueWind) * 5, tongueSwing - lick * 1.2)
       paintLine(headContext, OUTLINE, 0.9, curvesPath([[38.5, -45.5, 33, -41.5, 26, -43.5]]))
       drawTreat(headContext, TREAT_IN_MOUTH.x, TREAT_IN_MOUTH.y, treatInMouth, 0)
     })

@@ -29,6 +29,7 @@ import {
   drawTorso,
   paintTube,
   shadeIf,
+  type Point,
   type RadiBottom,
   type RadiExpression,
   type RadiHair,
@@ -37,6 +38,22 @@ import {
 } from "@/characters/radi"
 
 type DrawSideShoe = (context: Context, legX: number, isPolished: boolean) => void
+export type HairWind = { strength: number; phase: number }
+type BendPoint = (x: number, y: number) => readonly [number, number]
+type HairCurve = readonly [number, number, number, number, number, number]
+
+const straightHair: BendPoint = (x, y) => [x, y]
+
+const clampToUnit = (amount: number) => Math.min(1, Math.max(0, amount))
+
+const windBentHair = ({ strength, phase }: HairWind): BendPoint => (x, y) => {
+  const fall = clampToUnit((y + 82) / 42)
+  const reach = fall * clampToUnit((-x - 4) / 22) * strength
+  return [x - reach * 26, y - reach * 14 + Math.sin(phase - fall * 3) * 3 * reach]
+}
+
+const bendCurves = (curves: readonly HairCurve[], bend: BendPoint) =>
+  curves.map(([startX, startY, controlX, controlY, endX, endY]) => [...bend(startX, startY), ...bend(controlX, controlY), ...bend(endX, endY)] as const)
 
 const SIDE_PONYTAIL_LOCKS = [
   [-19, -88, -52, -98, -23, -78],
@@ -75,14 +92,14 @@ const sideHairCapPath: BuildPath = (path) => {
   path.closePath()
 }
 
-const sideLooseHairPath: BuildPath = (path) => {
+const sideLooseHairPath = (bend: BendPoint): BuildPath => (path) => {
   path.moveTo(23.8, -76.5)
-  path.bezierCurveTo(21, -100, -19, -104, -25, -80)
-  path.bezierCurveTo(-28, -66, -29, -52, -27, -40)
-  path.quadraticCurveTo(-23, -37.5, -20, -40.5)
-  path.quadraticCurveTo(-17, -37, -13, -40)
-  path.quadraticCurveTo(-10, -38, -8.5, -41.5)
-  path.bezierCurveTo(-11, -50, -9, -60, -7, -66)
+  path.bezierCurveTo(21, -100, -19, -104, ...bend(-25, -80))
+  path.bezierCurveTo(...bend(-28, -66), ...bend(-29, -52), ...bend(-27, -40))
+  path.quadraticCurveTo(...bend(-23, -37.5), ...bend(-20, -40.5))
+  path.quadraticCurveTo(...bend(-17, -37), ...bend(-13, -40))
+  path.quadraticCurveTo(...bend(-10, -38), ...bend(-8.5, -41.5))
+  path.bezierCurveTo(...bend(-11, -50), ...bend(-9, -60), ...bend(-7, -66))
   path.quadraticCurveTo(-3, -72.5, 5, -73.5)
   path.lineTo(9, -74.8)
   path.lineTo(12, -76.8)
@@ -139,13 +156,13 @@ const drawSideHairBack = (context: Context, hair: RadiHair, isPolished: boolean)
   }
 }
 
-const drawSideHairFront = (context: Context, hair: RadiHair, isPolished: boolean) => {
+const drawSideHairFront = (context: Context, hair: RadiHair, isPolished: boolean, bend: BendPoint) => {
   const isLoose = hair === "loose"
-  paintShape(context, HAIR, isLoose ? sideLooseHairPath : sideHairCapPath, shadeIf(isPolished))
+  paintShape(context, HAIR, isLoose ? sideLooseHairPath(bend) : sideHairCapPath, shadeIf(isPolished))
   paintLine(context, HAIR_HIGHLIGHT, 1.4, curvesPath([[10, -86, 6, -92, -2, -94], [-8, -88, -14, -90, -19, -84]]))
-  if (isLoose) paintLine(context, HAIR_HIGHLIGHT, 1.2, curvesPath([[-21, -74, -26, -60, -23, -46]]))
+  if (isLoose) paintLine(context, HAIR_HIGHLIGHT, 1.2, curvesPath(bendCurves([[-21, -74, -26, -60, -23, -46]], bend)))
   if (isPolished) paintLine(context, HAIR_STRAND, 0.6, curvesPath([[16, -80, 12, -90, 2, -95], [-12, -80, -20, -84, -22, -72]]))
-  if (isPolished && isLoose) paintLine(context, HAIR_STRAND, 0.7, curvesPath([[-15, -62, -17, -52, -14, -43], [-24, -60, -26, -50, -24, -42]]))
+  if (isPolished && isLoose) paintLine(context, HAIR_STRAND, 0.7, curvesPath(bendCurves([[-15, -62, -17, -52, -14, -43], [-24, -60, -26, -50, -24, -42]], bend)))
   if (hair === "sideTail") {
     paintShape(context, HAIR, (path) => {
       path.moveTo(-2, -90)
@@ -386,9 +403,20 @@ const drawSideHeadwear = (context: Context, look: RadiLook, isPolished: boolean)
   }
 }
 
-const drawSideArm = (context: Context, look: RadiLook, isPolished: boolean) => {
+const drawSideSunglasses = (context: Context) => {
+  paintLine(context, OUTLINE, 1.2, linePath(9, -67.5, -2, -66))
+  paintShape(context, "#2b8cff", (path) => {
+    path.moveTo(9, -69)
+    path.lineTo(19, -69)
+    path.quadraticCurveTo(19.5, -59, 14, -59.5)
+    path.quadraticCurveTo(9, -60, 9, -69)
+    path.closePath()
+  }, { decorateInside: (lensContext) => paintLine(lensContext, "#bfe4ff", 1.5, linePath(11, -61, 17, -68)) })
+}
+
+const drawSideArm = (context: Context, look: RadiLook, isPolished: boolean, hand?: Point) => {
   const isHolding = look.pose === "hold"
-  const [handX, handY] = isHolding ? [10, -35] : [3, -31]
+  const [handX, handY] = hand ?? (isHolding ? [10, -35] : [3, -31])
   paintTube(context, look.extras.includes("denimJacket") ? DENIM : SKIN, 4.5, linePath(0, -41.5, handX, handY), isPolished)
   paintShape(context, SKIN, ellipsePath(handX, handY, 2.8, 2.8), shadeIf(isPolished))
   if (look.extras.includes("puffSleeves")) {
@@ -398,7 +426,7 @@ const drawSideArm = (context: Context, look: RadiLook, isPolished: boolean) => {
   if (look.extras.includes("gaida")) paintTube(context, WOOD, 1.6, linePath(23, -52.5, 13, -43), isPolished)
 }
 
-export const drawRadiSide = (context: Context, look: RadiLook, feetX: number, feetY: number, scale: number) => {
+export const drawRadiSide = (context: Context, look: RadiLook, feetX: number, feetY: number, scale: number, hand?: Point, hairWind?: HairWind) => {
   const isPolished = look.polished === true
   context.save()
   context.translate(feetX, feetY)
@@ -414,9 +442,10 @@ export const drawRadiSide = (context: Context, look: RadiLook, feetX: number, fe
   drawTorso(context, look.top, isPolished, 7)
   drawSideExtrasOnBody(context, look, isPolished)
   drawSideHead(context, look.expression, isPolished)
-  drawSideHairFront(context, look.hair, isPolished)
+  drawSideHairFront(context, look.hair, isPolished, hairWind && hairWind.strength > 0 ? windBentHair(hairWind) : straightHair)
   drawSideHeadwear(context, look, isPolished)
-  drawSideArm(context, look, isPolished)
+  if (look.extras.includes("sunglasses")) drawSideSunglasses(context)
+  drawSideArm(context, look, isPolished, hand)
 
   context.restore()
 }

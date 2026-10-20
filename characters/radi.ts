@@ -728,7 +728,7 @@ const drawFace = (context: Context, expression: RadiExpression, isPolished: bool
   }
 }
 
-const drawSunglasses = (context: Context) => {
+export const drawSunglasses = (context: Context) => {
   for (const side of SIDES) {
     paintShape(context, "#2b8cff", (path) => {
       path.moveTo(side * 3.5, -68.5)
