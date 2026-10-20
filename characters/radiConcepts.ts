@@ -67,11 +67,14 @@ const polishConcept = (concept: RadiConcept, lookChanges: Partial<RadiLook> = {}
 
 const [everydayConcept, popArtConcept, sunnyConcept, gaidaConcept] = originalConcepts
 
+const polishedPopArtConcept = polishConcept(popArtConcept, { shoes: "highTops" })
+
 export const everydayRadiLook = polishConcept(everydayConcept).look
+export const popArtRadiLook = polishedPopArtConcept.look
 
 const radiConcepts: RadiConcept[] = [
   polishConcept(everydayConcept),
-  polishConcept(popArtConcept, { shoes: "highTops" }),
+  polishedPopArtConcept,
   polishConcept(sunnyConcept),
   polishConcept(gaidaConcept, { hair: "tucked", extras: ["pendant", "gaida", "kalpak"], shoes: "tsarvuli" }),
   polishConcept({

@@ -1,6 +1,6 @@
 import { ellipsePath, linePath, paintFill, paintLine, paintShape, type BuildPath, type Context } from "@/characters/paint"
 import { drawRadi } from "@/characters/radi"
-import { everydayRadiLook } from "@/characters/radiConcepts"
+import { popArtRadiLook } from "@/characters/radiConcepts"
 import {
   drawClouds,
   drawSun,
@@ -170,7 +170,7 @@ const drawBenchRadi = (context: Context, width: number, height: number, time: nu
   context.lineWidth = 1.6
   for (const benchPart of BENCH_PARTS) paintShape(context, BENCH, benchPart)
   context.restore()
-  drawRadi(context, everydayRadiLook, radiX, feetY, scale, {
+  drawRadi(context, { ...popArtRadiLook, expression: "grin", pose: "wave" }, radiX, feetY, scale, {
     faceTurn: 0,
     hands: [[-17, -25], [17, -25]],
     legLifts: [1.5 + kick, 1.5 - kick],
