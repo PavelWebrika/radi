@@ -3,6 +3,7 @@ import { SHADE, SILVER, curvesPath, drawRadi, drawSunglasses, type Point } from 
 import { popArtRadiLook } from "@/characters/radiConcepts"
 import { drawKiraSide } from "@/characters/kira"
 import { drawRadiSide } from "@/characters/radiSide"
+import { clipToClubDoor, clubDoorCenterY, clubDoorWidth, clubDoorX, clubLeftX, clubPlacement, drawClubBuilding, drawClubLights, type ClubPlacement } from "@/scenes/nightClub"
 import { drawEveningSky, drawMoonAndStars, drawNightShade, drawSettingSun, eveningLight } from "@/scenes/nightfall"
 import { drawSceneryBack, drawSceneryFront, drawScenerySky } from "@/scenes/roadTrip"
 import {
@@ -66,8 +67,15 @@ const FLIP_HEIGHT_UNITS = 90
 const ZHUPKI_BUBBLE_START = 6.4
 const ZHUPKI_BUBBLE_END = 6.8
 const EXHAUST_PUFFS = 10
-const KIRA_POP_START = 0.5
-const KIRA_POP_END = 0.52
+export const KIRA_POP_PROGRESS = 0.5
+const KIRA_LEAP_END = 0.35
+const KIRA_SETTLE_END = 0.7
+const KIRA_LEAP_Y = -46
+const KIRA_WOOF_START = 0.25
+const KIRA_WOOF_END = 1.9
+const KIRA_LOOK_BACK_START = 1.2
+const KIRA_LOOK_FORWARD_START = 2.4
+const KIRA_TURN_SECONDS = 0.25
 const KIRA_TRUNK_X = -68
 const KIRA_SEAT_Y = -24
 const KIRA_HIDDEN_Y = 40
@@ -83,7 +91,29 @@ export const DRIVE_MAX_BOOST = 4
 const SPEED_BAR_TOP = 16
 const SPEED_BAR_MARGIN = 16
 
-export type DriveState = { progress: number; speed: number }
+export type DriveState = { progress: number; speed: number; kiraSeconds: number | null; arrivalSeconds: number | null }
+
+const smoothStep = (amount: number) => amount * amount * (3 - 2 * amount)
+
+const CLUB_CENTER_X = 0.84
+const CLUB_BASE = 0.83
+const ROAD_END_GROUND = "#ffc4e1"
+const RADI_LANDING_UNITS = 140
+const RADI_EXIT_START = 0.8
+const RADI_EXIT_END = 1.5
+const RADI_WALK_END = 3.1
+const RADI_ENTER_END = 3.9
+const KIRA_JUMP_START = 1.7
+const KIRA_JUMP_END = 2.3
+const KIRA_RUN_END = 3.7
+const SCENE_IRIS_START = 3.9
+const SCENE_IRIS_END = 5.2
+const ARRIVING_LOOK = {
+  ...popArtRadiLook,
+  expression: "grin" as const,
+  pose: "wave" as const,
+  extras: [...popArtRadiLook.extras, "sunglasses" as const],
+}
 
 const carBodyPath: BuildPath = (path) => {
   path.moveTo(-112, -12)
@@ -350,9 +380,14 @@ const drawCar = (context: Context, width: number, height: number, time: number, 
   context.restore()
 }
 
-const drawTrunkKira = (context: Context, width: number, height: number, time: number, driveProgress: number, wind: number) => {
-  const pop = easeOutBack(stageProgress(driveProgress, KIRA_POP_START, KIRA_POP_END))
-  if (pop <= 0) return
+const drawTrunkKira = (context: Context, width: number, height: number, time: number, kiraSeconds: number, wind: number) => {
+  const leap = easeOut(stageProgress(kiraSeconds, 0, KIRA_LEAP_END))
+  const settle = easeOutBack(stageProgress(kiraSeconds, KIRA_LEAP_END, KIRA_SETTLE_END))
+  const landingSquash = Math.sin(Math.PI * stageProgress(kiraSeconds, KIRA_LEAP_END, KIRA_SETTLE_END)) * 0.15
+  const turn = smoothStep(stageProgress(kiraSeconds, KIRA_LOOK_BACK_START, KIRA_LOOK_BACK_START + KIRA_TURN_SECONDS))
+    - smoothStep(stageProgress(kiraSeconds, KIRA_LOOK_FORWARD_START, KIRA_LOOK_FORWARD_START + KIRA_TURN_SECONDS))
+  const facing = Math.cos(Math.PI * turn)
+  const feetY = settle > 0 ? mix(KIRA_LEAP_Y, KIRA_SEAT_Y, settle) : mix(KIRA_HIDDEN_Y, KIRA_LEAP_Y, leap)
   const { scale, carX, groundY } = carPlacement(width, height, CAR_ENTER_END)
   context.save()
   context.translate(carX, groundY)
@@ -360,13 +395,92 @@ const drawTrunkKira = (context: Context, width: number, height: number, time: nu
   context.beginPath()
   context.rect(-200, -200, 400, 200 + KIRA_CLIP_Y)
   context.clip()
-  drawKiraSide(context, KIRA_TRUNK_X, mix(KIRA_HIDDEN_Y, KIRA_SEAT_Y, pop), KIRA_SCALE, {
+  context.translate(KIRA_TRUNK_X, feetY)
+  context.scale(facing * (1 + landingSquash), 1 - landingSquash)
+  drawKiraSide(context, 0, 0, KIRA_SCALE, {
     sit: 1,
     headReach: 0.25 + 0.25 * Math.sin(time * 2.6),
-    tongueWind: wind,
+    tongueWind: wind * Math.sign(facing),
     tonguePhase: time * 14,
     showTail: false,
   })
+  context.restore()
+}
+
+const drawKiraWoof = (context: Context, width: number, height: number, kiraSeconds: number) => {
+  const popScale = easeOutBack(stageProgress(kiraSeconds, KIRA_WOOF_START, KIRA_WOOF_START + 0.25)) * (1 - stageProgress(kiraSeconds, KIRA_WOOF_END - 0.3, KIRA_WOOF_END))
+  if (popScale <= 0) return
+  const { scale, carX, groundY } = carPlacement(width, height, CAR_ENTER_END)
+  context.save()
+  context.translate(carX + (KIRA_TRUNK_X - 28) * scale, groundY - 112 * scale)
+  context.scale(scale * popScale, scale * popScale)
+  context.rotate(-0.15)
+  context.lineWidth = 1.6
+  context.strokeStyle = OUTLINE
+  paintShape(context, "#ffe23f", (path) => {
+    for (let spike = 0; spike < 28; spike += 1) {
+      const angle = (spike * Math.PI) / 14
+      const radius = spike % 2 === 0 ? 24 : 16
+      const pointX = Math.cos(angle) * radius * 1.25
+      const pointY = Math.sin(angle) * radius
+      if (spike === 0) path.moveTo(pointX, pointY)
+      else path.lineTo(pointX, pointY)
+    }
+    path.closePath()
+  })
+  context.font = 'bold 12px "Comic Sans MS", "Comic Sans", cursive'
+  context.textAlign = "center"
+  context.textBaseline = "middle"
+  context.fillStyle = "#e8262e"
+  context.fillText("WOOF!", 0, 1)
+  context.restore()
+}
+
+const drawArrivingRadi = (context: Context, width: number, height: number, time: number, arrivalSeconds: number, carShift: number, club: ClubPlacement) => {
+  const enter = stageProgress(arrivalSeconds, RADI_WALK_END, RADI_ENTER_END)
+  if (enter >= 1) return
+  const exit = stageProgress(arrivalSeconds, RADI_EXIT_START, RADI_EXIT_END)
+  const walk = stageProgress(arrivalSeconds, RADI_EXIT_END, RADI_WALK_END)
+  const seat = carSeatPosition(width, height)
+  const startX = seat.radiX + carShift
+  const landX = startX + RADI_LANDING_UNITS * seat.scale
+  const isWalking = walk > 0 && enter < 1
+  const doorX = clubDoorX(club)
+  const radiX = exit < 1
+    ? mix(startX, landX, exit)
+    : walk < 1 ? mix(landX, doorX, walk) : mix(doorX, doorX + clubDoorWidth(club) / 2 + 30 * seat.scale, enter)
+  const feetY = exit < 1
+    ? mix(seat.feetY, club.baseY, exit) - 4 * exit * (1 - exit) * 50 * seat.scale
+    : club.baseY - (isWalking ? Math.abs(Math.sin(time * 10)) * 3 * seat.scale : 0)
+  context.save()
+  if (enter > 0) clipToClubDoor(context, club)
+  drawRadiSide(context, ARRIVING_LOOK, radiX, feetY, seat.scale)
+  context.restore()
+}
+
+const drawRoadEnd = (context: Context, width: number, height: number, roadEndX: number) => {
+  if (roadEndX >= width) return
+  const top = height * BACK_WALK_BOTTOM
+  context.lineWidth = 3
+  paintShape(context, ROAD_END_GROUND, (path) => path.roundRect(roadEndX, top, width - roadEndX + 8, height * ROAD_BOTTOM - top, [18, 0, 0, 18]))
+}
+
+const drawArrivingKira = (context: Context, width: number, height: number, time: number, arrivalSeconds: number, carShift: number) => {
+  const jump = stageProgress(arrivalSeconds, KIRA_JUMP_START, KIRA_JUMP_END)
+  const run = stageProgress(arrivalSeconds, KIRA_JUMP_END, KIRA_RUN_END)
+  const { scale, carX, groundY } = carPlacement(width, height, CAR_ENTER_END)
+  const startX = carX + carShift + KIRA_TRUNK_X * scale
+  const landX = startX - 40 * scale
+  const runGroundY = height * 0.93
+  const kiraX = jump < 1 ? mix(startX, landX, jump) : mix(landX, -120 * scale, run)
+  const feetY = jump < 1
+    ? mix(groundY + KIRA_SEAT_Y * scale, runGroundY, jump) - 4 * jump * (1 - jump) * 50 * scale
+    : runGroundY - Math.abs(Math.sin(time * 16)) * 5 * scale
+  if (jump >= 1) paintFill(context, SHADOW, ellipsePath(kiraX, runGroundY, 30 * scale, 3 * scale))
+  context.save()
+  context.translate(kiraX, 0)
+  context.scale(-1, 1)
+  drawKiraSide(context, 0, feetY, KIRA_SCALE * scale * 1.15, { legSwing: jump < 1 ? 0.6 : Math.sin(time * 16) })
   context.restore()
 }
 
@@ -608,6 +722,12 @@ export const drawCityScene = (
   drawClouds(context, width, height, time)
   context.globalAlpha = 1
   drawSceneryBack(context, width, height, height * BUILDINGS_BASE, height * BACK_WALK_BOTTOM, camera)
+  const arrivalSeconds = drive?.arrivalSeconds ?? null
+  const kiraSeconds = drive?.kiraSeconds ?? null
+  const club = drive
+    ? clubPlacement(height, driveView(width, height, { progress: 1, speed: 0, kiraSeconds: null, arrivalSeconds: null }).camera - camera + width * CLUB_CENTER_X, height * CLUB_BASE, time)
+    : null
+  const isClubVisible = club !== null && clubLeftX(club) < width + 8
   if (isCityVisible) {
     drawWithCamera(() => {
       drawBuildings(context, width, height)
@@ -617,20 +737,32 @@ export const drawCityScene = (
     })
   }
   drawRoad(context, width, height, camera)
+  if (club && isClubVisible) drawRoadEnd(context, width, height, clubLeftX(club) - 10 * club.unit)
   drawSceneryFront(context, width, height, height * ROAD_BOTTOM, camera)
   if (isCityVisible) drawWithCamera(() => drawSidewalk(context, width, height * ROAD_BOTTOM, height + 4, width * 0.1))
+  if (club && isClubVisible) drawClubBuilding(context, club, time)
   drawNightShade(context, width, height, light)
   drawMoonAndStars(context, width, height, height * BUILDINGS_BASE, time, light)
+  if (club && isClubVisible) {
+    drawClubLights(context, club, time, arrivalSeconds === null ? 0 : Math.sin(Math.PI * stageProgress(arrivalSeconds, RADI_WALK_END - 0.3, RADI_ENTER_END + 0.3)))
+  }
+  const isRadiOut = arrivalSeconds !== null && arrivalSeconds >= RADI_EXIT_START
+  const isKiraOut = arrivalSeconds !== null && arrivalSeconds >= KIRA_JUMP_START
   const drawRadiLayer = () => drawWithCar(() => drawCityRadi(context, width, height, time, actionSeconds, wind))
   const drawCarLayer = () => drawWithCar(() => drawCar(context, width, height, time, actionSeconds, distance, exhaust))
   const drawBenchLayer = () => {
     if (isCityVisible) drawWithCamera(() => drawBench(context, width, height))
   }
   if (flipProgress(actionSeconds) > 0.8) {
-    drawRadiLayer()
-    drawWithCar(() => drawTrunkKira(context, width, height, time, drive?.progress ?? 0, wind))
+    const isRadiInFront = isRadiOut && arrivalSeconds >= (RADI_EXIT_START + RADI_EXIT_END) / 2
+    if (isRadiOut && club && !isRadiInFront) drawArrivingRadi(context, width, height, time, arrivalSeconds, carShift, club)
+    if (!isRadiOut) drawRadiLayer()
+    if (!isKiraOut && kiraSeconds !== null) drawWithCar(() => drawTrunkKira(context, width, height, time, kiraSeconds, wind))
     drawCarLayer()
     drawBenchLayer()
+    if (kiraSeconds !== null) drawWithCar(() => drawKiraWoof(context, width, height, kiraSeconds))
+    if (isRadiInFront && club) drawArrivingRadi(context, width, height, time, arrivalSeconds, carShift, club)
+    if (isKiraOut) drawArrivingKira(context, width, height, time, arrivalSeconds, carShift)
   } else {
     drawCarLayer()
     drawBenchLayer()
@@ -654,8 +786,12 @@ export const drawCityScene = (
     height,
     easeOutBack(stageProgress(actionSeconds, ZHUPKI_BUBBLE_START, ZHUPKI_BUBBLE_END)) * (1 - easeOut(clampToUnit(distance / (width * ZHUPKI_HIDE_WIDTHS)))),
   ))
-  if (drive) drawSpeedBar(context, width, gauge)
+  if (drive && arrivalSeconds === null) drawSpeedBar(context, width, gauge)
   const { radiX, feetY, scale } = benchRadiPosition(width, height)
   const irisIn = easeOut(stageProgress(citySeconds, IRIS_IN_START, IRIS_IN_END)) ** 2
   if (irisIn < 1) paintIris(context, width, height, radiX, feetY - 60 * scale, mix(0, Math.hypot(width, height), irisIn))
+  if (club && arrivalSeconds !== null && arrivalSeconds >= SCENE_IRIS_START) {
+    const irisOut = stageProgress(arrivalSeconds, SCENE_IRIS_START, SCENE_IRIS_END) ** 2
+    paintIris(context, width, height, clubDoorX(club), clubDoorCenterY(club), mix(Math.hypot(width, height), 0, irisOut))
+  }
 }

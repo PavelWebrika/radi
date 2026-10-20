@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react"
 import { drawRadiConcepts } from "@/characters/radiConcepts"
-import { anywayButtonLayout, drawCityScene, DRIVE_CRUISE_SECONDS, DRIVE_MAX_BOOST, DRIVE_READY_SECONDS } from "@/scenes/cityScene"
+import { anywayButtonLayout, drawCityScene, DRIVE_CRUISE_SECONDS, DRIVE_MAX_BOOST, DRIVE_READY_SECONDS, KIRA_POP_PROGRESS } from "@/scenes/cityScene"
 import { FILM_SCENES } from "@/scenes/filmScenes"
 import { drawOpeningScene, greetingButtonLayout, KIRA_SCENE_END, type BubbleButtonLayout } from "@/scenes/openingScene"
 import { useFilmStore } from "@/store/film"
@@ -52,6 +52,8 @@ export const FilmCanvas = () => {
     let driveProgress: number | null = null
     let driveSpeed = 0
     let driveBoost = 0
+    let arrivalStartMilliseconds: number | null = null
+    let kiraStartMilliseconds: number | null = null
     let lastTouchY: number | null = null
     const drawFrame = (timeMilliseconds: number) => {
       const elapsedSeconds = previousTimeMilliseconds === null ? 0 : (timeMilliseconds - previousTimeMilliseconds) / 1000
@@ -69,13 +71,20 @@ export const FilmCanvas = () => {
         driveProgress = null
         driveSpeed = 0
         driveBoost = 0
+        arrivalStartMilliseconds = null
+        kiraStartMilliseconds = null
       }
       if (driveProgress !== null) {
         driveSpeed += (1 + driveBoost - driveSpeed) * (1 - Math.exp(-elapsedSeconds * 4))
         driveProgress = Math.min(1, driveProgress + (driveSpeed * elapsedSeconds) / DRIVE_CRUISE_SECONDS)
         driveBoost *= Math.exp(-elapsedSeconds * 4)
+        if (driveProgress >= KIRA_POP_PROGRESS) kiraStartMilliseconds ??= timeMilliseconds
+        if (driveProgress >= 1) arrivalStartMilliseconds ??= timeMilliseconds
       }
-      const drive = driveProgress === null ? null : { progress: driveProgress, speed: driveSpeed }
+      const secondsSince = (startMilliseconds: number | null) => (startMilliseconds === null ? null : Math.max(0, timeMilliseconds - startMilliseconds) / 1000)
+      const drive = driveProgress === null
+        ? null
+        : { progress: driveProgress, speed: driveSpeed, kiraSeconds: secondsSince(kiraStartMilliseconds), arrivalSeconds: secondsSince(arrivalStartMilliseconds) }
       if (isShowingConcepts) {
         context.fillStyle = "#000000"
         context.fillRect(0, 0, window.innerWidth, window.innerHeight)
