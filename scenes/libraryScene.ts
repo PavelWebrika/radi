@@ -74,8 +74,20 @@ const JOKE_QUESTION_LINES = [
   "hairballs all night. We thought it was a…",
 ] as const
 
+const FINAL_CHOICES = [
+  { id: "batman", letter: "A", name: "Batman" },
+  { id: "unicorn", letter: "B", name: "Unicorn" },
+  { id: "radi", letter: "C", name: "Radi" },
+] as const
+
+const FINAL_QUESTION_LINES = [
+  "If you could be anything",
+  "what would you be?",
+] as const
+
 export type CaptainChoice = (typeof CAPTAIN_CHOICES)[number]["id"]
 export type JokeChoice = (typeof JOKE_CHOICES)[number]["id"]
+export type FinalChoice = (typeof FINAL_CHOICES)[number]["id"]
 export type LibraryQuizPhase = "captain" | "joke" | "final"
 export type QuizChoiceLayout = { choice: string; centerX: number; centerY: number; width: number; height: number; fontSize: number }
 
@@ -1064,15 +1076,15 @@ const drawReadingRadi = (
   context.save()
   context.translate(radiX, floorY + drop)
   context.rotate(lean)
-  const cheering = cheerSeconds !== null
-  const captainQuizzing = quizPhase === "captain" && sceneSeconds >= QUIZ_START && wrongSeconds === null && !cheering
-  const jokeQuizzing = quizPhase === "joke" && jokeQuizStartSeconds !== null && sceneSeconds >= jokeQuizStartSeconds && wrongSeconds === null && !cheering
-  const quizzing = captainQuizzing || jokeQuizzing
+  const armsUp = cheerSeconds !== null && cheerSeconds < RIGHT_CHEER_SECONDS
+  const captainQuizzing = quizPhase === "captain" && sceneSeconds >= QUIZ_START && wrongSeconds === null && !armsUp
+  const jokeQuizzing = quizPhase === "joke" && jokeQuizStartSeconds !== null && sceneSeconds >= jokeQuizStartSeconds && wrongSeconds === null && !armsUp
+  const quizzing = captainQuizzing || jokeQuizzing || (quizPhase === "final" && !armsUp && wrongSeconds === null)
   const reacting = wrongSeconds !== null && wrongSeconds < 1
-  const smiling = cheering || (wrongSeconds !== null && wrongSeconds >= 2) || quizPhase === "final"
+  const smiling = armsUp || (wrongSeconds !== null && wrongSeconds >= 2)
   const headSway = quizzing ? Math.sin(sceneSeconds * 1.3) * 0.42 : 0
   const shake = reacting ? Math.sin(wrongSeconds * 16) * (1 - wrongSeconds) : 0
-  const cheer = cheering ? easeOut(Math.min(1, cheerSeconds / 0.28)) : 0
+  const cheer = cheerArmAmount(cheerSeconds)
   const poseHands = cheer > 0 ? mixHands(hands, CHEER_HANDS, cheer) : hands
   const restingElbows = naturalElbows(hands)
   const poseElbows: readonly [number, number] = cheer > 0
@@ -1176,9 +1188,22 @@ const jokeCardConfig: QuizCardConfig = {
   headerRatio: 0.34,
 }
 
+const finalCardConfig: QuizCardConfig = {
+  choices: FINAL_CHOICES,
+  questionLines: FINAL_QUESTION_LINES,
+  headerRatio: 0.34,
+}
+
 const NEXT_QUESTION_AT = 2
 export const QUIZ_ADVANCE_AFTER_WRONG = NEXT_QUESTION_AT + QUIZ_POP_SECONDS
+export const CHEER_MOVE_SECONDS = 0.28
 export const RIGHT_CHEER_SECONDS = 1.2
+const cheerArmAmount = (cheerSeconds: number | null) => {
+  if (cheerSeconds === null) return 0
+  if (cheerSeconds < CHEER_MOVE_SECONDS) return easeOut(cheerSeconds / CHEER_MOVE_SECONDS)
+  if (cheerSeconds < RIGHT_CHEER_SECONDS) return 1
+  return 1 - easeOut(Math.min(1, (cheerSeconds - RIGHT_CHEER_SECONDS) / CHEER_MOVE_SECONDS))
+}
 const cheerHand = (side: number): Point => [
   side * (SHOULDER_X + Math.sin(0.7) * ARM_SEGMENT * 2),
   SHOULDER_Y - Math.cos(0.7) * ARM_SEGMENT * 2,
@@ -1260,8 +1285,6 @@ const drawQuizPanel = (
   context.restore()
 }
 
-const emptyCardConfig: QuizCardConfig = { choices: [], questionLines: [], headerRatio: 0.24 }
-
 const drawTimedQuiz = (
   context: Context,
   width: number,
@@ -1274,7 +1297,7 @@ const drawTimedQuiz = (
   cheerSeconds: number | null,
 ) => {
   const pop = easeOutBack(stageProgress(elapsed, 0, QUIZ_POP_SECONDS))
-  const hide = wrongSeconds !== null ? easeOut(stageProgress(wrongSeconds, 0, 0.35)) : cheerSeconds !== null ? 1 : 0
+  const hide = wrongSeconds !== null ? easeOut(stageProgress(wrongSeconds, 0, 0.35)) : cheerSeconds !== null && cheerSeconds < RIGHT_CHEER_SECONDS ? 1 : 0
   drawQuizPanel(context, width, height, pop * (1 - hide), config, true, choice, hovered)
 }
 
@@ -1285,14 +1308,19 @@ export const libraryQuizChoiceLayouts = (
   sceneSeconds: number,
   wrongSeconds: number | null,
   jokeQuizStartSeconds: number | null,
+  finalQuizStartSeconds: number | null = null,
 ): readonly QuizChoiceLayout[] | null => {
-  if (wrongSeconds !== null || phase === "final") return null
+  if (wrongSeconds !== null) return null
   if (phase === "captain") {
     if (sceneSeconds < QUIZ_START + QUIZ_POP_SECONDS) return null
     return quizCard(width, height, captainCardConfig).rows
   }
-  if (jokeQuizStartSeconds === null || sceneSeconds < jokeQuizStartSeconds + QUIZ_POP_SECONDS) return null
-  return quizCard(width, height, jokeCardConfig).rows
+  if (phase === "joke") {
+    if (jokeQuizStartSeconds === null || sceneSeconds < jokeQuizStartSeconds + QUIZ_POP_SECONDS) return null
+    return quizCard(width, height, jokeCardConfig).rows
+  }
+  if (finalQuizStartSeconds === null || sceneSeconds < finalQuizStartSeconds + QUIZ_POP_SECONDS) return null
+  return quizCard(width, height, finalCardConfig).rows
 }
 
 export const captainChoiceLayouts = (
@@ -1313,6 +1341,8 @@ const drawLibraryQuizzes = (
   hoveredCaptain: CaptainChoice | null,
   jokeChoice: JokeChoice | null,
   hoveredJoke: JokeChoice | null,
+  finalChoice: FinalChoice | null,
+  hoveredFinal: FinalChoice | null,
   wrongSeconds: number | null,
   jokeQuizStartSeconds: number | null,
   finalQuizStartSeconds: number | null,
@@ -1327,8 +1357,7 @@ const drawLibraryQuizzes = (
     return
   }
   if (phase === "final" && finalQuizStartSeconds !== null) {
-    const pop = easeOutBack(stageProgress(sceneSeconds - finalQuizStartSeconds, 0, QUIZ_POP_SECONDS))
-    drawQuizPanel(context, width, height, pop, emptyCardConfig, false, null, null)
+    drawTimedQuiz(context, width, height, sceneSeconds - finalQuizStartSeconds, wrongSeconds, finalCardConfig, finalChoice, hoveredFinal, cheerSeconds)
   }
 }
 
@@ -1370,6 +1399,8 @@ export const drawLibraryScene = (
   jokeQuizStartSeconds: number | null = null,
   finalQuizStartSeconds: number | null = null,
   cheerSeconds: number | null = null,
+  finalChoice: FinalChoice | null = null,
+  hoveredFinal: FinalChoice | null = null,
 ) => {
   const { scale, floorY, ceilingY, landingX } = libraryLayout(width, height)
   const sinceImpact = sceneSeconds - FALL_END
@@ -1411,6 +1442,8 @@ export const drawLibraryScene = (
     hoveredCaptain,
     jokeChoice,
     hoveredJoke,
+    finalChoice,
+    hoveredFinal,
     wrongSeconds,
     jokeQuizStartSeconds,
     finalQuizStartSeconds,

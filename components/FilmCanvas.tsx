@@ -10,7 +10,9 @@ import {
   libraryQuizChoiceLayouts,
   QUIZ_ADVANCE_AFTER_WRONG,
   RIGHT_CHEER_SECONDS,
+  CHEER_MOVE_SECONDS,
   type CaptainChoice,
+  type FinalChoice,
   type JokeChoice,
   type LibraryQuizPhase,
 } from "@/scenes/libraryScene"
@@ -123,10 +125,13 @@ export const FilmCanvas = () => {
     let hoveredCaptain: CaptainChoice | null = null
     let jokeChoice: JokeChoice | null = null
     let hoveredJoke: JokeChoice | null = null
+    let finalChoice: FinalChoice | null = null
+    let hoveredFinal: FinalChoice | null = null
     let jokeQuizStartSeconds: number | null = null
     let finalQuizStartSeconds: number | null = null
     let wrongStartMilliseconds: number | null = null
     let cheerStartMilliseconds: number | null = null
+    let cheerQuestionStarted = false
     let lastTouchY: number | null = null
     const drawFrame = (timeMilliseconds: number) => {
       const elapsedSeconds = previousTimeMilliseconds === null ? 0 : (timeMilliseconds - previousTimeMilliseconds) / 1000
@@ -204,10 +209,14 @@ export const FilmCanvas = () => {
           }
         }
         let cheerSeconds = secondsSince(cheerStartMilliseconds)
-        if (cheerSeconds !== null && cheerSeconds >= RIGHT_CHEER_SECONDS) {
+        if (cheerSeconds !== null && cheerSeconds >= RIGHT_CHEER_SECONDS && !cheerQuestionStarted) {
+          cheerQuestionStarted = true
           if (libraryQuizPhase === "captain") startJokeQuiz(librarySeconds)
           else if (libraryQuizPhase === "joke") startFinalQuiz(librarySeconds)
+        }
+        if (cheerSeconds !== null && cheerSeconds >= RIGHT_CHEER_SECONDS + CHEER_MOVE_SECONDS) {
           cheerStartMilliseconds = null
+          cheerQuestionStarted = false
           cheerSeconds = null
         }
         drawLibraryScene(
@@ -225,6 +234,8 @@ export const FilmCanvas = () => {
           jokeQuizStartSeconds,
           finalQuizStartSeconds,
           cheerSeconds,
+          finalChoice,
+          hoveredFinal,
         )
       } else if (clubSeconds !== null) {
         drawClubScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, clubSeconds, letsDanceSeconds)
@@ -245,23 +256,26 @@ export const FilmCanvas = () => {
         hoveredCaptain = null
         jokeChoice = null
         hoveredJoke = null
+        finalChoice = null
+        hoveredFinal = null
         jokeQuizStartSeconds = null
         finalQuizStartSeconds = null
         wrongStartMilliseconds = null
         cheerStartMilliseconds = null
+        cheerQuestionStarted = false
       }
       const wrongSeconds = librarySeconds === null ? null : secondsSince(wrongStartMilliseconds)
       const cheering = librarySeconds !== null && cheerStartMilliseconds !== null
       const quizLayouts = isShowingConcepts || librarySeconds === null || cheering
         ? null
-        : libraryQuizChoiceLayouts(window.innerWidth, window.innerHeight, libraryQuizPhase, librarySeconds, wrongSeconds, jokeQuizStartSeconds)
+        : libraryQuizChoiceLayouts(window.innerWidth, window.innerHeight, libraryQuizPhase, librarySeconds, wrongSeconds, jokeQuizStartSeconds, finalQuizStartSeconds)
       const quizButtons = [nemoButtonRef.current, americaButtonRef.current, janewayButtonRef.current]
       const quizChoices = libraryQuizPhase === "captain"
         ? (["nemo", "america", "janeway"] as const)
         : libraryQuizPhase === "joke"
           ? (["furmidable", "catastrophe", "purplexing"] as const)
-          : null
-      const chosenQuiz = libraryQuizPhase === "captain" ? captainChoice : libraryQuizPhase === "joke" ? jokeChoice : null
+          : (["batman", "unicorn", "radi"] as const)
+      const chosenQuiz = libraryQuizPhase === "captain" ? captainChoice : libraryQuizPhase === "joke" ? jokeChoice : finalChoice
       quizButtons.forEach((button, index) => {
         if (!button) return
         const choice = quizChoices?.[index] ?? null
@@ -335,10 +349,13 @@ export const FilmCanvas = () => {
       hoveredCaptain = null
       jokeChoice = null
       hoveredJoke = null
+      finalChoice = null
+      hoveredFinal = null
       jokeQuizStartSeconds = null
       finalQuizStartSeconds = null
       wrongStartMilliseconds = null
       cheerStartMilliseconds = null
+      cheerQuestionStarted = false
       letsDanceStartMilliseconds = null
     })
     const updateProgress = () => {
@@ -380,6 +397,7 @@ export const FilmCanvas = () => {
       captainChoice = choice
       if (choice === "janeway") {
         cheerStartMilliseconds = performance.now()
+        cheerQuestionStarted = false
         return
       }
       wrongStartMilliseconds = performance.now()
@@ -389,21 +407,29 @@ export const FilmCanvas = () => {
       jokeChoice = choice
       if (choice === "catastrophe") {
         cheerStartMilliseconds = performance.now()
+        cheerQuestionStarted = false
         return
       }
       wrongStartMilliseconds = performance.now()
     }
+    const chooseFinal = (choice: FinalChoice) => {
+      if (libraryQuizPhase !== "final" || wrongStartMilliseconds !== null || cheerStartMilliseconds !== null) return
+      finalChoice = choice
+    }
     const chooseQuizA = () => {
       if (libraryQuizPhase === "captain") chooseCaptain("nemo")
       else if (libraryQuizPhase === "joke") chooseJoke("furmidable")
+      else if (libraryQuizPhase === "final") chooseFinal("batman")
     }
     const chooseQuizB = () => {
       if (libraryQuizPhase === "captain") chooseCaptain("america")
       else if (libraryQuizPhase === "joke") chooseJoke("catastrophe")
+      else if (libraryQuizPhase === "final") chooseFinal("unicorn")
     }
     const chooseQuizC = () => {
       if (libraryQuizPhase === "captain") chooseCaptain("janeway")
       else if (libraryQuizPhase === "joke") chooseJoke("purplexing")
+      else if (libraryQuizPhase === "final") chooseFinal("radi")
     }
     const nemoButton = nemoButtonRef.current
     const americaButton = americaButtonRef.current
@@ -411,18 +437,22 @@ export const FilmCanvas = () => {
     const hoverQuizA = () => {
       if (libraryQuizPhase === "captain") hoveredCaptain = "nemo"
       else if (libraryQuizPhase === "joke") hoveredJoke = "furmidable"
+      else if (libraryQuizPhase === "final") hoveredFinal = "batman"
     }
     const hoverQuizB = () => {
       if (libraryQuizPhase === "captain") hoveredCaptain = "america"
       else if (libraryQuizPhase === "joke") hoveredJoke = "catastrophe"
+      else if (libraryQuizPhase === "final") hoveredFinal = "unicorn"
     }
     const hoverQuizC = () => {
       if (libraryQuizPhase === "captain") hoveredCaptain = "janeway"
       else if (libraryQuizPhase === "joke") hoveredJoke = "purplexing"
+      else if (libraryQuizPhase === "final") hoveredFinal = "radi"
     }
     const clearQuizHover = () => {
       hoveredCaptain = null
       hoveredJoke = null
+      hoveredFinal = null
     }
     nemoButton?.addEventListener("click", chooseQuizA)
     americaButton?.addEventListener("click", chooseQuizB)
@@ -470,9 +500,9 @@ export const FilmCanvas = () => {
       <button ref={letsDanceButtonRef} type="button" className="more-button" data-visible="false" tabIndex={-1}>
         {"Let's dance!"}
       </button>
-      <button ref={nemoButtonRef} type="button" className="quiz-answer" data-visible="false" tabIndex={-1} aria-label="Captain Nemo" />
-      <button ref={americaButtonRef} type="button" className="quiz-answer" data-visible="false" tabIndex={-1} aria-label="Captain America" />
-      <button ref={janewayButtonRef} type="button" className="quiz-answer" data-visible="false" tabIndex={-1} aria-label="Captain Janeway" />
+      <button ref={nemoButtonRef} type="button" className="quiz-answer" data-visible="false" tabIndex={-1} aria-label="Answer A" />
+      <button ref={americaButtonRef} type="button" className="quiz-answer" data-visible="false" tabIndex={-1} aria-label="Answer B" />
+      <button ref={janewayButtonRef} type="button" className="quiz-answer" data-visible="false" tabIndex={-1} aria-label="Answer C" />
     </>
   )
 }
