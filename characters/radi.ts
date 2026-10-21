@@ -42,7 +42,7 @@ type RadiExtra =
   | "puffSleeves"
   | "hairFlower"
 export type RadiHair = "ponytail" | "sideTail" | "loose" | "tucked" | "braid" | "bun" | "bob"
-export type RadiExpression = "grin" | "tongue" | "puff" | "surprised" | "angry"
+export type RadiExpression = "grin" | "tongue" | "puff" | "surprised" | "angry" | "thinking"
 type RadiPose = "wave" | "peace" | "hold"
 export type RadiShoes = "sneakers" | "highTops" | "tsarvuli" | "partyHeels" | "folkFlats"
 type DrawShoe = (context: Context, side: number, isPolished: boolean) => void
@@ -661,7 +661,7 @@ export const createIrisGradient = (context: Context) => {
   return gradient
 }
 
-const drawEye = (context: Context, side: number, isOpen: boolean, isPolished: boolean) => {
+const drawEye = (context: Context, side: number, isOpen: boolean, isPolished: boolean, gazeY = 0) => {
   const centerX = side * 9
   if (!isOpen) {
     paintLine(context, OUTLINE, 1.6, (path) => {
@@ -678,7 +678,7 @@ const drawEye = (context: Context, side: number, isOpen: boolean, isPolished: bo
         }
       : undefined,
   })
-  paintFill(context, PUPIL, ellipsePath(centerX, -63.2, 2.2, 3))
+  paintFill(context, PUPIL, ellipsePath(centerX + (gazeY === 0 ? 0 : -0.5), -63.2 + gazeY, 2.2, 3))
   paintFill(context, WHITE, ellipsePath(centerX - 1.4, -66.2, 1.5, 1.5))
   paintFill(context, WHITE, ellipsePath(centerX + 1.5, -61.6, 0.7, 0.7))
   if (isPolished) {
@@ -699,6 +699,14 @@ const drawMouth = (context: Context, expression: RadiExpression, isPolished: boo
   if (expression === "surprised") {
     paintShape(context, MOUTH, ellipsePath(0, -51.5, 3.4, 4.4), {
       decorateInside: (mouthContext) => paintFill(mouthContext, TONGUE, ellipsePath(0, -47.8, 2.8, 1.8)),
+    })
+    return
+  }
+  if (expression === "thinking") {
+    paintLine(context, OUTLINE, 1.5, (path) => {
+      path.moveTo(-4, -52.4)
+      path.quadraticCurveTo(-1, -54.2, 1.4, -52.2)
+      path.quadraticCurveTo(3.4, -50.6, 4.6, -52.8)
     })
     return
   }
@@ -739,7 +747,7 @@ const drawFace = (context: Context, expression: RadiExpression, isPolished: bool
   const blushSize = expression === "puff" && !isPolished ? 1.4 : 1
   const isAngry = expression === "angry"
   for (const side of SIDES) {
-    drawEye(context, side, !(expression === "tongue" && side === 1), isPolished)
+    drawEye(context, side, !(expression === "tongue" && side === 1), isPolished, expression === "thinking" ? -1.7 : 0)
     if (isAngry) {
       paintFill(context, activeColors.skin, (path) => {
         path.moveTo(side * 4, -66.4)
@@ -751,7 +759,7 @@ const drawFace = (context: Context, expression: RadiExpression, isPolished: bool
       paintLine(context, OUTLINE, 1.2, linePath(side * 4.2, -66.4, side * 13.8, -70.2))
       paintLine(context, OUTLINE, 1.8, linePath(side * 4.5, -69.4, side * 13, -73.4))
     } else {
-      const browLift = expression === "surprised" ? 3 : 0
+      const browLift = expression === "surprised" ? 3 : expression === "thinking" ? side * 1.8 : 0
       paintLine(context, activeColors.hair, 1.2, (path) => {
         path.moveTo(side * 6, -72.5 - browLift)
         path.quadraticCurveTo(side * 9, -74.5 - browLift * 1.4, side * 12, -72.5 - browLift)

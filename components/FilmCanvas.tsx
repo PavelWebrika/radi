@@ -5,7 +5,7 @@ import { drawRadiConcepts } from "@/characters/radiConcepts"
 import { anywayButtonLayout, CITY_SCENE_END, drawCityScene, DRIVE_CRUISE_SECONDS, DRIVE_MAX_BOOST, DRIVE_READY_SECONDS, KIRA_POP_PROGRESS } from "@/scenes/cityScene"
 import { CLUB_SCENE_END, drawClubScene, letsDanceButtonLayout, playedClubSeconds } from "@/scenes/clubScene"
 import { FILM_SCENES } from "@/scenes/filmScenes"
-import { drawLibraryScene } from "@/scenes/libraryScene"
+import { captainChoiceLayouts, drawLibraryScene, type CaptainChoice } from "@/scenes/libraryScene"
 import { drawOpeningScene, greetingButtonLayout, KIRA_SCENE_END, type BubbleButtonLayout } from "@/scenes/openingScene"
 import { useFilmStore } from "@/store/film"
 
@@ -25,6 +25,17 @@ const readScrollProgress = () => {
 const DRIVE_BOOST_PER_PIXEL = 0.006
 const WHEEL_LINE_PIXELS = 16
 
+const placeQuizButton = (button: HTMLButtonElement, layout: { centerX: number; centerY: number; width: number; height: number } | null, chosen: boolean) => {
+  button.dataset.visible = String(layout !== null)
+  button.dataset.chosen = String(chosen)
+  button.tabIndex = layout ? 0 : -1
+  if (!layout) return
+  button.style.left = `${layout.centerX}px`
+  button.style.top = `${layout.centerY}px`
+  button.style.width = `${layout.width}px`
+  button.style.height = `${layout.height}px`
+}
+
 const placeBubbleButton = (button: HTMLButtonElement, layout: BubbleButtonLayout) => {
   button.dataset.visible = String(layout !== null)
   button.tabIndex = layout ? 0 : -1
@@ -40,6 +51,9 @@ export const FilmCanvas = () => {
   const moreButtonRef = useRef<HTMLButtonElement>(null)
   const anywayButtonRef = useRef<HTMLButtonElement>(null)
   const letsDanceButtonRef = useRef<HTMLButtonElement>(null)
+  const nemoButtonRef = useRef<HTMLButtonElement>(null)
+  const americaButtonRef = useRef<HTMLButtonElement>(null)
+  const janewayButtonRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -60,6 +74,8 @@ export const FilmCanvas = () => {
     let clubStartMilliseconds: number | null = null
     let letsDanceStartMilliseconds: number | null = null
     let libraryStartMilliseconds: number | null = null
+    let captainChoice: CaptainChoice | null = null
+    let hoveredCaptain: CaptainChoice | null = null
     let lastTouchY: number | null = null
     const drawFrame = (timeMilliseconds: number) => {
       const elapsedSeconds = previousTimeMilliseconds === null ? 0 : (timeMilliseconds - previousTimeMilliseconds) / 1000
@@ -107,7 +123,7 @@ export const FilmCanvas = () => {
         context.fillRect(0, 0, window.innerWidth, window.innerHeight)
         drawRadiConcepts(context, window.innerWidth, window.innerHeight)
       } else if (librarySeconds !== null) {
-        drawLibraryScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, librarySeconds)
+        drawLibraryScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, librarySeconds, captainChoice, hoveredCaptain)
       } else if (clubSeconds !== null) {
         drawClubScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, clubSeconds, letsDanceSeconds)
       } else if (citySeconds !== null) {
@@ -121,6 +137,19 @@ export const FilmCanvas = () => {
       if (anywayButtonRef.current) placeBubbleButton(anywayButtonRef.current, anywayLayout)
       const letsDanceLayout = isShowingConcepts || clubSeconds === null ? null : letsDanceButtonLayout(window.innerWidth, window.innerHeight, clubSeconds, letsDanceSeconds)
       if (letsDanceButtonRef.current) placeBubbleButton(letsDanceButtonRef.current, letsDanceLayout)
+      if (librarySeconds === null) {
+        captainChoice = null
+        hoveredCaptain = null
+      }
+      const captainLayouts = isShowingConcepts || librarySeconds === null ? null : captainChoiceLayouts(window.innerWidth, window.innerHeight, librarySeconds)
+      const captainButtons = [
+        [nemoButtonRef.current, "nemo"],
+        [americaButtonRef.current, "america"],
+        [janewayButtonRef.current, "janeway"],
+      ] as const
+      captainButtons.forEach(([button, choice], index) => {
+        if (button) placeQuizButton(button, captainLayouts?.[index] ?? null, captainChoice === choice)
+      })
       animationFrameId = requestAnimationFrame(drawFrame)
     }
     const startMeetingKira = () => {
@@ -160,6 +189,8 @@ export const FilmCanvas = () => {
       anywayStartMilliseconds = null
       clubStartMilliseconds = sceneSelection.sceneId === "nightClub" ? performance.now() : null
       libraryStartMilliseconds = sceneSelection.sceneId === "library" ? performance.now() : null
+      captainChoice = null
+      hoveredCaptain = null
       letsDanceStartMilliseconds = null
     })
     const updateProgress = () => {
@@ -184,6 +215,33 @@ export const FilmCanvas = () => {
     anywayButton?.addEventListener("click", startCoolRadi)
     const letsDanceButton = letsDanceButtonRef.current
     letsDanceButton?.addEventListener("click", startDancing)
+    const chooseCaptain = (choice: CaptainChoice) => {
+      captainChoice = choice
+    }
+    const chooseNemo = () => chooseCaptain("nemo")
+    const chooseAmerica = () => chooseCaptain("america")
+    const chooseJaneway = () => chooseCaptain("janeway")
+    const nemoButton = nemoButtonRef.current
+    const americaButton = americaButtonRef.current
+    const janewayButton = janewayButtonRef.current
+    const hoverCaptain = (choice: CaptainChoice) => {
+      hoveredCaptain = choice
+    }
+    const clearCaptainHover = () => {
+      hoveredCaptain = null
+    }
+    const hoverNemo = () => hoverCaptain("nemo")
+    const hoverAmerica = () => hoverCaptain("america")
+    const hoverJaneway = () => hoverCaptain("janeway")
+    nemoButton?.addEventListener("click", chooseNemo)
+    americaButton?.addEventListener("click", chooseAmerica)
+    janewayButton?.addEventListener("click", chooseJaneway)
+    nemoButton?.addEventListener("mouseenter", hoverNemo)
+    americaButton?.addEventListener("mouseenter", hoverAmerica)
+    janewayButton?.addEventListener("mouseenter", hoverJaneway)
+    nemoButton?.addEventListener("mouseleave", clearCaptainHover)
+    americaButton?.addEventListener("mouseleave", clearCaptainHover)
+    janewayButton?.addEventListener("mouseleave", clearCaptainHover)
     return () => {
       cancelAnimationFrame(animationFrameId)
       window.removeEventListener("resize", onResize)
@@ -194,6 +252,15 @@ export const FilmCanvas = () => {
       moreButton?.removeEventListener("click", startMeetingKira)
       anywayButton?.removeEventListener("click", startCoolRadi)
       letsDanceButton?.removeEventListener("click", startDancing)
+      nemoButton?.removeEventListener("click", chooseNemo)
+      americaButton?.removeEventListener("click", chooseAmerica)
+      janewayButton?.removeEventListener("click", chooseJaneway)
+      nemoButton?.removeEventListener("mouseenter", hoverNemo)
+      americaButton?.removeEventListener("mouseenter", hoverAmerica)
+      janewayButton?.removeEventListener("mouseenter", hoverJaneway)
+      nemoButton?.removeEventListener("mouseleave", clearCaptainHover)
+      americaButton?.removeEventListener("mouseleave", clearCaptainHover)
+      janewayButton?.removeEventListener("mouseleave", clearCaptainHover)
       unsubscribeFromScenes()
     }
   }, [])
@@ -210,6 +277,9 @@ export const FilmCanvas = () => {
       <button ref={letsDanceButtonRef} type="button" className="more-button" data-visible="false" tabIndex={-1}>
         {"Let's dance!"}
       </button>
+      <button ref={nemoButtonRef} type="button" className="quiz-answer" data-visible="false" tabIndex={-1} aria-label="Captain Nemo" />
+      <button ref={americaButtonRef} type="button" className="quiz-answer" data-visible="false" tabIndex={-1} aria-label="Captain America" />
+      <button ref={janewayButtonRef} type="button" className="quiz-answer" data-visible="false" tabIndex={-1} aria-label="Captain Janeway" />
     </>
   )
 }

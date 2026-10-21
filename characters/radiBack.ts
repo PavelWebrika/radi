@@ -1,4 +1,4 @@
-import { ellipsePath, linePath, paintLine, paintShape, type Context } from "@/characters/paint"
+import { ellipsePath, linePath, paintFill, paintLine, paintShape, type Context } from "@/characters/paint"
 import {
   HAIR,
   HAIR_HIGHLIGHT,
@@ -77,9 +77,15 @@ const drawBackLegs = (context: Context, legLifts: readonly [number, number], kne
       path.lineTo(legX + side * kneeBends[index], -12.5)
       path.lineTo(legX, -6)
     }, isPolished)
-    paintShape(context, WHITE, ellipsePath(side * 6, -3, 5.5, 3.5), shadeIf(isPolished))
-    paintLine(context, OUTLINE, 0.6, linePath(side * 6 - 1.6, -5.3, side * 6 + 1.6, -3.7))
-    paintLine(context, OUTLINE, 0.6, linePath(side * 6 + 1.6, -5.3, side * 6 - 1.6, -3.7))
+    const shoeX = side * 6
+    paintShape(context, WHITE, ellipsePath(shoeX, -3, 5.2, 3.4), {
+      ...shadeIf(isPolished),
+      decorateInside: (shoe) => {
+        paintFill(shoe, "#ddd6cf", (path) => path.rect(shoeX - 6, -1.2, 12, 2.6))
+        paintFill(shoe, "#efeae4", (path) => path.roundRect(shoeX - 2.8, -6.4, 5.6, 3.6, 1.6))
+      },
+    })
+    paintLine(context, OUTLINE, 0.7, linePath(shoeX, -5.4, shoeX, -2.4))
     context.restore()
   })
 }
