@@ -76,6 +76,7 @@ export const FilmCanvas = () => {
     let libraryStartMilliseconds: number | null = null
     let captainChoice: CaptainChoice | null = null
     let hoveredCaptain: CaptainChoice | null = null
+    let wrongStartMilliseconds: number | null = null
     let lastTouchY: number | null = null
     const drawFrame = (timeMilliseconds: number) => {
       const elapsedSeconds = previousTimeMilliseconds === null ? 0 : (timeMilliseconds - previousTimeMilliseconds) / 1000
@@ -123,7 +124,8 @@ export const FilmCanvas = () => {
         context.fillRect(0, 0, window.innerWidth, window.innerHeight)
         drawRadiConcepts(context, window.innerWidth, window.innerHeight)
       } else if (librarySeconds !== null) {
-        drawLibraryScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, librarySeconds, captainChoice, hoveredCaptain)
+        const wrongSeconds = secondsSince(wrongStartMilliseconds)
+        drawLibraryScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, librarySeconds, captainChoice, hoveredCaptain, wrongSeconds)
       } else if (clubSeconds !== null) {
         drawClubScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, clubSeconds, letsDanceSeconds)
       } else if (citySeconds !== null) {
@@ -140,8 +142,10 @@ export const FilmCanvas = () => {
       if (librarySeconds === null) {
         captainChoice = null
         hoveredCaptain = null
+        wrongStartMilliseconds = null
       }
-      const captainLayouts = isShowingConcepts || librarySeconds === null ? null : captainChoiceLayouts(window.innerWidth, window.innerHeight, librarySeconds)
+      const wrongSeconds = librarySeconds === null ? null : secondsSince(wrongStartMilliseconds)
+      const captainLayouts = isShowingConcepts || librarySeconds === null ? null : captainChoiceLayouts(window.innerWidth, window.innerHeight, librarySeconds, wrongSeconds)
       const captainButtons = [
         [nemoButtonRef.current, "nemo"],
         [americaButtonRef.current, "america"],
@@ -191,6 +195,7 @@ export const FilmCanvas = () => {
       libraryStartMilliseconds = sceneSelection.sceneId === "library" ? performance.now() : null
       captainChoice = null
       hoveredCaptain = null
+      wrongStartMilliseconds = null
       letsDanceStartMilliseconds = null
     })
     const updateProgress = () => {
@@ -216,7 +221,9 @@ export const FilmCanvas = () => {
     const letsDanceButton = letsDanceButtonRef.current
     letsDanceButton?.addEventListener("click", startDancing)
     const chooseCaptain = (choice: CaptainChoice) => {
+      if (wrongStartMilliseconds !== null) return
       captainChoice = choice
+      if (choice === "nemo" || choice === "america") wrongStartMilliseconds = performance.now()
     }
     const chooseNemo = () => chooseCaptain("nemo")
     const chooseAmerica = () => chooseCaptain("america")

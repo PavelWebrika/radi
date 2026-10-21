@@ -1019,7 +1019,7 @@ const drawReadingBook = (context: Context, centerX: number, centerY: number, sca
   context.restore()
 }
 
-const drawReadingRadi = (context: Context, radiX: number, floorY: number, scale: number, sceneSeconds: number) => {
+const drawReadingRadi = (context: Context, radiX: number, floorY: number, scale: number, sceneSeconds: number, wrongSeconds: number | null) => {
   const sit = stageProgress(sceneSeconds, WALK_BACK_END, SIT_END)
   const crouch = easeOut(stageProgress(sit, 0, 0.38))
   const fold = easeInOut(stageProgress(sit, 0.28, 0.88))
@@ -1038,11 +1038,19 @@ const drawReadingRadi = (context: Context, radiX: number, floorY: number, scale:
   context.save()
   context.translate(radiX, floorY + drop)
   context.rotate(lean)
-  const quizzing = sceneSeconds >= QUIZ_START
+  const quizzing = sceneSeconds >= QUIZ_START && wrongSeconds === null
+  const reacting = wrongSeconds !== null && wrongSeconds < 1
+  const smiling = wrongSeconds !== null && wrongSeconds >= 2
   const headSway = quizzing ? Math.sin(sceneSeconds * 1.3) * 0.42 : 0
-  drawRadi(context, quizzing ? { ...bookwormRadiLook, expression: "thinking" } : bookwormRadiLook, 0, 0, scale, {
+  const shake = reacting ? Math.sin(wrongSeconds * 16) * (1 - wrongSeconds) : 0
+  if (shake !== 0) {
+    context.translate(0, -74 * scale)
+    context.rotate(shake * 0.08)
+    context.translate(0, 74 * scale)
+  }
+  drawRadi(context, smiling || (!reacting && !quizzing && wrongSeconds === null) ? bookwormRadiLook : { ...bookwormRadiLook, expression: "thinking" }, 0, 0, scale, {
     hideLegs: seated,
-    faceTurn: quizzing ? headSway : open >= 1 ? Math.sin(sceneSeconds * 0.9) * 0.12 : 0,
+    faceTurn: reacting ? shake * 0.9 : quizzing ? headSway : open >= 1 ? Math.sin(sceneSeconds * 0.9) * 0.12 : 0,
     legLifts: seated ? [0, 0] : [crouch * 4, crouch * 4],
     kneeBends: seated ? [0, 0] : [crouch * 8, crouch * 8],
     hands,
@@ -1112,18 +1120,19 @@ const quizCard = (width: number, height: number) => {
   }
 }
 
-export const captainChoiceLayouts = (width: number, height: number, sceneSeconds: number): readonly QuizChoiceLayout[] | null => {
-  if (sceneSeconds < QUIZ_START + QUIZ_POP_SECONDS) return null
+export const captainChoiceLayouts = (width: number, height: number, sceneSeconds: number, wrongSeconds: number | null = null): readonly QuizChoiceLayout[] | null => {
+  if (wrongSeconds !== null || sceneSeconds < QUIZ_START + QUIZ_POP_SECONDS) return null
   return quizCard(width, height).rows
 }
 
-const drawCaptainQuiz = (context: Context, width: number, height: number, sceneSeconds: number, choice: CaptainChoice | null, hovered: CaptainChoice | null) => {
-  const pop = easeOutBack(stageProgress(sceneSeconds, QUIZ_START, QUIZ_START + QUIZ_POP_SECONDS))
-  if (pop <= 0) return
+const NEXT_QUESTION_AT = 2
+
+const drawQuizPanel = (context: Context, width: number, height: number, shown: number, question: string | null, showAnswers: boolean, choice: CaptainChoice | null, hovered: CaptainChoice | null) => {
+  if (shown <= 0.02) return
   const card = quizCard(width, height)
   context.save()
   context.translate(card.centerX, card.centerY)
-  context.scale(pop, pop)
+  context.scale(shown, shown)
   context.translate(-card.centerX, -card.centerY)
   const left = card.centerX - card.cardWidth / 2
   const top = card.centerY - card.cardHeight / 2
@@ -1131,40 +1140,53 @@ const drawCaptainQuiz = (context: Context, width: number, height: number, sceneS
   paintFill(context, "rgba(0, 0, 0, 0.18)", (path) => path.roundRect(left + 8, top + 8, card.cardWidth, card.cardHeight, 22))
   paintShape(context, "#fff8ea", (path) => path.roundRect(left, top, card.cardWidth, card.cardHeight, 22))
   paintShape(context, "#ffd23f", (path) => path.roundRect(left + 16, top + 16, card.cardWidth - 32, card.cardHeight * 0.24, 14))
-  context.fillStyle = OUTLINE
-  context.font = `bold ${card.questionSize}px "Comic Sans MS", "Comic Sans", cursive`
-  context.textAlign = "center"
-  context.textBaseline = "middle"
-  context.fillText("Who is the best captain?", card.centerX, top + 16 + card.cardHeight * 0.12)
+  if (question) {
+    context.fillStyle = OUTLINE
+    context.font = `bold ${card.questionSize}px "Comic Sans MS", "Comic Sans", cursive`
+    context.textAlign = "center"
+    context.textBaseline = "middle"
+    context.fillText(question, card.centerX, top + 16 + card.cardHeight * 0.12)
+  }
   context.lineWidth = 3
   for (const row of card.rows) {
     const rowLeft = row.centerX - row.width / 2
     const rowTop = row.centerY - row.height / 2
-    const rowFill = row.choice === hovered ? "#c8f0b4" : choice === row.choice ? "#ffd23f" : "#fffdf8"
+    const rowFill = showAnswers && row.choice === hovered ? "#c8f0b4" : showAnswers && choice === row.choice ? "#ffd23f" : "#fffdf8"
     paintShape(context, rowFill, (path) => path.roundRect(rowLeft, rowTop, row.width, row.height, 12))
+    if (!showAnswers) continue
     paintShape(context, "#7b5cff", (path) => path.roundRect(rowLeft + 8, row.centerY - row.height * 0.32, row.height * 0.64, row.height * 0.64, 8))
     context.fillStyle = WHITE
     context.font = `bold ${row.fontSize}px "Comic Sans MS", "Comic Sans", cursive`
+    context.textAlign = "center"
+    context.textBaseline = "middle"
     context.fillText(row.letter, rowLeft + 8 + row.height * 0.32, row.centerY)
     context.fillStyle = OUTLINE
     context.textAlign = "left"
     context.fillText(row.name, rowLeft + row.height * 0.95, row.centerY)
-    context.textAlign = "center"
   }
   context.restore()
 }
 
-const drawLibraryRadi = (context: Context, width: number, height: number, floorY: number, landingX: number, scale: number, time: number, sceneSeconds: number) => {
+const drawCaptainQuiz = (context: Context, width: number, height: number, sceneSeconds: number, choice: CaptainChoice | null, hovered: CaptainChoice | null, wrongSeconds: number | null) => {
+  const pop = easeOutBack(stageProgress(sceneSeconds, QUIZ_START, QUIZ_START + QUIZ_POP_SECONDS))
+  const hide = wrongSeconds === null ? 0 : easeOut(stageProgress(wrongSeconds, 0, 0.35))
+  drawQuizPanel(context, width, height, pop * (1 - hide), "Who is the best captain?", true, choice, hovered)
+  if (wrongSeconds === null || wrongSeconds < NEXT_QUESTION_AT) return
+  const nextPop = easeOutBack(stageProgress(wrongSeconds, NEXT_QUESTION_AT, NEXT_QUESTION_AT + QUIZ_POP_SECONDS))
+  drawQuizPanel(context, width, height, nextPop, null, false, null, null)
+}
+
+const drawLibraryRadi = (context: Context, width: number, height: number, floorY: number, landingX: number, scale: number, time: number, sceneSeconds: number, wrongSeconds: number | null) => {
   const ladder = ladderPlacement(width, height, floorY)
   const ladderX = ladderCenterX(ladder, floorY)
   if (sceneSeconds < WALK_TO_LADDER_START) drawCrashRadi(context, landingX, floorY, scale, time, sceneSeconds)
   else if (sceneSeconds < WALK_TO_LADDER_END) drawSkippingRadi(context, landingX, ladderX, floorY, scale, sceneSeconds, WALK_TO_LADDER_START, WALK_TO_LADDER_END, false)
   else if (sceneSeconds < WALK_BACK_START) drawClimbingRadi(context, ladder, floorY, scale, sceneSeconds)
   else if (sceneSeconds < WALK_BACK_END) drawSkippingRadi(context, ladderX, landingX, floorY, scale, sceneSeconds, WALK_BACK_START, WALK_BACK_END, true)
-  else drawReadingRadi(context, landingX, floorY, scale, sceneSeconds)
+  else drawReadingRadi(context, landingX, floorY, scale, sceneSeconds, wrongSeconds)
 }
 
-export const drawLibraryScene = (context: Context, width: number, height: number, time: number, sceneSeconds: number, captainChoice: CaptainChoice | null = null, hoveredCaptain: CaptainChoice | null = null) => {
+export const drawLibraryScene = (context: Context, width: number, height: number, time: number, sceneSeconds: number, captainChoice: CaptainChoice | null = null, hoveredCaptain: CaptainChoice | null = null, wrongSeconds: number | null = null) => {
   const { scale, floorY, ceilingY, landingX } = libraryLayout(width, height)
   const sinceImpact = sceneSeconds - FALL_END
   const { lowestY } = crashMotion(sceneSeconds, floorY, scale)
@@ -1183,7 +1205,7 @@ export const drawLibraryScene = (context: Context, width: number, height: number
   drawNightHole(context, width, ceilingY, breaking.holeOpen, time)
   const ladder = ladderPlacement(width, height, floorY)
   drawLadder(context, ladder.left, floorY, ladder.top, sinceImpact)
-  drawLibraryRadi(context, width, height, floorY, landingX, scale, time, sceneSeconds)
+  drawLibraryRadi(context, width, height, floorY, landingX, scale, time, sceneSeconds, wrongSeconds)
   drawCeilingBoards(context, width, ceilingY, breaking.holeOpen)
   drawCeilingCracks(context, width, ceilingY, breaking.holeOpen < 0.55 ? breaking.cracks : 0)
   drawHoleRim(context, width, ceilingY, breaking.holeOpen)
@@ -1195,7 +1217,7 @@ export const drawLibraryScene = (context: Context, width: number, height: number
   drawBookcase(context, width * 0.8, ceilingY - 6, width - 12, floorY + 8, sinceImpact)
   drawDust(context, landingX, floorY, sceneSeconds)
   drawSpeechBubble(context, width, landingX, floorY, scale, easeOutBack(stageProgress(sceneSeconds, SAY_START, SAY_START + BUBBLE_POP_SECONDS)) * (1 - stageProgress(sceneSeconds, SAY_END - BUBBLE_HIDE_SECONDS, SAY_END)))
-  drawCaptainQuiz(context, width, height, sceneSeconds, captainChoice, hoveredCaptain)
+  drawCaptainQuiz(context, width, height, sceneSeconds, captainChoice, hoveredCaptain, wrongSeconds)
   if (sinceImpact >= 0 && sinceImpact < 0.5) {
     const ring = stageProgress(sinceImpact, 0, 0.5)
     context.save()
