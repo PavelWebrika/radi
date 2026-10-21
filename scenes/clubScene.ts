@@ -16,34 +16,35 @@ const FUN_BUBBLE_START = 1.5
 const FUN_BUBBLE_END = 5.1
 const DANCE_START = 5.1
 const OPEN_EYES_START = 10
-const DANCE_STOP_START = 12.8
-const DANCE_STOP_END = 13.2
-const ONLY_DANCE_BUBBLE_START = 13.2
-const ONLY_DANCE_BUBBLE_END = 16.3
+const EXTRA_DANCE_SECONDS = 25
+const DANCE_STOP_START = 12.8 + EXTRA_DANCE_SECONDS
+const DANCE_STOP_END = 13.2 + EXTRA_DANCE_SECONDS
+const ONLY_DANCE_BUBBLE_START = 13.2 + EXTRA_DANCE_SECONDS
+const ONLY_DANCE_BUBBLE_END = 16.3 + EXTRA_DANCE_SECONDS
 const BUBBLE_POP_SECONDS = 0.4
 const BUBBLE_HIDE_SECONDS = 0.3
 const FUN_BUBBLE_HOLD = FUN_BUBBLE_END - BUBBLE_HIDE_SECONDS
 const FUN_BUBBLE_TEXT_OFFSET = -0.7
 const LETS_DANCE_BUTTON_OFFSET = 1.3
-const FIST_RAISE_START = 16.3
-const FIST_RAISE_END = 16.7
-const LAUNCH_START = 17
-const LAUNCH_END = 18.2
+const FIST_RAISE_START = 16.3 + EXTRA_DANCE_SECONDS
+const FIST_RAISE_END = 16.7 + EXTRA_DANCE_SECONDS
+export const LAUNCH_START = 17 + EXTRA_DANCE_SECONDS
+const LAUNCH_END = 18.2 + EXTRA_DANCE_SECONDS
 const LAUNCH_KICK_SECONDS = 0.25
-const CROWD_AMAZED_START = 16.4
-const CROWD_AMAZED_END = 17
+const CROWD_AMAZED_START = 16.4 + EXTRA_DANCE_SECONDS
+const CROWD_AMAZED_END = 17 + EXTRA_DANCE_SECONDS
 const SHOCKWAVE_COUNT = 3
 const SHOCKWAVE_GAP = 0.12
 const SHOCKWAVE_SECONDS = 0.6
 const DEBRIS_COUNT = 14
 const DEBRIS_SECONDS = 1.2
-const SONIC_BOOM_START = 17.7
+const SONIC_BOOM_START = 17.7 + EXTRA_DANCE_SECONDS
 const SONIC_BOOM_SECONDS = 0.45
 const SHAKE_SECONDS = 0.6
 const SHAKE_STRENGTH = 12
 const FLASH_SECONDS = 0.35
-const IRIS_OUT_START = 18.5
-const IRIS_OUT_END = 19.8
+const IRIS_OUT_START = 18.5 + EXTRA_DANCE_SECONDS
+const IRIS_OUT_END = 19.8 + EXTRA_DANCE_SECONDS
 
 export const CLUB_SCENE_END = IRIS_OUT_END
 
@@ -53,6 +54,9 @@ export const playedClubSeconds = (sceneSeconds: number, letsDanceSeconds: number
 const GROOVE_RATE = Math.PI * 2
 const MOVE_SECONDS = 2
 const MOVE_BLEND = 0.2
+const DANCE_SPEED_START = 1
+const DANCE_SPEED_STEP = 0.08
+const DANCE_SPEED_EVERY = 3
 const FLOOR_TOP = 0.56
 const FLOOR_ROWS = 7
 const FLOOR_COLUMNS = 12
@@ -211,6 +215,29 @@ const danceHands = (move: number, groove: number): RadiHands => {
 
 const mixHands = (from: RadiHands, to: RadiHands, amount: number): RadiHands => [mixPoint(from[0], to[0], amount), mixPoint(from[1], to[1], amount)]
 
+const dancePlaybackSeconds = (elapsed: number) => {
+  const steps = Math.floor(elapsed / DANCE_SPEED_EVERY)
+  const partial = elapsed - steps * DANCE_SPEED_EVERY
+  const completed = (steps * DANCE_SPEED_START + (DANCE_SPEED_STEP * steps * (steps - 1)) / 2) * DANCE_SPEED_EVERY
+  return completed + (DANCE_SPEED_START + steps * DANCE_SPEED_STEP) * partial
+}
+
+const danceMotionSeconds = (clubSeconds: number) => {
+  const sinceEyes = clubSeconds - OPEN_EYES_START
+  if (sinceEyes <= 0) return clubSeconds - DANCE_START
+  const danceWindow = DANCE_STOP_START - OPEN_EYES_START
+  const played = Math.min(sinceEyes, danceWindow)
+  return OPEN_EYES_START - DANCE_START + dancePlaybackSeconds(played) + (sinceEyes - played)
+}
+
+const danceGrooveTime = (time: number, clubSeconds: number) => {
+  const sinceEyes = clubSeconds - OPEN_EYES_START
+  if (sinceEyes <= 0) return time
+  const danceWindow = DANCE_STOP_START - OPEN_EYES_START
+  const played = Math.min(sinceEyes, danceWindow)
+  return time - sinceEyes + dancePlaybackSeconds(played) + (sinceEyes - played)
+}
+
 const radiDanceMotion = (danceSeconds: number, energy: number) => {
   const groove = danceSeconds * GROOVE_RATE
   const movePosition = danceSeconds / MOVE_SECONDS
@@ -261,7 +288,7 @@ const drawClubRadi = (context: Context, radiX: number, feetY: number, scale: num
     })
     return
   }
-  const { hop, motion } = radiDanceMotion(clubSeconds - DANCE_START, 1 - stageProgress(clubSeconds, DANCE_STOP_START, DANCE_STOP_END))
+  const { hop, motion } = radiDanceMotion(danceMotionSeconds(clubSeconds), 1 - stageProgress(clubSeconds, DANCE_STOP_START, DANCE_STOP_END))
   const hands = mixHands(motion.hands, SUPERHERO_HANDS, stageProgress(clubSeconds, FIST_RAISE_START, FIST_RAISE_END))
   const hasLaunched = clubSeconds >= LAUNCH_START
   const crouch = hasLaunched ? 0 : stageProgress(clubSeconds, FIST_RAISE_END, LAUNCH_START)
@@ -461,22 +488,23 @@ export const drawClubScene = (context: Context, width: number, height: number, t
   const shake = sinceLaunch >= 0 ? (1 - stageProgress(sinceLaunch, 0, SHAKE_SECONDS)) * SHAKE_STRENGTH : 0
   const flash = sinceLaunch >= 0 ? 0.8 * (1 - stageProgress(sinceLaunch, 0, FLASH_SECONDS)) : 0
   const amazement = stageProgress(clubSeconds, CROWD_AMAZED_START, CROWD_AMAZED_END)
+  const grooveTime = danceGrooveTime(time, clubSeconds)
   if (shake > 0) {
     context.fillStyle = "#0d0626"
     context.fillRect(0, 0, width, height)
   }
   context.save()
   context.translate(Math.sin(time * 90) * shake, Math.cos(time * 73) * shake)
-  drawClubRoom(context, width, height, time)
-  drawDanceFloor(context, width, height, time)
-  drawDjBooth(context, width, height, time, scale)
-  const { ballX, ballY } = drawDiscoBall(context, width, height, time)
-  drawCrowd(context, width, height, time, scale, false, amazement)
-  drawSpotlight(context, radiX, feetY, scale, time)
+  drawClubRoom(context, width, height, grooveTime)
+  drawDanceFloor(context, width, height, grooveTime)
+  drawDjBooth(context, width, height, grooveTime, scale)
+  const { ballX, ballY } = drawDiscoBall(context, width, height, grooveTime)
+  drawCrowd(context, width, height, grooveTime, scale, false, amazement)
+  drawSpotlight(context, radiX, feetY, scale, grooveTime)
   drawTakeoff(context, radiX, feetY, scale, time, clubSeconds)
-  drawClubRadi(context, radiX, feetY, scale, time, clubSeconds)
-  drawLightBeams(context, width, height, time, ballX, ballY)
-  drawCrowd(context, width, height, time, scale, true, amazement)
+  drawClubRadi(context, radiX, feetY, scale, grooveTime, clubSeconds)
+  drawLightBeams(context, width, height, grooveTime, ballX, ballY)
+  drawCrowd(context, width, height, grooveTime, scale, true, amazement)
   drawRadiBubble(context, width, radiX, feetY, scale, bubblePopScale(clubSeconds, FUN_BUBBLE_START, FUN_BUBBLE_END), ["And I like to have fun", "and dance!"], FUN_BUBBLE_TEXT_OFFSET)
   drawRadiBubble(context, width, radiX, feetY, scale, bubblePopScale(clubSeconds, ONLY_DANCE_BUBBLE_START, ONLY_DANCE_BUBBLE_END), ["But it's not all", "fun and games..."])
   context.restore()

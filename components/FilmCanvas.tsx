@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react"
 import { drawRadiConcepts } from "@/characters/radiConcepts"
 import { anywayButtonLayout, CITY_SCENE_END, drawCityScene, DRIVE_CRUISE_SECONDS, DRIVE_MAX_BOOST, DRIVE_READY_SECONDS, KIRA_POP_PROGRESS, RADI_EXIT_START } from "@/scenes/cityScene"
-import { CLUB_SCENE_END, drawClubScene, letsDanceButtonLayout, playedClubSeconds } from "@/scenes/clubScene"
+import { CLUB_SCENE_END, drawClubScene, LAUNCH_START, letsDanceButtonLayout, playedClubSeconds } from "@/scenes/clubScene"
 import { FILM_SCENES } from "@/scenes/filmScenes"
 import { captainChoiceLayouts, drawLibraryScene, type CaptainChoice } from "@/scenes/libraryScene"
 import { drawOpeningScene, greetingButtonLayout, KIRA_SCENE_END, type BubbleButtonLayout } from "@/scenes/openingScene"
@@ -87,6 +87,24 @@ export const FilmCanvas = () => {
       driveSong.volume = songFadeDirection === "in" ? fade : 1 - fade
       if (songFadeDirection === "out" && fadeUnit >= 1) stopDriveSong()
     }
+    let danceFadeDirection: "in" | "out" | null = null
+    let danceFadeStartedAt: number | null = null
+    const danceSong = new Audio("/song2.mp3")
+    const stopDanceSong = () => {
+      danceSong.volume = 0
+      danceSong.pause()
+      if (danceSong.currentTime > 0) danceSong.currentTime = 0
+      danceSong.volume = 1
+      danceFadeDirection = null
+      danceFadeStartedAt = null
+    }
+    const fadeDanceSong = (timeMilliseconds: number) => {
+      if (danceFadeDirection === null || danceFadeStartedAt === null) return
+      const fadeUnit = Math.min(1, Math.max(0, (timeMilliseconds - danceFadeStartedAt) / (danceFadeDirection === "in" ? 1000 : 3000)))
+      const fade = fadeUnit * fadeUnit * (3 - 2 * fadeUnit)
+      danceSong.volume = danceFadeDirection === "in" ? fade : 1 - fade
+      if (danceFadeDirection === "out" && fadeUnit >= 1) stopDanceSong()
+    }
     let arrivalStartMilliseconds: number | null = null
     let kiraStartMilliseconds: number | null = null
     let clubStartMilliseconds: number | null = null
@@ -142,6 +160,13 @@ export const FilmCanvas = () => {
       const letsDanceSeconds = secondsSince(letsDanceStartMilliseconds)
       const playedClub = clubSeconds === null ? null : playedClubSeconds(clubSeconds, letsDanceSeconds)
       if (playedClub !== null && playedClub >= CLUB_SCENE_END) libraryStartMilliseconds ??= timeMilliseconds
+      if (letsDanceStartMilliseconds === null) {
+        if (!danceSong.paused || danceFadeStartedAt !== null) stopDanceSong()
+      } else if (playedClub !== null && playedClub >= LAUNCH_START && danceFadeDirection === "in" && !danceSong.paused) {
+        danceFadeDirection = "out"
+        danceFadeStartedAt = timeMilliseconds
+      }
+      fadeDanceSong(timeMilliseconds)
       const librarySeconds = secondsSince(libraryStartMilliseconds)
       if (isShowingConcepts) {
         context.fillStyle = "#000000"
@@ -196,7 +221,13 @@ export const FilmCanvas = () => {
       })
     }
     const startDancing = () => {
-      letsDanceStartMilliseconds ??= performance.now()
+      if (letsDanceStartMilliseconds !== null) return
+      letsDanceStartMilliseconds = performance.now()
+      danceFadeDirection = "in"
+      danceFadeStartedAt = performance.now()
+      danceSong.volume = 0
+      danceSong.currentTime = 0
+      void danceSong.play().catch(() => {})
     }
     const pressGas = (scrollPixels: number) => {
       if (scrollPixels <= 0 || latestAnywaySeconds === null || latestAnywaySeconds < DRIVE_READY_SECONDS) return
@@ -312,6 +343,7 @@ export const FilmCanvas = () => {
       janewayButton?.removeEventListener("mouseleave", clearCaptainHover)
       unsubscribeFromScenes()
       stopDriveSong()
+      stopDanceSong()
     }
   }, [])
 
