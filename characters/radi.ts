@@ -41,10 +41,11 @@ type RadiExtra =
   | "pafti"
   | "puffSleeves"
   | "hairFlower"
+  | "batman"
 export type RadiHair = "ponytail" | "sideTail" | "loose" | "tucked" | "braid" | "bun" | "bob"
 export type RadiExpression = "grin" | "tongue" | "puff" | "surprised" | "angry" | "thinking"
 type RadiPose = "wave" | "peace" | "hold"
-export type RadiShoes = "sneakers" | "highTops" | "tsarvuli" | "partyHeels" | "folkFlats"
+export type RadiShoes = "sneakers" | "highTops" | "tsarvuli" | "partyHeels" | "folkFlats" | "boots"
 type DrawShoe = (context: Context, side: number, isPolished: boolean) => void
 type RadiTop = { color: string; pattern?: RadiPattern; label?: string }
 export type RadiBottom = { kind: "skirt" | "shorts"; color: string; pattern?: RadiPattern }
@@ -427,9 +428,18 @@ const shoePainters: Record<RadiShoes, DrawShoe> = {
     paintTube(context, BLACK_FABRIC, 0.9, linePath(legX - 3, -6.5, legX + 3, -6.5), isPolished)
     paintFill(context, SILVER, ellipsePath(side * 7.3, -6.5, 0.6, 0.6))
   },
+  boots: (context, side, isPolished) => {
+    const shoeX = side * 6
+    const legX = side * 5
+    paintShape(context, BLACK_FABRIC, (path) => path.roundRect(legX - 3.6, -13, 7.2, 11, 2), shadeIf(isPolished))
+    paintShape(context, BLACK_FABRIC, ellipsePath(shoeX, -3, 5.6, 3.5), {
+      ...shadeIf(isPolished),
+      decorateInside: isPolished ? (shoeContext) => paintFill(shoeContext, "rgba(255, 255, 255, 0.16)", ellipsePath(shoeX - 2, -4.4, 1.5, 0.7)) : undefined,
+    })
+  },
 }
 
-export const LEG_COVERS: Partial<Record<RadiShoes, string>> = { tsarvuli: WOOL_WRAP, folkFlats: WHITE }
+export const LEG_COVERS: Partial<Record<RadiShoes, string>> = { tsarvuli: WOOL_WRAP, folkFlats: WHITE, boots: BLACK_FABRIC }
 
 const drawLegs = (context: Context, shoes: RadiShoes, legLifts: PerSide, kneeBends: PerSide, isPolished: boolean) => {
   SIDES.forEach((side, index) => {
@@ -864,7 +874,9 @@ export const drawKalpak = (context: Context, isPolished: boolean) => {
 }
 
 const drawArms = (context: Context, look: RadiLook, hands: RadiHands, elbowBends: PerSide, isPolished: boolean) => {
-  const sleeveColor = look.extras.includes("denimJacket") ? DENIM : activeColors.skin
+  const isBatman = look.extras.includes("batman")
+  const sleeveColor = look.extras.includes("denimJacket") ? DENIM : isBatman ? BLACK_FABRIC : activeColors.skin
+  const handColor = isBatman ? BLACK_FABRIC : activeColors.skin
   SIDES.forEach((side, index) => {
     const [handX, handY] = hands[index]
     const shoulderX = side * 8.5
@@ -881,7 +893,7 @@ const drawArms = (context: Context, look: RadiLook, hands: RadiHands, elbowBends
       paintTube(context, activeColors.skin, 1.8, linePath(handX, handY, handX - 1.5, handY - 6))
       paintTube(context, activeColors.skin, 1.8, linePath(handX, handY, handX + 2.5, handY - 6))
     }
-    paintShape(context, activeColors.skin, ellipsePath(handX, handY, 2.8, 2.8), shadeIf(isPolished))
+    paintShape(context, handColor, ellipsePath(handX, handY, 2.8, 2.8), shadeIf(isPolished))
   })
 }
 
@@ -896,9 +908,87 @@ const drawHeadphones = (context: Context, isPolished: boolean) => {
   }
 }
 
+const batMarkPath: BuildPath = (path) => {
+  path.moveTo(0, -1.15)
+  path.lineTo(-0.85, -2.55)
+  path.lineTo(-0.45, -0.9)
+  path.lineTo(-1.2, -0.4)
+  path.lineTo(-4.6, -1.65)
+  path.lineTo(-2.65, 0.35)
+  path.lineTo(-3.75, 1.3)
+  path.lineTo(-0.55, 0.45)
+  path.lineTo(0, 1.6)
+  path.lineTo(0.55, 0.45)
+  path.lineTo(3.75, 1.3)
+  path.lineTo(2.65, 0.35)
+  path.lineTo(4.6, -1.65)
+  path.lineTo(1.2, -0.4)
+  path.lineTo(0.45, -0.9)
+  path.lineTo(0.85, -2.55)
+  path.closePath()
+}
+
+export const drawBatMark = (context: Context, centerX: number, centerY: number, scale: number) => {
+  context.save()
+  context.translate(centerX, centerY)
+  context.scale(scale, scale)
+  paintFill(context, OUTLINE, batMarkPath)
+  context.restore()
+}
+
+const drawBatmanCape = (context: Context, isPolished: boolean) => {
+  paintShape(context, BLACK_FABRIC, (path) => {
+    path.moveTo(-9, -47)
+    path.quadraticCurveTo(-28, -34, -30, -8)
+    path.lineTo(-22, -14)
+    path.lineTo(-16, -2)
+    path.lineTo(-8, -12)
+    path.lineTo(0, -1)
+    path.lineTo(8, -12)
+    path.lineTo(16, -2)
+    path.lineTo(22, -14)
+    path.lineTo(30, -8)
+    path.quadraticCurveTo(28, -34, 9, -47)
+    path.quadraticCurveTo(0, -43, -9, -47)
+    path.closePath()
+  }, shadeIf(isPolished))
+}
+
+const drawBatmanChest = (context: Context, isPolished: boolean) => {
+  paintShape(context, FOLK_YELLOW, ellipsePath(0, -40, 7, 5.6), shadeIf(isPolished))
+  drawBatMark(context, 0, -40.2, 1.2)
+  paintShape(context, FOLK_YELLOW, (path) => path.roundRect(-10.5, -33.4, 21, 4.2, 1.4), shadeIf(isPolished))
+  paintShape(context, BLACK_FABRIC, ellipsePath(0, -31.3, 1.7, 1.7))
+  for (const pouchX of [-6.2, 6.2]) paintShape(context, BLACK_FABRIC, (path) => path.roundRect(pouchX - 1.3, -33, 2.6, 3.2, 0.6))
+}
+
+const drawBatmanCowl = (context: Context, isPolished: boolean) => {
+  paintShape(context, BLACK_FABRIC, (path) => {
+    path.moveTo(-18, -57)
+    path.quadraticCurveTo(-26, -66, -22, -84)
+    path.lineTo(-17, -93)
+    path.lineTo(-12, -111)
+    path.lineTo(-7, -93)
+    path.quadraticCurveTo(0, -98, 7, -93)
+    path.lineTo(12, -111)
+    path.lineTo(17, -93)
+    path.lineTo(22, -84)
+    path.quadraticCurveTo(26, -66, 18, -57)
+    path.quadraticCurveTo(14, -53.5, 8, -58)
+    path.quadraticCurveTo(3.2, -56.4, 0, -56)
+    path.quadraticCurveTo(-3.2, -56.4, -8, -58)
+    path.quadraticCurveTo(-14, -53.5, -18, -57)
+    path.closePath()
+  }, shadeIf(isPolished))
+  for (const side of SIDES) {
+    paintShape(context, WHITE, (path) => path.ellipse(side * 9, -65.2, 5.2, 2.15, side * -0.4, 0, Math.PI * 2))
+  }
+}
+
 export const drawRadi = (context: Context, look: RadiLook, feetX: number, feetY: number, scale: number, motion: Partial<RadiMotion> = {}) => {
   const hasExtra = (extra: RadiExtra) => look.extras.includes(extra)
   const isPolished = look.polished === true
+  const isBatman = hasExtra("batman")
   const { faceTurn = 0, legLifts = [0, 0], kneeBends = [0, 0], hands = HAND_POSITIONS[look.pose], elbowBends = [0, 0], hideLegs = false } = motion
 
   activeColors = look.colors ?? RADI_COLORS
@@ -910,10 +1000,12 @@ export const drawRadi = (context: Context, look: RadiLook, feetX: number, feetY:
   context.lineWidth = OUTLINE_WIDTH
   context.strokeStyle = OUTLINE
 
-  drawHairBack(context, look.hair, isPolished)
+  if (isBatman) drawBatmanCape(context, isPolished)
+  else drawHairBack(context, look.hair, isPolished)
   if (!hideLegs) drawLegs(context, look.shoes ?? "sneakers", legLifts, kneeBends, isPolished)
   drawBottom(context, look.bottom, isPolished)
   drawTorso(context, look.top, isPolished)
+  if (isBatman) drawBatmanChest(context, isPolished)
   if (hasExtra("apron")) drawApron(context, isPolished)
   if (hasExtra("pafti")) drawPafti(context, isPolished)
   if (hasExtra("denimJacket")) drawDenimJacket(context, isPolished)
@@ -927,7 +1019,8 @@ export const drawRadi = (context: Context, look: RadiLook, feetX: number, feetY:
   context.restore()
   if (hasExtra("sunglasses")) drawSunglasses(context)
   if (hasExtra("readingGlasses")) drawReadingGlasses(context)
-  drawHairFront(context, look.hair, isPolished)
+  if (isBatman) drawBatmanCowl(context, isPolished)
+  else drawHairFront(context, look.hair, isPolished)
   if (hasExtra("bandana")) drawBandana(context, isPolished)
   if (hasExtra("kalpak")) drawKalpak(context, isPolished)
   if (hasExtra("hairFlower")) drawHairFlower(context, isPolished)
