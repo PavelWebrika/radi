@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react"
 import { drawRadiConcepts } from "@/characters/radiConcepts"
-import { anywayButtonLayout, CITY_SCENE_END, drawCityScene, DRIVE_CRUISE_SECONDS, DRIVE_MAX_BOOST, DRIVE_READY_SECONDS, KIRA_POP_PROGRESS } from "@/scenes/cityScene"
+import { anywayButtonLayout, CITY_SCENE_END, drawCityScene, DRIVE_CRUISE_SECONDS, DRIVE_MAX_BOOST, DRIVE_READY_SECONDS, KIRA_POP_PROGRESS, RADI_EXIT_START } from "@/scenes/cityScene"
 import { CLUB_SCENE_END, drawClubScene, letsDanceButtonLayout, playedClubSeconds } from "@/scenes/clubScene"
 import { FILM_SCENES } from "@/scenes/filmScenes"
 import { captainChoiceLayouts, drawLibraryScene, type CaptainChoice } from "@/scenes/libraryScene"
@@ -69,6 +69,24 @@ export const FilmCanvas = () => {
     let driveProgress: number | null = null
     let driveSpeed = 0
     let driveBoost = 0
+    let songFadeDirection: "in" | "out" | null = null
+    let songFadeStartedAt: number | null = null
+    const driveSong = new Audio("/song1.mp3")
+    const stopDriveSong = () => {
+      driveSong.volume = 0
+      driveSong.pause()
+      if (driveSong.currentTime > 0) driveSong.currentTime = 0
+      driveSong.volume = 1
+      songFadeDirection = null
+      songFadeStartedAt = null
+    }
+    const fadeSong = (timeMilliseconds: number) => {
+      if (songFadeDirection === null || songFadeStartedAt === null) return
+      const fadeUnit = Math.min(1, Math.max(0, (timeMilliseconds - songFadeStartedAt) / 2000))
+      const fade = fadeUnit * fadeUnit * (3 - 2 * fadeUnit)
+      driveSong.volume = songFadeDirection === "in" ? fade : 1 - fade
+      if (songFadeDirection === "out" && fadeUnit >= 1) stopDriveSong()
+    }
     let arrivalStartMilliseconds: number | null = null
     let kiraStartMilliseconds: number | null = null
     let clubStartMilliseconds: number | null = null
@@ -95,6 +113,7 @@ export const FilmCanvas = () => {
       const anywaySeconds = anywayStartMilliseconds === null ? null : Math.max(0, timeMilliseconds - anywayStartMilliseconds) / 1000
       latestAnywaySeconds = isShowingConcepts ? null : anywaySeconds
       if (anywaySeconds === null) {
+        if (driveProgress !== null) stopDriveSong()
         driveProgress = null
         driveSpeed = 0
         driveBoost = 0
@@ -112,6 +131,11 @@ export const FilmCanvas = () => {
       const drive = driveProgress === null
         ? null
         : { progress: driveProgress, speed: driveSpeed, kiraSeconds: secondsSince(kiraStartMilliseconds), arrivalSeconds: secondsSince(arrivalStartMilliseconds) }
+      if (songFadeDirection === "in" && !driveSong.paused && drive?.arrivalSeconds != null && drive.arrivalSeconds >= RADI_EXIT_START) {
+        songFadeDirection = "out"
+        songFadeStartedAt = timeMilliseconds
+      }
+      fadeSong(timeMilliseconds)
       if (drive?.arrivalSeconds != null && drive.arrivalSeconds >= CITY_SCENE_END) clubStartMilliseconds ??= timeMilliseconds
       const clubSeconds = secondsSince(clubStartMilliseconds)
       if (clubSeconds === null) letsDanceStartMilliseconds = null
@@ -161,13 +185,31 @@ export const FilmCanvas = () => {
     }
     const startCoolRadi = () => {
       anywayStartMilliseconds = performance.now()
+      driveSong.muted = true
+      void driveSong.play().then(() => {
+        if (driveProgress !== null) return
+        driveSong.pause()
+        driveSong.currentTime = 0
+        driveSong.muted = false
+      }).catch(() => {
+        driveSong.muted = false
+      })
     }
     const startDancing = () => {
       letsDanceStartMilliseconds ??= performance.now()
     }
     const pressGas = (scrollPixels: number) => {
       if (scrollPixels <= 0 || latestAnywaySeconds === null || latestAnywaySeconds < DRIVE_READY_SECONDS) return
+      const startingDrive = driveProgress === null
       driveProgress ??= 0
+      if (startingDrive) {
+        driveSong.muted = false
+        driveSong.volume = 0
+        driveSong.currentTime = 0
+        songFadeDirection = "in"
+        songFadeStartedAt = performance.now()
+        void driveSong.play().catch(() => {})
+      }
       driveBoost = Math.min(DRIVE_MAX_BOOST, driveBoost + scrollPixels * DRIVE_BOOST_PER_PIXEL)
     }
     const onWheel = (event: WheelEvent) => {
@@ -269,6 +311,7 @@ export const FilmCanvas = () => {
       americaButton?.removeEventListener("mouseleave", clearCaptainHover)
       janewayButton?.removeEventListener("mouseleave", clearCaptainHover)
       unsubscribeFromScenes()
+      stopDriveSong()
     }
   }, [])
 

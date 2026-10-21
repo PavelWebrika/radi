@@ -97,7 +97,7 @@ const CLUB_CENTER_X = 0.84
 const CLUB_BASE = 0.83
 const ROAD_END_GROUND = "#ffc4e1"
 const RADI_LANDING_UNITS = 140
-const RADI_EXIT_START = 0.8
+export const RADI_EXIT_START = 0.8
 const RADI_EXIT_END = 1.5
 const RADI_WALK_END = 3.1
 const RADI_ENTER_END = 3.9
@@ -466,16 +466,17 @@ const drawArrivingRadi = (context: Context, width: number, height: number, time:
   const startX = seat.radiX + carShift
   const landX = startX + RADI_LANDING_UNITS * seat.scale
   const isWalking = walk > 0 && enter < 1
+  const stride = isWalking ? Math.sin((walk < 1 ? walk : 1 + enter) * Math.PI * 4) : 0
   const doorX = clubDoorX(club)
   const radiX = exit < 1
     ? mix(startX, landX, exit)
     : walk < 1 ? mix(landX, doorX, walk) : mix(doorX, doorX + clubDoorWidth(club) / 2 + 30 * seat.scale, enter)
   const feetY = exit < 1
     ? mix(seat.feetY, club.baseY, exit) - 4 * exit * (1 - exit) * 50 * seat.scale
-    : club.baseY - (isWalking ? Math.abs(Math.sin(time * 10)) * 3 * seat.scale : 0)
+    : club.baseY - Math.abs(stride) * 4 * seat.scale
   context.save()
   if (enter > 0) clipToClubDoor(context, club)
-  drawRadiSide(context, ARRIVING_LOOK, radiX, feetY, seat.scale)
+  drawRadiSide(context, ARRIVING_LOOK, radiX, feetY, seat.scale, isWalking ? [3 - stride * 7, -31] : undefined, undefined, stride)
   context.restore()
 }
 

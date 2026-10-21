@@ -4,13 +4,14 @@ import { drawPartyPerson, type PartyPerson, type PartyPose } from "@/characters/
 import { nightClubRadiLook } from "@/characters/radiConcepts"
 import { drawExhaust } from "@/scenes/cityScene"
 import { partyColor } from "@/scenes/nightClub"
-import { easeOutBack, mix, mixPoint, paintComicBubble, paintIris, radiScale, stageProgress, type BubbleButtonLayout } from "@/scenes/openingScene"
+import { easeOut, easeOutBack, mix, mixPoint, paintComicBubble, paintIris, radiScale, stageProgress, type BubbleButtonLayout } from "@/scenes/openingScene"
 
 type PartyMove = "handsUp" | "pump" | "sway" | "drink" | "shuffle"
 type Dancer = { x: number; isFront: boolean; person: PartyPerson; move: PartyMove; phase: number }
 type RadiHands = readonly [Point, Point]
 
 const IRIS_IN_END = 1.2
+const WALK_IN_END = 1.15
 const FUN_BUBBLE_START = 1.5
 const FUN_BUBBLE_END = 5.1
 const DANCE_START = 5.1
@@ -248,7 +249,16 @@ const drawClubRadi = (context: Context, radiX: number, feetY: number, scale: num
   const isSmiling = clubSeconds < FUN_BUBBLE_END || clubSeconds >= OPEN_EYES_START
   const look = isSmiling ? SMILING_RADI_LOOK : nightClubRadiLook
   if (clubSeconds < DANCE_START) {
-    drawRadi(context, look, radiX, feetY, scale, { faceTurn: Math.sin(time * 1.5) * 0.15, hands: RESTING_HANDS })
+    const isWalkingIn = clubSeconds < WALK_IN_END
+    const stride = isWalkingIn ? Math.sin(stageProgress(clubSeconds, 0, WALK_IN_END) * Math.PI * 4) : 0
+    const leadingLift = Math.max(0, stride) * 8
+    const trailingLift = Math.max(0, -stride) * 8
+    drawRadi(context, look, radiX, feetY, scale, {
+      faceTurn: isWalkingIn ? 0.4 : Math.sin(time * 1.5) * 0.15,
+      hands: isWalkingIn ? [[-15, -31 - trailingLift], [15, -31 - leadingLift]] : RESTING_HANDS,
+      legLifts: [leadingLift, trailingLift],
+      kneeBends: [leadingLift * 0.7, trailingLift * 0.7],
+    })
     return
   }
   const { hop, motion } = radiDanceMotion(clubSeconds - DANCE_START, 1 - stageProgress(clubSeconds, DANCE_STOP_START, DANCE_STOP_END))
@@ -394,7 +404,16 @@ const drawSpotlight = (context: Context, radiX: number, feetY: number, scale: nu
   paintFill(context, `rgba(255, 255, 255, ${0.35 * pulse})`, ellipsePath(radiX, feetY, 55 * scale, 12 * scale))
 }
 
-const clubRadiPosition = (width: number, height: number) => ({ scale: radiScale(width, height) * 1.15, radiX: width / 2, feetY: height * 0.84 })
+const clubRadiPosition = (width: number, height: number, clubSeconds = WALK_IN_END) => {
+  const scale = radiScale(width, height) * 1.15
+  const walkIn = stageProgress(clubSeconds, 0, WALK_IN_END)
+  const stride = walkIn < 1 ? Math.sin(walkIn * Math.PI * 4) : 0
+  return {
+    scale,
+    radiX: mix(width * 0.34, width / 2, easeOut(walkIn)),
+    feetY: height * 0.84 - Math.abs(stride) * 3 * scale,
+  }
+}
 
 const radiBubbleGeometry = (width: number, radiX: number, feetY: number, scale: number) => {
   const bubbleWidth = Math.min(width * 0.44, 380)
@@ -437,7 +456,7 @@ const drawRadiBubble = (context: Context, width: number, radiX: number, feetY: n
 
 export const drawClubScene = (context: Context, width: number, height: number, time: number, sceneSeconds: number, letsDanceSeconds: number | null) => {
   const clubSeconds = playedClubSeconds(sceneSeconds, letsDanceSeconds)
-  const { scale, radiX, feetY } = clubRadiPosition(width, height)
+  const { scale, radiX, feetY } = clubRadiPosition(width, height, clubSeconds)
   const sinceLaunch = clubSeconds - LAUNCH_START
   const shake = sinceLaunch >= 0 ? (1 - stageProgress(sinceLaunch, 0, SHAKE_SECONDS)) * SHAKE_STRENGTH : 0
   const flash = sinceLaunch >= 0 ? 0.8 * (1 - stageProgress(sinceLaunch, 0, FLASH_SECONDS)) : 0
@@ -463,7 +482,8 @@ export const drawClubScene = (context: Context, width: number, height: number, t
   context.restore()
   if (flash > 0) paintFill(context, `rgba(255, 255, 255, ${flash})`, (path) => path.rect(0, 0, width, height))
   const fullRadius = Math.hypot(width, height)
-  const irisCenterY = feetY - 60 * scale
-  if (clubSeconds < IRIS_IN_END) paintIris(context, width, height, radiX, irisCenterY, mix(0, fullRadius, stageProgress(clubSeconds, 0, IRIS_IN_END) ** 2))
-  if (clubSeconds > IRIS_OUT_START) paintIris(context, width, height, radiX, irisCenterY, mix(fullRadius, 0, stageProgress(clubSeconds, IRIS_OUT_START, IRIS_OUT_END) ** 2))
+  const home = clubRadiPosition(width, height)
+  const irisCenterY = home.feetY - 60 * scale
+  if (clubSeconds < IRIS_IN_END) paintIris(context, width, height, home.radiX, irisCenterY, mix(0, fullRadius, stageProgress(clubSeconds, 0, IRIS_IN_END) ** 2))
+  if (clubSeconds > IRIS_OUT_START) paintIris(context, width, height, home.radiX, irisCenterY, mix(fullRadius, 0, stageProgress(clubSeconds, IRIS_OUT_START, IRIS_OUT_END) ** 2))
 }

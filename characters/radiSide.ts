@@ -246,11 +246,18 @@ const sideShoePainters: Record<RadiShoes, DrawSideShoe> = {
   },
 }
 
-const drawSideLegs = (context: Context, shoes: RadiShoes, isPolished: boolean) => {
-  for (const legX of [-2.5, 2.5]) {
+const drawSideLegs = (context: Context, shoes: RadiShoes, isPolished: boolean, stride = 0) => {
+  ;([-2.5, 2.5] as const).forEach((legX, index) => {
+    const swing = stride * (index === 0 ? 1 : -1)
+    context.save()
+    context.translate(0, -Math.max(0, swing) * 5)
+    context.translate(legX, -19)
+    context.rotate(swing * 0.42)
+    context.translate(-legX, 19)
     paintTube(context, LEG_COVERS[shoes] ?? SKIN, 6, linePath(legX, -19, legX, -6), isPolished)
     sideShoePainters[shoes](context, legX, isPolished)
-  }
+    context.restore()
+  })
 }
 
 const drawSideBottom = (context: Context, bottom: RadiBottom, isPolished: boolean) => {
@@ -449,7 +456,7 @@ const drawSideArm = (context: Context, look: RadiLook, isPolished: boolean, hand
   if (look.extras.includes("gaida")) paintTube(context, WOOD, 1.6, linePath(23, -52.5, 13, -43), isPolished)
 }
 
-export const drawRadiSide = (context: Context, look: RadiLook, feetX: number, feetY: number, scale: number, hand?: Point, hairWind?: HairWind) => {
+export const drawRadiSide = (context: Context, look: RadiLook, feetX: number, feetY: number, scale: number, hand?: Point, hairWind?: HairWind, stride = 0) => {
   const isPolished = look.polished === true
   context.save()
   context.translate(feetX, feetY)
@@ -460,7 +467,7 @@ export const drawRadiSide = (context: Context, look: RadiLook, feetX: number, fe
   context.strokeStyle = OUTLINE
 
   drawSideHairBack(context, look.hair, isPolished)
-  drawSideLegs(context, look.shoes ?? "sneakers", isPolished)
+  drawSideLegs(context, look.shoes ?? "sneakers", isPolished, stride)
   drawSideBottom(context, look.bottom, isPolished)
   drawTorso(context, look.top, isPolished, 7)
   drawSideExtrasOnBody(context, look, isPolished)
