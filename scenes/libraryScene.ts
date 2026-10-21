@@ -1,6 +1,6 @@
 import { drawKiraFront } from "@/characters/kira"
 import { ellipsePath, linePath, paintFill, paintLine, paintShape, type Context } from "@/characters/paint"
-import { drawRadiBack } from "@/characters/radiBack"
+import { drawRadiBack, type BackArms } from "@/characters/radiBack"
 import { drawRadi, OUTLINE_WIDTH, paintTube, SKIN, WHITE, type Point, type RadiLook } from "@/characters/radi"
 import { bookwormRadiLook } from "@/characters/radiConcepts"
 import { drawRadiSide } from "@/characters/radiSide"
@@ -51,8 +51,8 @@ const TOP_RUNG = 2
 const READING_BOOK = "#7b5cff"
 const PAGE = "#fffaf0"
 const CHEST_HAND: Point = [6, -32]
-const REACH_HAND: Point = [22, -60]
-const RAIL_HANDS: readonly [Point, Point] = [[-16, -43], [16, -42]]
+const REACH_HAND: Point = [16, -60]
+const PEEK_HANDS: readonly [Point, Point] = [[-11, -40], [11, -39]]
 const HOLD_HANDS: readonly [Point, Point] = [[-8, -30], [8, -28]]
 const READ_HANDS: readonly [Point, Point] = [[-12, -24], [12, -24]]
 const CEILING_VANISH = 3
@@ -909,8 +909,8 @@ const climbPose = (progress: number, levels: readonly number[]) => {
     feetY: mix(levels[stepIndex] ?? 0, levels[stepIndex + 1] ?? 0, easeInOut(stepT)),
     legLifts: (leadsLeft ? [lift * 9, lift * 1.5] : [lift * 1.5, lift * 9]) as const,
     hands: [
-      [RAIL_HANDS[0][0], RAIL_HANDS[0][1] - (leadsLeft ? lift * 6 : lift * 1.5)],
-      [RAIL_HANDS[1][0], RAIL_HANDS[1][1] - (leadsLeft ? lift * 1.5 : lift * 6)],
+      [PEEK_HANDS[0][0], PEEK_HANDS[0][1] - (leadsLeft ? lift * 2 : 0)],
+      [PEEK_HANDS[1][0], PEEK_HANDS[1][1] - (leadsLeft ? 0 : lift * 2)],
     ] as const,
   }
 }
@@ -923,9 +923,10 @@ const drawClimbingRadi = (context: Context, ladder: LadderPlacement, floorY: num
   const radiX = ladderCenterX(ladder, feetY)
   const reach = easeOut(stageProgress(sceneSeconds, CLIMB_UP_END, REACH_END))
   const pull = easeInOut(stageProgress(sceneSeconds, REACH_END, PULL_END))
-  const rightHand = isGoingDown ? CHEST_HAND : mixPoint(mixPoint(climbHands[1], REACH_HAND, reach), CHEST_HAND, pull)
-  const leftHand = isGoingDown ? RAIL_HANDS[0] : climbHands[0]
-  const hands: readonly [Point, Point] = [leftHand, rightHand]
+  const stretched = mixPoint(mixPoint(climbHands[1], REACH_HAND, reach), PEEK_HANDS[1], pull)
+  const reaching = !isGoingDown && reach > 0 && pull < 1
+  const hasBook = sceneSeconds >= PULL_END
+  const hands: readonly [Point, Point] = [climbHands[0], hasBook ? CHEST_HAND : climbHands[1]]
   const turningAway = easeInOut(stageProgress(sceneSeconds, WALK_TO_LADDER_END, WALK_TO_LADDER_END + TURN_SECONDS))
   const turningBack = 1 - easeInOut(stageProgress(sceneSeconds, CLIMB_DOWN_END, WALK_BACK_START))
   const turn = Math.min(turningAway, turningBack)
@@ -936,18 +937,21 @@ const drawClimbingRadi = (context: Context, ladder: LadderPlacement, floorY: num
     hands,
     elbowBends: naturalElbows(hands),
   }
+  const backArms: BackArms = {
+    behind: [hands[0], reaching ? null : hands[1]],
+    reach: reaching ? { side: 1, hand: stretched } : null,
+  }
   context.save()
   context.translate(radiX, feetY)
   if (turn < 0.34) {
     drawRadi(context, bookwormRadiLook, 0, 0, scale, motion)
+    if (hasBook) drawHeldBook(context, 2 * scale, -31 * scale, scale, 0.08)
   } else if (turn < 0.66) {
     context.scale(faceRight ? 1 : -1, 1)
-    drawRadiSide(context, bookwormRadiLook, 0, 0, scale, isGoingDown ? CHEST_HAND : [8, -48])
+    drawRadiSide(context, bookwormRadiLook, 0, 0, scale, [8, -48])
   } else {
-    drawRadiBack(context, bookwormRadiLook, 0, 0, scale, motion)
-  }
-  if (sceneSeconds >= REACH_END && (turn < 0.34 || turn >= 0.66)) {
-    drawHeldBook(context, (rightHand[0] + 2) * scale, rightHand[1] * scale, scale, 0.15)
+    drawRadiBack(context, bookwormRadiLook, 0, 0, scale, motion, backArms)
+    if (reaching && reach > 0.72 && pull < 0.25) drawHeldBook(context, (stretched[0] + 2) * scale, stretched[1] * scale, scale, 0.2)
   }
   context.restore()
 }

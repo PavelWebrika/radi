@@ -84,25 +84,28 @@ const drawBackLegs = (context: Context, legLifts: readonly [number, number], kne
   })
 }
 
-const drawBackArms = (context: Context, hands: readonly [Point, Point], elbowBends: readonly [number, number], isPolished: boolean) => {
-  SIDES.forEach((side, index) => {
-    const [handX, handY] = hands[index]
-    const shoulderX = side * 8.5
-    const shoulderY = -42.5
-    const reach = Math.hypot(handX - shoulderX, handY - shoulderY) || 1
-    const bend = elbowBends[index] / reach
-    const elbowX = (shoulderX + handX) / 2 + side * (handY - shoulderY) * bend
-    const elbowY = (shoulderY + handY) / 2 - side * (handX - shoulderX) * bend
-    paintTube(context, SKIN, 4.5, (path) => {
-      path.moveTo(shoulderX, shoulderY)
-      path.lineTo(elbowX, elbowY)
-      path.lineTo(handX, handY)
-    }, isPolished)
-    paintShape(context, SKIN, ellipsePath(handX, handY, 2.8, 2.8), shadeIf(isPolished))
-  })
+const drawBackArm = (context: Context, side: number, hand: Point, bendAmount: number, isPolished: boolean) => {
+  const [handX, handY] = hand
+  const shoulderX = side * 8.5
+  const shoulderY = -42.5
+  const reach = Math.hypot(handX - shoulderX, handY - shoulderY) || 1
+  const bend = bendAmount / reach
+  const elbowX = (shoulderX + handX) / 2 + side * (handY - shoulderY) * bend
+  const elbowY = (shoulderY + handY) / 2 - side * (handX - shoulderX) * bend
+  paintTube(context, SKIN, 4.5, (path) => {
+    path.moveTo(shoulderX, shoulderY)
+    path.lineTo(elbowX, elbowY)
+    path.lineTo(handX, handY)
+  }, isPolished)
+  paintShape(context, SKIN, ellipsePath(handX, handY, 2.8, 2.8), shadeIf(isPolished))
 }
 
-export const drawRadiBack = (context: Context, look: RadiLook, feetX: number, feetY: number, scale: number, motion: Partial<RadiMotion> = {}) => {
+export type BackArms = {
+  behind: readonly [Point | null, Point | null]
+  reach: { side: 0 | 1, hand: Point } | null
+}
+
+export const drawRadiBack = (context: Context, look: RadiLook, feetX: number, feetY: number, scale: number, motion: Partial<RadiMotion> = {}, arms?: BackArms) => {
   const isPolished = look.polished === true
   const { legLifts = [0, 0], kneeBends = [0, 0], hands = CLIMB_HANDS, elbowBends = [0, 0], hideLegs = false } = motion
   context.save()
@@ -112,12 +115,18 @@ export const drawRadiBack = (context: Context, look: RadiLook, feetX: number, fe
   context.lineCap = "round"
   context.lineWidth = OUTLINE_WIDTH
   context.strokeStyle = OUTLINE
+  if (arms) {
+    arms.behind.forEach((hand, index) => {
+      if (hand) drawBackArm(context, index === 0 ? -1 : 1, hand, elbowBends[index] ?? 0, isPolished)
+    })
+  }
   if (!hideLegs) drawBackLegs(context, legLifts, kneeBends, isPolished)
   drawBackShorts(context, look, isPolished)
   drawTorso(context, { ...look.top, label: undefined }, isPolished)
   drawBackHead(context, isPolished)
   drawBackHair(context, isPolished)
   if (look.extras.includes("readingGlasses")) drawBackGlasses(context)
-  drawBackArms(context, hands, elbowBends, isPolished)
+  if (arms?.reach) drawBackArm(context, arms.reach.side === 0 ? -1 : 1, arms.reach.hand, 0.4, isPolished)
+  if (!arms) SIDES.forEach((side, index) => drawBackArm(context, side, hands[index] ?? CLIMB_HANDS[index], elbowBends[index] ?? 0, isPolished))
   context.restore()
 }
