@@ -1,3 +1,4 @@
+import { drawKiraFront } from "@/characters/kira"
 import { ellipsePath, linePath, paintFill, paintLine, paintShape, type Context } from "@/characters/paint"
 import { drawRadi, type Point, type RadiLook } from "@/characters/radi"
 import { bookwormRadiLook } from "@/characters/radiConcepts"
@@ -10,7 +11,21 @@ const WOOD_DARK = "#8d4e24"
 const RUG = "#e25b86"
 const NIGHT = "#241848"
 const PLASTER = "#f3d7a2"
-const BOOK_COLORS = ["#e23d4a", "#ffd23f", "#3ec6c6", "#7b5cff", "#5ec76a", "#ff8c42", "#f472b6", "#3d7eff"] as const
+const WOOD_LIGHT = "#f4c47e"
+const SHELF_BACK = "#3d1c0a"
+const SHELF_SIDE = "#5a2a10"
+const GOLD = "#ffd86b"
+const BOOK_COLORS = ["#ff3b5c", "#ffcf3f", "#20d0c4", "#7b5cff", "#4fdc6b", "#ff8a2a", "#ff5fc4", "#2f7bff", "#b04dff", "#00b8ff", "#ff6a3d", "#c6f03a", "#ff9ec7", "#14b88f", "#ffe066", "#e0287a"] as const
+const SPINE_MARKS = ["stripe", "dot", "band", "gold", "label", "plain"] as const
+const SHELF_ROWS = 5
+const SHELF_THICKNESS = 7
+const QUAKE_SECONDS = 1.2
+const BRASS = "#d9a441"
+const PAINTING_GOLD = "#e2a83a"
+const LADDER_RUNGS = 7
+const KIRA_PEEK_UNITS = 33
+const CEILING_VANISH = 3
+const CEILING_BEAMS = [1.12, 1.3] as const
 
 const FALL_START = 0.4
 const FALL_END = 1.85
@@ -25,7 +40,21 @@ const GET_UP_END = 4.1
 const CLEAN_SWEEP_SECONDS = 0.85
 const CLEAN_SWEEPS = 3
 const BACK_HANDS: readonly [Point, Point] = [[-14, -48], [14, -48]]
-const SIDE_HANDS: readonly [Point, Point] = [[-16, -32], [16, -32]]
+const KNEE_HANDS: readonly [Point, Point] = [[-11, -26], [11, -26]]
+const SIDE_HANDS: readonly [Point, Point] = [[-14, -27], [14, -27]]
+const CROUCH_LIFT = 5
+const ARM_SEGMENT = 9
+const SHOULDER_X = 8.5
+const SHOULDER_Y = -42.5
+
+const easeInOut = (amount: number) => amount * amount * (3 - 2 * amount)
+
+const elbowBendFor = ([handX, handY]: Point, side: number) => {
+  const reach = Math.hypot(handX - side * SHOULDER_X, handY - SHOULDER_Y)
+  return Math.sqrt(Math.max(0, ARM_SEGMENT ** 2 - (reach / 2) ** 2))
+}
+
+const naturalElbows = (hands: readonly [Point, Point]): readonly [number, number] => [elbowBendFor(hands[0], -1), elbowBendFor(hands[1], 1)]
 
 const mixHands = (from: readonly [Point, Point], to: readonly [Point, Point], amount: number): readonly [Point, Point] => [
   mixPoint(from[0], to[0], amount),
@@ -34,18 +63,16 @@ const mixHands = (from: readonly [Point, Point], to: readonly [Point, Point], am
 
 const cleaningPose = (sceneSeconds: number) => {
   const sweep = (sceneSeconds - GET_UP_END) / CLEAN_SWEEP_SECONDS
-  if (sweep < 0 || sweep >= CLEAN_SWEEPS) return { hands: SIDE_HANDS, brush: null, puff: 0, elbows: [0, 0] as const }
+  if (sweep < 0 || sweep >= CLEAN_SWEEPS) return { hands: SIDE_HANDS, brush: null, puff: 0 }
   const sweepIndex = Math.floor(sweep)
   const sweepT = sweep - sweepIndex
   const brushingLeft = sweepIndex % 2 === 0
   const across = sweepT < 0.7 ? sweepT / 0.7 : (1 - sweepT) / 0.3
-  const brush = mixPoint(brushingLeft ? [-20, -46] : [20, -46], brushingLeft ? [6, -22] : [-6, -22], easeOut(Math.min(1, across)))
-  const rest: Point = brushingLeft ? [16, -32] : [-16, -32]
+  const brush = mixPoint(brushingLeft ? [-15, -38] : [15, -38], [0, -30], easeOut(Math.min(1, across)))
   return {
-    hands: (brushingLeft ? [brush, rest] : [rest, brush]) as const,
+    hands: (brushingLeft ? [brush, SIDE_HANDS[1]] : [SIDE_HANDS[0], brush]) as const,
     brush,
     puff: Math.sin(Math.min(sweepT, 1) * Math.PI),
-    elbows: (brushingLeft ? [9, 0] : [0, 9]) as const,
   }
 }
 
@@ -56,19 +83,36 @@ const libraryLayout = (width: number, height: number) => ({
   landingX: width * 0.52,
 })
 
-type SpineMark = "stripe" | "dot" | "band" | "plain"
+type SpineMark = (typeof SPINE_MARKS)[number]
 type ShelfOrnament = "plant" | "clock" | "none"
+
+const seededRandom = (index: number, salt: number) => {
+  const wave = Math.sin(index * 12.9898 + salt * 78.233) * 43758.5453
+  return wave - Math.floor(wave)
+}
+
+const quakeWobble = (sinceImpact: number, seed: number) => {
+  if (sinceImpact < 0 || sinceImpact > QUAKE_SECONDS) return 0
+  return (1 - sinceImpact / QUAKE_SECONDS) ** 2 * Math.sin(sinceImpact * 34 + seed)
+}
 
 const drawBook = (context: Context, centerX: number, centerY: number, bookWidth: number, bookHeight: number, color: string, tilt: number, mark: SpineMark) => {
   context.save()
   context.translate(centerX, centerY)
   context.rotate(tilt)
   context.lineWidth = 2
-  paintShape(context, color, (path) => path.roundRect(-bookWidth / 2, -bookHeight / 2, bookWidth, bookHeight, 2))
+  paintShape(context, color, (path) => path.roundRect(-bookWidth / 2, -bookHeight / 2, bookWidth, bookHeight, 2), { shade: "rgba(0, 0, 0, 0.22)" })
   paintLine(context, "rgba(255, 255, 255, 0.8)", Math.max(1.2, bookWidth * 0.1), linePath(-bookWidth * 0.28, -bookHeight / 2, -bookWidth * 0.28, bookHeight / 2))
   if (mark === "stripe") paintLine(context, "rgba(255, 255, 255, 0.85)", Math.max(1.4, bookWidth * 0.14), linePath(bookWidth * 0.08, -bookHeight * 0.34, bookWidth * 0.08, bookHeight * 0.34))
   if (mark === "dot") paintFill(context, "#fff6c8", ellipsePath(bookWidth * 0.08, -bookHeight * 0.16, Math.max(1.4, bookWidth * 0.16), Math.max(1.4, bookWidth * 0.16)))
   if (mark === "band") paintFill(context, "rgba(255, 255, 255, 0.9)", (path) => path.rect(-bookWidth / 2, -bookHeight * 0.08, bookWidth, Math.max(2, bookHeight * 0.14)))
+  if (mark === "gold") {
+    for (const bandY of [-0.38, 0.3]) paintFill(context, GOLD, (path) => path.rect(-bookWidth / 2, bookHeight * bandY, bookWidth, Math.max(1.6, bookHeight * 0.06)))
+  }
+  if (mark === "label") {
+    context.lineWidth = 1.2
+    paintShape(context, "#fff4dc", (path) => path.roundRect(-bookWidth * 0.32, -bookHeight * 0.22, bookWidth * 0.64, bookHeight * 0.26, 1.5))
+  }
   context.restore()
 }
 
@@ -91,65 +135,91 @@ const drawClock = (context: Context, centerX: number, centerY: number) => {
   paintLine(context, OUTLINE, 1.4, linePath(centerX, centerY, centerX + 4, centerY + 1))
 }
 
-const spineMark = (colorIndex: number): SpineMark => {
-  const marks = ["stripe", "dot", "band", "plain"] as const
-  return marks[colorIndex % marks.length] ?? "plain"
+const bookColor = (bookIndex: number, salt: number) => BOOK_COLORS[Math.floor(seededRandom(bookIndex, salt) * BOOK_COLORS.length)] ?? BOOK_COLORS[0]
+
+const drawCaseFrame = (context: Context, left: number, top: number, right: number, bottom: number) => {
+  const caseWidth = right - left
+  paintShape(context, WOOD_DARK, (path) => path.roundRect(left, top, caseWidth, bottom - top, 6))
+  paintLine(context, "rgba(255, 214, 160, 0.45)", 2.5, linePath(left + 4, top + 6, left + 4, bottom - 8))
+  paintLine(context, "rgba(40, 16, 4, 0.45)", 2.5, linePath(right - 4, top + 6, right - 4, bottom - 8))
+  paintShape(context, WOOD_DARK, (path) => path.roundRect(left - 4, top - 6, caseWidth + 8, 8, 2))
+  paintShape(context, WOOD, (path) => path.roundRect(left - 9, top - 16, caseWidth + 18, 11, 3))
+  paintLine(context, WOOD_LIGHT, 2, linePath(left - 5, top - 13, right + 5, top - 13))
+  paintShape(context, WOOD, (path) => path.roundRect(left - 5, bottom - 13, caseWidth + 10, 13, 3))
+  paintLine(context, WOOD_LIGHT, 2, linePath(left - 1, bottom - 10, right + 1, bottom - 10))
 }
 
-const drawBookcase = (context: Context, left: number, top: number, right: number, bottom: number, ornament: ShelfOrnament = "none") => {
-  const caseWidth = right - left
-  paintShape(context, WOOD_DARK, (path) => path.roundRect(left, top, caseWidth, bottom - top, 8))
-  paintShape(context, WOOD, (path) => path.roundRect(left - 6, top - 8, caseWidth + 12, 12, 4))
-  const rows = 5
-  const innerLeft = left + 8
-  const innerRight = right - 8
-  const innerTop = top + 12
-  const innerBottom = bottom - 8
-  paintFill(context, "#6b3414", (path) => path.rect(innerLeft - 2, innerTop, innerRight - innerLeft + 4, innerBottom - innerTop))
-  const caseSeed = Math.round(left / 10)
-  for (let row = 0; row < rows; row += 1) {
-    const rowTop = mix(innerTop, innerBottom, row / rows)
-    const rowBottom = mix(innerTop, innerBottom, (row + 1) / rows)
-    const shelfY = rowBottom - 6
-    paintShape(context, WOOD, (path) => path.rect(innerLeft - 4, shelfY, innerRight - innerLeft + 8, 6))
-    const ornamentHere = ornament === "plant" && row === 0 ? "plant" : ornament === "clock" && row === 1 ? "clock" : "none"
-    const contentRight = ornamentHere === "none" ? innerRight : innerRight - 24
-    let bookX = innerLeft
-    let colorIndex = caseSeed + row * 5
-    while (bookX < contentRight - 8) {
-      if (colorIndex % 11 === 0) {
-        bookX += 8
-        colorIndex += 1
-        continue
+const drawCubby = (context: Context, innerLeft: number, innerRight: number, cubbyTop: number, shelfY: number) => {
+  const depth = Math.min(9, (innerRight - innerLeft) * 0.06)
+  paintFill(context, SHELF_BACK, (path) => path.rect(innerLeft, cubbyTop, innerRight - innerLeft, shelfY - cubbyTop))
+  paintFill(context, SHELF_SIDE, (path) => {
+    path.moveTo(innerLeft, cubbyTop)
+    path.lineTo(innerLeft + depth, cubbyTop + depth)
+    path.lineTo(innerLeft + depth, shelfY)
+    path.lineTo(innerLeft, shelfY)
+    path.closePath()
+  })
+  const shadow = context.createLinearGradient(0, cubbyTop, 0, cubbyTop + 14)
+  shadow.addColorStop(0, "rgba(0, 0, 0, 0.45)")
+  shadow.addColorStop(1, "rgba(0, 0, 0, 0)")
+  paintFill(context, shadow, (path) => path.rect(innerLeft, cubbyTop, innerRight - innerLeft, 14))
+}
+
+const drawShelfBooks = (context: Context, startX: number, endX: number, cubbyTop: number, shelfY: number, firstBook: number, sinceImpact: number) => {
+  let bookX = startX
+  let bookIndex = firstBook
+  while (bookX < endX - 8) {
+    const roll = seededRandom(bookIndex, 11)
+    const jiggle = quakeWobble(sinceImpact, bookIndex * 1.7)
+    const bounce = Math.abs(jiggle) * 4
+    if (roll < 0.06) {
+      bookX += 7
+    } else if (roll < 0.16) {
+      const flatWidth = Math.min(mix(18, 26, seededRandom(bookIndex, 13)), endX - bookX)
+      const layers = 2 + Math.floor(seededRandom(bookIndex, 14) * 3)
+      for (let layer = 0; layer < layers; layer += 1) {
+        drawBook(context, bookX + flatWidth / 2 + (layer % 2) * 1.5, shelfY - 3 - layer * 6 - bounce * (1 + layer * 0.4), flatWidth - layer * 2, 6, bookColor(bookIndex + layer, 18), jiggle * 0.05, "gold")
       }
-      const standingHeight = (rowBottom - rowTop - 10) * (0.62 + (colorIndex % 5) * 0.08)
-      const bookWidth = colorIndex % 6 === 0 ? 15 : 7 + (colorIndex % 3) * 3
-      const lean = colorIndex % 7 === 0 ? 0.22 : 0
-      if (colorIndex % 9 === 0) {
-        const flatWidth = Math.min(22, contentRight - bookX)
-        for (let layer = 0; layer < 3; layer += 1) {
-          drawBook(context, bookX + flatWidth / 2, shelfY - 4 - layer * 5, flatWidth, 5, BOOK_COLORS[(colorIndex + layer) % BOOK_COLORS.length] ?? BOOK_COLORS[0], 0, "band")
-        }
-        bookX += flatWidth + 3
-        colorIndex += 1
-        continue
-      }
-      drawBook(
-        context,
-        bookX + bookWidth / 2,
-        shelfY - standingHeight / 2,
-        bookWidth,
-        standingHeight,
-        BOOK_COLORS[colorIndex % BOOK_COLORS.length] ?? BOOK_COLORS[0],
-        lean,
-        spineMark(colorIndex),
-      )
-      bookX += bookWidth + 2
-      colorIndex += 1
+      bookX += flatWidth + 3
+    } else {
+      const bookHeight = (shelfY - cubbyTop - 6) * mix(0.6, 0.95, seededRandom(bookIndex, 15))
+      const bookWidth = mix(7, 15, seededRandom(bookIndex, 16) ** 1.5)
+      if (bookX + bookWidth > endX) break
+      const leaning = roll > 0.92
+      const mark = SPINE_MARKS[Math.floor(seededRandom(bookIndex, 17) * SPINE_MARKS.length)] ?? "plain"
+      drawBook(context, bookX + bookWidth / 2 + (leaning ? bookHeight * 0.12 : 0), shelfY - bookHeight / 2 - bounce, bookWidth, bookHeight, bookColor(bookIndex, 12), (leaning ? 0.25 : 0) + jiggle * 0.08, mark)
+      bookX += bookWidth + (leaning ? bookHeight * 0.25 : 1.5)
     }
-    if (ornamentHere === "plant") drawPlant(context, innerRight - 12, shelfY)
-    if (ornamentHere === "clock") drawClock(context, innerRight - 12, shelfY - 12)
+    bookIndex += 1
   }
+}
+
+const drawBookcase = (context: Context, left: number, top: number, right: number, bottom: number, sinceImpact: number, ornament: ShelfOrnament = "none") => {
+  const sway = quakeWobble(sinceImpact, left * 0.013)
+  const centerX = (left + right) / 2
+  context.save()
+  context.translate(centerX + sway * 3, bottom)
+  context.rotate(sway * 0.02)
+  context.translate(-centerX, -bottom)
+  drawCaseFrame(context, left, top, right, bottom)
+  const innerLeft = left + 10
+  const innerRight = right - 10
+  const innerTop = top + 8
+  const innerBottom = bottom - 14
+  const caseSeed = Math.round(left / 10)
+  for (let row = 0; row < SHELF_ROWS; row += 1) {
+    const cubbyTop = mix(innerTop, innerBottom, row / SHELF_ROWS)
+    const shelfY = mix(innerTop, innerBottom, (row + 1) / SHELF_ROWS) - SHELF_THICKNESS
+    const ornamentHere = ornament === "plant" && row === 0 ? "plant" : ornament === "clock" && row === 1 ? "clock" : "none"
+    const ornamentLift = Math.abs(quakeWobble(sinceImpact, row * 2.3)) * 3
+    drawCubby(context, innerLeft, innerRight, cubbyTop, shelfY)
+    drawShelfBooks(context, innerLeft + 3, ornamentHere === "none" ? innerRight : innerRight - 24, cubbyTop, shelfY, caseSeed + row * 13, sinceImpact)
+    if (ornamentHere === "plant") drawPlant(context, innerRight - 12, shelfY - ornamentLift)
+    if (ornamentHere === "clock") drawClock(context, innerRight - 12, shelfY - 12 - ornamentLift)
+    paintShape(context, WOOD, (path) => path.rect(innerLeft - 3, shelfY, innerRight - innerLeft + 6, SHELF_THICKNESS))
+    paintLine(context, WOOD_LIGHT, 1.6, linePath(innerLeft - 1, shelfY + 2, innerRight + 1, shelfY + 2))
+  }
+  context.restore()
 }
 
 const drawSign = (context: Context, centerX: number, centerY: number, width: number) => {
@@ -163,18 +233,113 @@ const drawSign = (context: Context, centerX: number, centerY: number, width: num
   context.fillText("Library", centerX, centerY + signHeight * 0.04)
 }
 
-const drawLadder = (context: Context, left: number, floorY: number, top: number) => {
-  paintLine(context, WOOD_DARK, 5, linePath(left, top, left - 10, floorY))
-  paintLine(context, WOOD_DARK, 5, linePath(left + 28, top, left + 18, floorY))
-  for (let rung = 0; rung < 5; rung += 1) {
-    const rungY = mix(top + 16, floorY - 12, rung / 4)
-    paintLine(context, WOOD, 4, linePath(left - 4, rungY, left + 24, rungY))
+const drawLadder = (context: Context, left: number, floorY: number, top: number, sinceImpact: number) => {
+  const railY = top - 8
+  const footY = floorY - 8
+  const topRails = [left, left + 30] as const
+  const footRails = [left - 18, left + 24] as const
+  const railXAt = (side: 0 | 1, y: number) => mix(topRails[side], footRails[side], (y - top) / (footY - top))
+  paintLine(context, OUTLINE, 6.5, linePath(left - 60, railY, left + 90, railY))
+  paintLine(context, BRASS, 3.5, linePath(left - 60, railY, left + 90, railY))
+  for (const bracketX of [left - 50, left + 80]) paintShape(context, BRASS, (path) => path.roundRect(bracketX - 3, railY - 7, 6, 13, 2))
+  context.save()
+  context.translate(left + 15, railY)
+  context.rotate(quakeWobble(sinceImpact, 2.9) * 0.025)
+  context.translate(-(left + 15), -railY)
+  context.lineWidth = 2.5
+  for (let rung = 0; rung < LADDER_RUNGS; rung += 1) {
+    const rungY = mix(top + 14, footY - 16, rung / (LADDER_RUNGS - 1))
+    const rungLeft = railXAt(0, rungY)
+    const rungRight = railXAt(1, rungY)
+    paintShape(context, WOOD, (path) => path.roundRect(rungLeft, rungY - 3, rungRight - rungLeft, 6, 2))
+    paintLine(context, "rgba(90, 42, 16, 0.6)", 1.5, linePath(rungLeft + 2, rungY + 1.5, rungRight - 2, rungY + 1.5))
+    if (rung === 3) drawBook(context, (rungLeft + rungRight) / 2, rungY - 6, 20, 6, BOOK_COLORS[3], 0, "gold")
   }
+  for (const side of [0, 1] as const) {
+    const topX = topRails[side]
+    const footX = footRails[side]
+    paintShape(context, WOOD_DARK, (path) => {
+      path.moveTo(topX - 3.5, top)
+      path.lineTo(topX + 3.5, top)
+      path.lineTo(footX + 4, footY)
+      path.lineTo(footX - 4, footY)
+      path.closePath()
+    })
+    paintLine(context, WOOD_LIGHT, 1.5, linePath(topX - 1, top + 4, footX - 1.5, footY - 4))
+    const hookPath = (path: Path2D) => {
+      path.moveTo(topX, top + 2)
+      path.lineTo(topX, railY - 2)
+      path.arc(topX + 5, railY - 2, 5, Math.PI, 0)
+    }
+    paintLine(context, OUTLINE, 5, hookPath)
+    paintLine(context, BRASS, 2.5, hookPath)
+    paintShape(context, BRASS, ellipsePath(footX, floorY - 5, 5, 5))
+    paintFill(context, OUTLINE, ellipsePath(footX, floorY - 5, 1.6, 1.6))
+  }
+  context.restore()
 }
 
-const drawRoom = (context: Context, width: number, height: number, floorY: number, ceilingY: number) => {
+const drawPaintingScene = (context: Context, left: number, top: number, sceneWidth: number, sceneHeight: number) => {
+  const sky = context.createLinearGradient(0, top, 0, top + sceneHeight)
+  sky.addColorStop(0, "#7cc8ff")
+  sky.addColorStop(1, "#ffe3b0")
+  paintFill(context, sky, (path) => path.rect(left, top, sceneWidth, sceneHeight))
+  paintShape(context, "#ffcf3f", ellipsePath(left + sceneWidth * 0.76, top + sceneHeight * 0.3, sceneHeight * 0.13, sceneHeight * 0.13))
+  for (const [puffX, puffY, puffSize] of [[0.22, 0.26, 0.09], [0.3, 0.22, 0.11], [0.38, 0.27, 0.08]] as const) {
+    paintFill(context, "#ffffff", ellipsePath(left + sceneWidth * puffX, top + sceneHeight * puffY, sceneHeight * puffSize * 1.4, sceneHeight * puffSize))
+  }
+  paintShape(context, "#7ccf6a", ellipsePath(left + sceneWidth * 0.25, top + sceneHeight * 1.05, sceneWidth * 0.5, sceneHeight * 0.45))
+  paintShape(context, "#3fae5a", ellipsePath(left + sceneWidth * 0.82, top + sceneHeight * 1.12, sceneWidth * 0.55, sceneHeight * 0.45))
+  paintLine(context, WOOD_DARK, 3, linePath(left + sceneWidth * 0.62, top + sceneHeight * 0.78, left + sceneWidth * 0.62, top + sceneHeight * 0.58))
+  paintShape(context, "#2f8f4e", ellipsePath(left + sceneWidth * 0.62, top + sceneHeight * 0.52, sceneHeight * 0.12, sceneHeight * 0.12))
+  const kiraScale = (sceneWidth * 0.24) / 48
+  context.save()
+  context.translate(left + sceneWidth * 0.84, top + sceneHeight)
+  context.rotate(-0.18)
+  drawKiraFront(context, 0, KIRA_PEEK_UNITS * kiraScale, kiraScale)
+  context.restore()
+}
+
+const drawPainting = (context: Context, centerX: number, centerY: number, paintingWidth: number, sinceImpact: number) => {
+  const paintingHeight = paintingWidth * 0.72
+  const left = centerX - paintingWidth / 2
+  const top = centerY - paintingHeight / 2
+  const nailY = top - paintingHeight * 0.18
+  const frame = paintingWidth * 0.08
+  const canvasPath = new Path2D()
+  canvasPath.rect(left + frame, top + frame, paintingWidth - frame * 2, paintingHeight - frame * 2)
+  context.save()
+  context.translate(centerX, nailY)
+  context.rotate(quakeWobble(sinceImpact, 0.7) * 0.07)
+  context.translate(-centerX, -nailY)
+  context.lineWidth = 2
+  paintLine(context, OUTLINE, 1.5, (path) => {
+    path.moveTo(centerX - paintingWidth * 0.3, top + frame * 0.5)
+    path.lineTo(centerX, nailY)
+    path.lineTo(centerX + paintingWidth * 0.3, top + frame * 0.5)
+  })
+  paintFill(context, "rgba(60, 30, 10, 0.18)", (path) => path.roundRect(left + 6, top + 8, paintingWidth, paintingHeight, 6))
+  paintShape(context, PAINTING_GOLD, (path) => path.roundRect(left, top, paintingWidth, paintingHeight, 6))
+  paintLine(context, GOLD, 2, (path) => path.roundRect(left + 4, top + 4, paintingWidth - 8, paintingHeight - 8, 4))
+  context.save()
+  context.clip(canvasPath)
+  drawPaintingScene(context, left + frame, top + frame, paintingWidth - frame * 2, paintingHeight - frame * 2)
+  context.restore()
+  paintLine(context, OUTLINE, 2, (path) => path.addPath(canvasPath))
+  for (const [cornerX, cornerY] of [[left, top], [left + paintingWidth, top], [left, top + paintingHeight], [left + paintingWidth, top + paintingHeight]] as const) {
+    paintShape(context, GOLD, ellipsePath(cornerX, cornerY, frame * 0.4, frame * 0.4))
+  }
+  paintShape(context, "#a8a8a8", ellipsePath(centerX, nailY, 3, 3))
+  context.restore()
+}
+
+const drawRoom = (context: Context, width: number, height: number, floorY: number, ceilingY: number, sinceImpact: number) => {
   context.fillStyle = WALL
   context.fillRect(0, 0, width, height)
+  const ceilingShadow = context.createLinearGradient(0, ceilingY, 0, ceilingY + 26)
+  ceilingShadow.addColorStop(0, "rgba(90, 45, 18, 0.25)")
+  ceilingShadow.addColorStop(1, "rgba(90, 45, 18, 0)")
+  paintFill(context, ceilingShadow, (path) => path.rect(0, ceilingY, width, 26))
   paintFill(context, "#f1d3a4", (path) => path.rect(0, floorY, width, height - floorY))
   paintLine(context, OUTLINE, 3, linePath(0, floorY, width, floorY))
   for (let plank = 0; plank < 8; plank += 1) {
@@ -182,9 +347,10 @@ const drawRoom = (context: Context, width: number, height: number, floorY: numbe
     paintLine(context, "rgba(120, 64, 28, 0.35)", 2, linePath(plankX, floorY, plankX + 30, height))
   }
   paintShape(context, RUG, ellipsePath(width * 0.52, floorY + 4, width * 0.14, height * 0.035))
-  drawBookcase(context, width * 0.2, height * 0.34, width * 0.38, floorY, "plant")
-  drawBookcase(context, width * 0.66, height * 0.34, width * 0.84, floorY, "clock")
+  drawBookcase(context, width * 0.2, height * 0.34, width * 0.38, floorY, sinceImpact, "plant")
+  drawBookcase(context, width * 0.66, height * 0.34, width * 0.84, floorY, sinceImpact, "clock")
   drawSign(context, width * 0.3, ceilingY + (height * 0.34 - ceilingY) * 0.42, width)
+  drawPainting(context, width * 0.52, height * 0.31, Math.min(width * 0.16, height * 0.26), sinceImpact)
 }
 
 const HOLE_EDGE = [1, 0.74, 1.12, 0.9, 0.62, 1.08, 0.82, 1.18, 0.7, 0.96, 1.1, 0.66, 1.04, 0.86, 1.16, 0.72, 0.98, 0.8, 1.14, 0.68, 1.06, 0.88, 0.76, 1.12] as const
@@ -207,16 +373,21 @@ const clipToCeiling = (context: Context, width: number, ceilingY: number) => {
 
 const crashMotion = (sceneSeconds: number, floorY: number, scale: number) => {
   const fall = stageProgress(sceneSeconds, FALL_START, FALL_END)
-  const stand = easeOut(stageProgress(sceneSeconds, GET_UP_START, GET_UP_END))
   const feetY = mix(-40 * scale, floorY, fall ** 1.15)
   const tumble = (1 - easeOut(fall)) * Math.PI * -2.15
-  const lie = easeOut(stageProgress(sceneSeconds, FALL_END - 0.4, FALL_END)) * (1 - stand)
+  const landed = easeOut(stageProgress(sceneSeconds, FALL_END - 0.4, FALL_END))
+  const getUp = stageProgress(sceneSeconds, GET_UP_START, GET_UP_END)
+  const sitUp = easeInOut(stageProgress(getUp, 0, 0.5))
+  const stand = easeInOut(stageProgress(getUp, 0.45, 1))
   return {
     fall,
     feetY,
-    spin: tumble + lie * (-Math.PI / 2),
+    spin: tumble + landed * mix(mix(-Math.PI / 2, -0.3, sitUp), 0, stand),
+    landed,
+    sitUp,
     stand,
-    lie,
+    crouch: Math.min(easeOut(stageProgress(getUp, 0.15, 0.45)), 1 - stand),
+    lie: landed * (1 - sitUp),
     lowestY: feetY + Math.max(0, -Math.cos(tumble)) * 100 * scale,
   }
 }
@@ -259,13 +430,31 @@ const drawCeilingBoards = (context: Context, width: number, ceilingY: number, ho
   context.save()
   clipToCeiling(context, width, ceilingY)
   context.clip(ceilingCover(width, ceilingY, holeOpen), "evenodd")
-  context.fillStyle = WOOD_DARK
+  const vanishX = width / 2
+  const vanishY = ceilingY * CEILING_VANISH
+  const spread = vanishY / (vanishY - ceilingY)
+  const shade = context.createLinearGradient(0, 0, 0, ceilingY)
+  shade.addColorStop(0, "#5e2d12")
+  shade.addColorStop(1, "#a0602e")
+  context.fillStyle = shade
   context.fillRect(0, 0, width, ceilingY)
-  for (let board = 0; board < 9; board += 1) {
-    const boardX = (width / 9) * board
-    paintLine(context, "rgba(255, 220, 170, 0.35)", 2, linePath(boardX, 0, boardX, ceilingY))
+  const boardGap = width / 16
+  for (let board = -8; board <= 8; board += 1) {
+    const backX = vanishX + board * boardGap
+    const frontX = vanishX + board * boardGap * spread
+    paintLine(context, "rgba(40, 16, 4, 0.55)", 2, linePath(frontX, 0, backX, ceilingY))
+    paintLine(context, "rgba(255, 214, 160, 0.25)", 1.5, linePath(frontX + 3, 0, backX + 2, ceilingY))
   }
-  paintShape(context, WOOD, (path) => path.rect(0, ceilingY - 10, width, 10))
+  for (const depth of CEILING_BEAMS) {
+    const beamY = vanishY * (1 - 1 / depth)
+    const beamHeight = (ceilingY * 0.16) / depth
+    paintShape(context, WOOD_DARK, (path) => path.rect(-4, beamY, width + 8, beamHeight))
+    paintFill(context, WOOD, (path) => path.rect(-4, beamY + beamHeight * 0.55, width + 8, beamHeight * 0.45))
+    paintLine(context, WOOD_LIGHT, 1.5, linePath(0, beamY + beamHeight * 0.6, width, beamY + beamHeight * 0.6))
+  }
+  paintShape(context, WOOD, (path) => path.rect(-4, ceilingY - 12, width + 8, 8))
+  paintShape(context, WOOD_DARK, (path) => path.rect(-4, ceilingY - 5, width + 8, 5))
+  paintLine(context, WOOD_LIGHT, 1.5, linePath(0, ceilingY - 10, width, ceilingY - 10))
   context.restore()
 }
 
@@ -448,11 +637,6 @@ const drawHangingPlank = (context: Context, anchorX: number, anchorY: number, pl
   context.restore()
 }
 
-const debrisRandom = (index: number, salt: number) => {
-  const wave = Math.sin(index * 12.9898 + salt * 78.233) * 43758.5453
-  return wave - Math.floor(wave)
-}
-
 const PLASTER_BITS = [PLASTER, "#e9c88c", "#fff1d2"] as const
 const DEBRIS_COLORS = { splinter: [WOOD, WOOD_DARK, "#b8702f"], chunk: PLASTER_BITS, crumb: PLASTER_BITS } as const
 
@@ -463,13 +647,13 @@ const BREAK_DEBRIS = Array.from({ length: 34 }, (_, index) => {
   const [smallest, largest] = DEBRIS_SIZES[kind]
   return {
     kind,
-    spawn: debrisRandom(index, 1) - 0.5,
-    direction: mix(-0.1, 1.1, debrisRandom(index, 2)) * Math.PI,
-    speed: mix(140, 380, debrisRandom(index, 3)),
-    spin: mix(-9, 9, debrisRandom(index, 4)),
-    size: mix(smallest, largest, debrisRandom(index, 5)),
-    delay: debrisRandom(index, 6) * 0.22,
-    restDepth: debrisRandom(index, 7),
+    spawn: seededRandom(index, 1) - 0.5,
+    direction: mix(-0.1, 1.1, seededRandom(index, 2)) * Math.PI,
+    speed: mix(140, 380, seededRandom(index, 3)),
+    spin: mix(-9, 9, seededRandom(index, 4)),
+    size: mix(smallest, largest, seededRandom(index, 5)),
+    delay: seededRandom(index, 6) * 0.22,
+    restDepth: seededRandom(index, 7),
     color: DEBRIS_COLORS[kind][index % 3] ?? PLASTER,
   }
 })
@@ -581,22 +765,24 @@ const drawDust = (context: Context, landingX: number, floorY: number, sceneSecon
 }
 
 const drawCrashRadi = (context: Context, landingX: number, floorY: number, scale: number, time: number, sceneSeconds: number) => {
-  const { fall, feetY, spin, stand, lie } = crashMotion(sceneSeconds, floorY, scale)
+  const { fall, feetY, spin, landed, sitUp, stand, crouch, lie } = crashMotion(sceneSeconds, floorY, scale)
   const grounded = fall >= 1
   const flail = grounded ? 0 : Math.sin(time * 16)
   const cleaning = grounded && sceneSeconds >= GET_UP_END ? cleaningPose(sceneSeconds) : null
-  const fallingHands: readonly [Point, Point] = [[-18 - flail * 6, -54], [18 + flail * 6, -48]]
-  const settledHands = mixHands(BACK_HANDS, SIDE_HANDS, stand)
+  const fallingHands: readonly [Point, Point] = [[-16 - flail * 4, -52], [16 + flail * 4, -50]]
+  const settledHands = mixHands(mixHands(BACK_HANDS, KNEE_HANDS, sitUp), SIDE_HANDS, stand)
+  const hands = cleaning ? cleaning.hands : mixHands(fallingHands, settledHands, grounded ? 1 : landed)
+  const legBend = CROUCH_LIFT * crouch
   if (fall > 0.62) paintFill(context, "rgba(80, 42, 20, 0.16)", ellipsePath(landingX - lie * 34 * scale, floorY, mix(22, 64, lie) * scale, mix(4, 8, lie) * scale))
   context.save()
-  context.translate(landingX, feetY - 22 * scale * lie)
+  context.translate(landingX, feetY + (legBend - 22 * lie) * scale)
   context.rotate(spin)
   drawRadi(context, stand > 0.82 ? bookwormRadiLook : CRASH_LOOK, 0, 0, scale, {
     faceTurn: grounded ? 0 : flail * 0.2,
-    legLifts: grounded ? [0, 0] : [7 + flail * 4, 7 - flail * 4],
-    kneeBends: grounded ? [0, 0] : [3, 3],
-    hands: cleaning ? cleaning.hands : mixHands(fallingHands, settledHands, Math.max(lie, grounded ? 1 : 0)),
-    elbowBends: cleaning ? cleaning.elbows : [0, 0],
+    legLifts: grounded ? [legBend, legBend] : [7 + flail * 4, 7 - flail * 4],
+    kneeBends: grounded ? [legBend * 0.8, legBend * 0.8] : [3, 3],
+    hands,
+    elbowBends: naturalElbows(hands),
   })
   if (cleaning?.brush && cleaning.puff > 0.05) {
     const [brushX, brushY] = cleaning.brush
@@ -621,7 +807,7 @@ export const drawLibraryScene = (context: Context, width: number, height: number
   context.strokeStyle = OUTLINE
   context.save()
   context.translate(Math.sin(time * 80) * shake, Math.cos(time * 66) * shake * 0.6)
-  drawRoom(context, width, height, floorY, ceilingY)
+  drawRoom(context, width, height, floorY, ceilingY, sinceImpact)
   drawNightHole(context, width, ceilingY, breaking.holeOpen, time)
   drawCrashRadi(context, landingX, floorY, scale, time, sceneSeconds)
   drawCeilingBoards(context, width, ceilingY, breaking.holeOpen)
@@ -631,9 +817,9 @@ export const drawLibraryScene = (context: Context, width: number, height: number
   drawBreakBurst(context, width, ceilingY, sinceBreak)
   drawBreakDust(context, width, ceilingY, sinceBreak)
   drawBreakDebris(context, width, height, ceilingY, floorY, sinceBreak)
-  drawBookcase(context, 12, ceilingY - 6, width * 0.2, floorY + 8)
-  drawBookcase(context, width * 0.8, ceilingY - 6, width - 12, floorY + 8)
-  drawLadder(context, width * 0.75, floorY, height * 0.36)
+  drawBookcase(context, 12, ceilingY - 6, width * 0.2, floorY + 8, sinceImpact)
+  drawBookcase(context, width * 0.8, ceilingY - 6, width - 12, floorY + 8, sinceImpact)
+  drawLadder(context, width * 0.75, floorY, height * 0.36, sinceImpact)
   drawDust(context, landingX, floorY, sceneSeconds)
   if (sinceImpact >= 0 && sinceImpact < 0.5) {
     const ring = stageProgress(sinceImpact, 0, 0.5)
