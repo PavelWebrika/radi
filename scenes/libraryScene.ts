@@ -1,7 +1,7 @@
 import { ellipsePath, linePath, paintFill, paintLine, paintShape, type Context } from "@/characters/paint"
-import { drawRadi, type RadiLook } from "@/characters/radi"
-import { nightClubRadiLook } from "@/characters/radiConcepts"
-import { easeOut, mix, paintIris, radiScale, stageProgress } from "@/scenes/openingScene"
+import { drawRadi, type Point, type RadiLook } from "@/characters/radi"
+import { bookwormRadiLook } from "@/characters/radiConcepts"
+import { easeOut, mix, mixPoint, paintIris, radiScale, stageProgress } from "@/scenes/openingScene"
 
 const OUTLINE = "#2b1d1a"
 const WALL = "#f6e2bc"
@@ -14,24 +14,40 @@ const BOOK_COLORS = ["#e23d4a", "#ffd23f", "#3ec6c6", "#7b5cff", "#5ec76a", "#ff
 
 const FALL_START = 0.4
 const FALL_END = 1.85
-const SETTLE_END = 2.5
 const SHAKE_SECONDS = 0.45
 const SHAKE_STRENGTH = 11
 const FLASH_SECONDS = 0.2
 const IRIS_IN_END = 0.7
 
-const CRASH_LOOK: RadiLook = { ...nightClubRadiLook, expression: "surprised" }
+const CRASH_LOOK: RadiLook = { ...bookwormRadiLook, expression: "surprised" }
+const GET_UP_START = 2.7
+const GET_UP_END = 4.1
+const CLEAN_SWEEP_SECONDS = 0.85
+const CLEAN_SWEEPS = 3
+const BACK_HANDS: readonly [Point, Point] = [[-14, -48], [14, -48]]
+const SIDE_HANDS: readonly [Point, Point] = [[-16, -32], [16, -32]]
 
-const FLYING_BOOKS = [
-  { angle: 0.4, speed: 1.15, spin: 7, width: 16, height: 22, color: BOOK_COLORS[0] },
-  { angle: 1.1, speed: 0.9, spin: -5, width: 14, height: 20, color: BOOK_COLORS[1] },
-  { angle: 1.8, speed: 1.25, spin: 6, width: 18, height: 12, color: BOOK_COLORS[2] },
-  { angle: 2.4, speed: 1, spin: -8, width: 13, height: 21, color: BOOK_COLORS[3] },
-  { angle: 2.9, speed: 1.35, spin: 4, width: 17, height: 11, color: BOOK_COLORS[4] },
-  { angle: 3.6, speed: 0.85, spin: -6, width: 15, height: 22, color: BOOK_COLORS[5] },
-  { angle: 4.4, speed: 1.1, spin: 9, width: 12, height: 19, color: BOOK_COLORS[6] },
-  { angle: 5.2, speed: 1.3, spin: -4, width: 18, height: 13, color: BOOK_COLORS[7] },
-] as const
+const mixHands = (from: readonly [Point, Point], to: readonly [Point, Point], amount: number): readonly [Point, Point] => [
+  mixPoint(from[0], to[0], amount),
+  mixPoint(from[1], to[1], amount),
+]
+
+const cleaningPose = (sceneSeconds: number) => {
+  const sweep = (sceneSeconds - GET_UP_END) / CLEAN_SWEEP_SECONDS
+  if (sweep < 0 || sweep >= CLEAN_SWEEPS) return { hands: SIDE_HANDS, brush: null, puff: 0, elbows: [0, 0] as const }
+  const sweepIndex = Math.floor(sweep)
+  const sweepT = sweep - sweepIndex
+  const brushingLeft = sweepIndex % 2 === 0
+  const across = sweepT < 0.7 ? sweepT / 0.7 : (1 - sweepT) / 0.3
+  const brush = mixPoint(brushingLeft ? [-20, -46] : [20, -46], brushingLeft ? [6, -22] : [-6, -22], easeOut(Math.min(1, across)))
+  const rest: Point = brushingLeft ? [16, -32] : [-16, -32]
+  return {
+    hands: (brushingLeft ? [brush, rest] : [rest, brush]) as const,
+    brush,
+    puff: Math.sin(Math.min(sweepT, 1) * Math.PI),
+    elbows: (brushingLeft ? [9, 0] : [0, 9]) as const,
+  }
+}
 
 const libraryLayout = (width: number, height: number) => ({
   scale: radiScale(width, height) * 1.15,
@@ -147,23 +163,6 @@ const drawSign = (context: Context, centerX: number, centerY: number, width: num
   context.fillText("Library", centerX, centerY + signHeight * 0.04)
 }
 
-const drawGlobe = (context: Context, centerX: number, floorY: number, roll: number) => {
-  const globeX = centerX + roll
-  paintShape(context, WOOD_DARK, (path) => {
-    path.moveTo(globeX - 16, floorY)
-    path.lineTo(globeX + 16, floorY)
-    path.lineTo(globeX + 8, floorY - 16)
-    path.lineTo(globeX - 8, floorY - 16)
-    path.closePath()
-  })
-  paintShape(context, "#7ec8f0", ellipsePath(globeX, floorY - 34, 16, 16), {
-    decorateInside: (globeContext) => {
-      paintFill(globeContext, "#3aaa6a", ellipsePath(globeX - 4, floorY - 36, 7, 5))
-      paintFill(globeContext, "#3aaa6a", ellipsePath(globeX + 6, floorY - 30, 4, 3))
-    },
-  })
-}
-
 const drawLadder = (context: Context, left: number, floorY: number, top: number) => {
   paintLine(context, WOOD_DARK, 5, linePath(left, top, left - 10, floorY))
   paintLine(context, WOOD_DARK, 5, linePath(left + 28, top, left + 18, floorY))
@@ -188,31 +187,37 @@ const drawRoom = (context: Context, width: number, height: number, floorY: numbe
   drawSign(context, width * 0.3, ceilingY + (height * 0.34 - ceilingY) * 0.42, width)
 }
 
-const HOLE_WOBBLE = [1.02, 0.72, 1.18, 0.8, 1.24, 0.7, 1.1, 0.84, 1.2, 0.76, 1.14, 0.68, 1.22, 0.86, 1.08, 0.78] as const
+const HOLE_EDGE = [1, 0.74, 1.12, 0.9, 0.62, 1.08, 0.82, 1.18, 0.7, 0.96, 1.1, 0.66, 1.04, 0.86, 1.16, 0.72, 0.98, 0.8, 1.14, 0.68, 1.06, 0.88, 0.76, 1.12] as const
 
-const HOLE_CENTER_Y = 0.78
+const HOLE_CENTER_Y = 0.5
+const HOLE_INSIDE = "#5e2d12"
 
 const holePlacement = (width: number, ceilingY: number, holeOpen: number) => ({
   holeX: width * 0.52,
   holeY: ceilingY * HOLE_CENTER_Y,
-  radiusX: Math.min(width * 0.11, ceilingY * 1.35) * holeOpen,
-  radiusY: ceilingY * 0.62 * holeOpen,
+  radiusX: Math.min(width * 0.12, ceilingY * 1.5) * holeOpen,
+  radiusY: ceilingY * 0.38 * holeOpen,
 })
 
-const crashMotion = (sceneSeconds: number, floorY: number, scale: number, time: number) => {
+const clipToCeiling = (context: Context, width: number, ceilingY: number) => {
+  const band = new Path2D()
+  band.rect(0, 0, width, ceilingY)
+  context.clip(band)
+}
+
+const crashMotion = (sceneSeconds: number, floorY: number, scale: number) => {
   const fall = stageProgress(sceneSeconds, FALL_START, FALL_END)
-  const settle = easeOut(stageProgress(sceneSeconds, FALL_END, SETTLE_END))
-  const rebound = Math.sin(stageProgress(sceneSeconds, FALL_END, SETTLE_END) * Math.PI) * (1 - settle) * 34 * scale
-  const idle = sceneSeconds > SETTLE_END ? Math.sin(time * 2.2) * 1.4 * scale : 0
-  const feetY = mix(-40 * scale, floorY, fall ** 1.15) - rebound - idle
-  const spin = (1 - easeOut(fall)) * Math.PI * -2.15 + (1 - settle) * 0.4
+  const stand = easeOut(stageProgress(sceneSeconds, GET_UP_START, GET_UP_END))
+  const feetY = mix(-40 * scale, floorY, fall ** 1.15)
+  const tumble = (1 - easeOut(fall)) * Math.PI * -2.15
+  const lie = easeOut(stageProgress(sceneSeconds, FALL_END - 0.4, FALL_END)) * (1 - stand)
   return {
     fall,
     feetY,
-    spin,
-    lowestY: feetY + Math.max(0, -Math.cos(spin)) * 100 * scale,
-    squash: Math.sin(stageProgress(sceneSeconds, FALL_END, FALL_END + 0.28) * Math.PI),
-    flail: Math.sin(time * 16),
+    spin: tumble + lie * (-Math.PI / 2),
+    stand,
+    lie,
+    lowestY: feetY + Math.max(0, -Math.cos(tumble)) * 100 * scale,
   }
 }
 
@@ -222,11 +227,18 @@ const ceilingBreak = (headY: number, ceilingY: number) => ({
   travel: Math.max(0, headY - (ceilingY - 50)),
 })
 
+const breakStartSeconds = (floorY: number, scale: number, ceilingY: number) => {
+  for (let seconds = FALL_START; seconds < FALL_END; seconds += 0.01) {
+    if (ceilingBreak(crashMotion(seconds, floorY, scale).lowestY, ceilingY).travel > 0) return seconds
+  }
+  return FALL_END
+}
+
 const traceHole = (path: Path2D, holeX: number, holeY: number, radiusX: number, radiusY: number) => {
-  HOLE_WOBBLE.forEach((wobble, index) => {
-    const angle = (index / HOLE_WOBBLE.length) * Math.PI * 2 - Math.PI / 2
-    const x = holeX + Math.cos(angle) * radiusX * wobble
-    const y = holeY + Math.sin(angle) * radiusY * wobble
+  HOLE_EDGE.forEach((reach, index) => {
+    const angle = ((index + ((index % 3) - 1) * 0.18) / HOLE_EDGE.length) * Math.PI * 2 - Math.PI / 2
+    const x = holeX + Math.cos(angle) * radiusX * reach
+    const y = holeY + Math.sin(angle) * radiusY * reach
     if (index === 0) path.moveTo(x, y)
     else path.lineTo(x, y)
   })
@@ -244,11 +256,11 @@ const ceilingCover = (width: number, ceilingY: number, holeOpen: number) => {
 }
 
 const drawCeilingBoards = (context: Context, width: number, ceilingY: number, holeOpen: number) => {
-  const ceiling = ceilingCover(width, ceilingY, holeOpen)
-  context.fillStyle = WOOD_DARK
-  context.fill(ceiling, "evenodd")
   context.save()
-  context.clip(ceiling, "evenodd")
+  clipToCeiling(context, width, ceilingY)
+  context.clip(ceilingCover(width, ceilingY, holeOpen), "evenodd")
+  context.fillStyle = WOOD_DARK
+  context.fillRect(0, 0, width, ceilingY)
   for (let board = 0; board < 9; board += 1) {
     const boardX = (width / 9) * board
     paintLine(context, "rgba(255, 220, 170, 0.35)", 2, linePath(boardX, 0, boardX, ceilingY))
@@ -305,17 +317,29 @@ const drawMoon = (context: Context, centerX: number, centerY: number, radius: nu
 const drawNightHole = (context: Context, width: number, ceilingY: number, holeOpen: number, time: number) => {
   if (holeOpen <= 0.02) return
   const { holeX, holeY, radiusX, radiusY } = holePlacement(width, ceilingY, holeOpen)
+  const depth = ceilingY * 0.14 * holeOpen
   const hole = new Path2D()
   traceHole(hole, holeX, holeY, radiusX, radiusY)
-  context.fillStyle = NIGHT
-  context.fill(hole)
+  const woodLayer = new Path2D()
+  traceHole(woodLayer, holeX, holeY + depth * 0.35, radiusX * 0.97, radiusY * 0.95)
+  const sky = new Path2D()
+  traceHole(sky, holeX, holeY + depth, radiusX * 0.93, radiusY * 0.88)
   context.save()
+  clipToCeiling(context, width, ceilingY)
   context.clip(hole)
-  const moonRadius = Math.min(radiusX, radiusY) * 0.34
-  drawMoon(context, holeX - radiusX * 0.28, holeY - radiusY * 0.08, moonRadius)
+  context.fillStyle = PLASTER
+  context.fill(hole)
+  context.fillStyle = HOLE_INSIDE
+  context.fill(woodLayer)
+  context.fillStyle = NIGHT
+  context.fill(sky)
+  paintLine(context, OUTLINE, 2, (path) => path.addPath(sky))
+  context.clip(sky)
+  const moonRadius = Math.min(radiusX, radiusY) * 0.45
+  drawMoon(context, holeX - radiusX * 0.3, holeY + depth * 0.5, moonRadius)
   NIGHT_STARS.forEach((star, index) => {
     const twinkle = 0.82 + Math.sin(time * 2.4 + index) * 0.18
-    drawSparkle(context, holeX + star.x * radiusX, holeY + star.y * radiusY, Math.max(7, moonRadius * 0.42 * star.size) * twinkle, index * 0.4)
+    drawSparkle(context, holeX + star.x * radiusX, holeY + depth * 0.5 + star.y * radiusY, Math.max(6, moonRadius * 0.36 * star.size) * twinkle, index * 0.4)
   })
   context.restore()
 }
@@ -346,74 +370,204 @@ const drawHoleRim = (context: Context, width: number, ceilingY: number, holeOpen
   const { holeX, holeY, radiusX, radiusY } = holePlacement(width, ceilingY, holeOpen)
   const hole = new Path2D()
   traceHole(hole, holeX, holeY, radiusX, radiusY)
+  context.save()
+  clipToCeiling(context, width, ceilingY)
   context.lineJoin = "round"
-  context.lineWidth = 10
+  context.lineWidth = 9
   context.strokeStyle = PLASTER
   context.stroke(hole)
-  context.lineWidth = 3.5
+  context.lineWidth = 3
   context.strokeStyle = OUTLINE
   context.stroke(hole)
-  const fullHole = holePlacement(width, ceilingY, 1)
-  for (const crack of [{ angle: -0.7, length: 36 }, { angle: 0.45, length: 28 }, { angle: 1.7, length: 32 }, { angle: 2.6, length: 40 }, { angle: 3.7, length: 30 }] as const) {
-    const startX = holeX + Math.cos(crack.angle) * fullHole.radiusX * holeOpen
-    const startY = holeY + Math.sin(crack.angle) * fullHole.radiusY * holeOpen
-    paintLine(context, OUTLINE, 2.4, linePath(startX, startY, startX + Math.cos(crack.angle) * crack.length, startY + Math.sin(crack.angle) * crack.length * 0.75))
+  for (const crack of RIM_CRACKS) {
+    const reach = crack.length * holeOpen
+    const startX = holeX + Math.cos(crack.angle) * radiusX * 1.05
+    const startY = holeY + Math.sin(crack.angle) * radiusY * 1.05
+    const midX = startX + Math.cos(crack.angle) * reach * 0.5
+    const midY = startY + Math.sin(crack.angle) * reach * 0.3
+    const branchAngle = crack.angle + crack.branch
+    paintLine(context, OUTLINE, 2.4, (path) => {
+      path.moveTo(startX, startY)
+      path.lineTo(midX, midY)
+      path.lineTo(startX + Math.cos(crack.angle + 0.15) * reach, startY + Math.sin(crack.angle + 0.15) * reach * 0.6)
+    })
+    paintLine(context, OUTLINE, 1.8, linePath(midX, midY, midX + Math.cos(branchAngle) * reach * 0.45, midY + Math.sin(branchAngle) * reach * 0.3))
   }
-  const hang = easeOut(stageProgress(holeOpen, 0.35, 1))
-  context.save()
-  context.translate(holeX + radiusX * 0.12, holeY - radiusY * 0.9)
-  context.rotate(mix(-1.15, 0.45, hang))
-  paintShape(context, WOOD, (path) => path.roundRect(-8, 0, 16, 28, 2))
   context.restore()
 }
 
-const BREAK_SHARDS = [
-  { angle: 0.35, speed: 1.2, spin: 5, width: 26, height: 11, color: WOOD_DARK },
-  { angle: 0.9, speed: 0.85, spin: -4, width: 18, height: 14, color: PLASTER },
-  { angle: 1.45, speed: 1.15, spin: 6, width: 22, height: 10, color: WOOD },
-  { angle: 2.05, speed: 0.95, spin: -5, width: 16, height: 13, color: PLASTER },
-  { angle: 2.6, speed: 1.25, spin: 4, width: 24, height: 9, color: WOOD_DARK },
-  { angle: 1.15, speed: 0.7, spin: -7, width: 14, height: 12, color: PLASTER },
-] as const
-
-const drawBreakShards = (context: Context, width: number, ceilingY: number, floorY: number, travel: number) => {
-  if (travel <= 2) return
-  const { holeX, holeY } = holePlacement(width, ceilingY, 1)
-  for (const shard of BREAK_SHARDS) {
-    const burst = Math.min(1, travel / 150)
-    const distance = shard.speed * 150 * burst
-    const gravity = Math.min(floorY - holeY - 12, (travel / 80) ** 2 * 200)
-    const shardX = holeX + Math.cos(shard.angle) * distance
-    const shardY = Math.min(floorY - shard.height, holeY + Math.sin(shard.angle) * distance * 0.4 + gravity)
-    context.save()
-    context.translate(shardX, shardY)
-    context.rotate(shard.spin * Math.min(travel * 0.012, 2.4))
-    paintShape(context, shard.color, (path) => path.roundRect(-shard.width / 2, -shard.height / 2, shard.width, shard.height, 2))
-    context.restore()
+const drawHangingPlanks = (context: Context, width: number, height: number, ceilingY: number, floorY: number, holeOpen: number, sinceBreak: number) => {
+  if (holeOpen <= 0.04) return
+  const { holeX, holeY, radiusX, radiusY } = holePlacement(width, ceilingY, holeOpen)
+  const hang = easeOut(stageProgress(holeOpen, 0.3, 1))
+  for (const plank of HANGING_PLANKS) {
+    const hangX = holeX + Math.cos(plank.angle) * radiusX * 0.92
+    const hangY = holeY + Math.sin(plank.angle) * radiusY * 0.92
+    const restY = mix(floorY + 6, height - 10, plank.rest) - plank.width / 2
+    const landing = Math.sqrt((2 * (restY - hangY)) / DEBRIS_GRAVITY)
+    const fallTime = Math.min(Math.max(0, sinceBreak - plank.drop), landing)
+    const tilt = mix(mix(plank.from, plank.tilt, hang), Math.sign(plank.tilt) * Math.PI / 2, fallTime / landing)
+    const anchorY = hangY + 0.5 * DEBRIS_GRAVITY * fallTime ** 2
+    drawHangingPlank(context, hangX + plank.drift * fallTime, anchorY, plank.width, ceilingY * plank.length, tilt, plank.color)
   }
 }
 
-const drawBreakDust = (context: Context, width: number, ceilingY: number, holeOpen: number, travel: number) => {
-  const puff = holeOpen * (1 - Math.min(1, travel / 170))
-  if (puff <= 0) return
-  const { holeX, holeY, radiusX, radiusY } = holePlacement(width, ceilingY, Math.max(holeOpen, 0.35))
-  paintFill(context, `rgba(243, 215, 162, ${0.55 * puff})`, ellipsePath(holeX, holeY + radiusY * 0.2, radiusX * 0.85, radiusY * 0.55))
+const RIM_CRACKS = [
+  { angle: -0.5, length: 34, branch: 0.5 },
+  { angle: 0.3, length: 26, branch: -0.6 },
+  { angle: 1.3, length: 22, branch: 0.5 },
+  { angle: 2.4, length: 30, branch: -0.5 },
+  { angle: 3.3, length: 38, branch: 0.6 },
+  { angle: 4.1, length: 24, branch: -0.5 },
+  { angle: 5.2, length: 30, branch: 0.5 },
+] as const
+
+const HANGING_PLANKS = [
+  { angle: -1.95, width: 14, length: 0.55, from: 1.6, tilt: 0.3, color: WOOD, drop: 0.7, drift: -60, rest: 0.35 },
+  { angle: -1.2, width: 11, length: 0.42, from: -1.5, tilt: -0.2, color: WOOD_DARK, drop: 1.05, drift: 40, rest: 0.15 },
+  { angle: -0.35, width: 9, length: 0.32, from: 1.3, tilt: -0.65, color: WOOD, drop: 0.85, drift: 70, rest: 0.5 },
+  { angle: 3.55, width: 10, length: 0.36, from: -1.4, tilt: 0.75, color: WOOD_DARK, drop: 1.25, drift: -50, rest: 0.25 },
+] as const
+
+const drawHangingPlank = (context: Context, anchorX: number, anchorY: number, plankWidth: number, plankLength: number, tilt: number, color: string) => {
+  context.save()
+  context.translate(anchorX, anchorY)
+  context.rotate(tilt)
+  context.lineWidth = 2.5
+  paintShape(context, color, (path) => {
+    path.moveTo(-plankWidth / 2, -4)
+    path.lineTo(plankWidth / 2, -4)
+    path.lineTo(plankWidth / 2, plankLength * 0.78)
+    path.lineTo(plankWidth * 0.2, plankLength)
+    path.lineTo(-plankWidth * 0.05, plankLength * 0.84)
+    path.lineTo(-plankWidth * 0.3, plankLength * 0.94)
+    path.lineTo(-plankWidth / 2, plankLength * 0.7)
+    path.closePath()
+  })
+  paintLine(context, "rgba(255, 220, 170, 0.5)", 1.5, linePath(-plankWidth * 0.1, 2, -plankWidth * 0.1, plankLength * 0.65))
+  context.restore()
 }
 
-const drawFlyingBooks = (context: Context, landingX: number, floorY: number, sceneSeconds: number) => {
-  if (sceneSeconds < FALL_END) return
-  const flightTime = sceneSeconds - FALL_END
-  for (const book of FLYING_BOOKS) {
-    const bookWidth = book.width * 1.7
-    const bookHeight = book.height * 1.7
-    const distance = book.speed * 190 * Math.min(flightTime, 0.55)
-    const rise = Math.sin(Math.min(flightTime, 0.7) * 4.2) * 90 * book.speed
-    const drop = flightTime * flightTime * 320
-    const restY = floorY - bookHeight / 2
-    const bookX = landingX + Math.cos(book.angle) * distance
-    const bookY = Math.min(restY, restY - rise + drop)
-    const tilt = bookY >= restY - 1 ? book.angle : flightTime * book.spin
-    drawBook(context, bookX, bookY, bookWidth, bookHeight, book.color, tilt, "plain")
+const debrisRandom = (index: number, salt: number) => {
+  const wave = Math.sin(index * 12.9898 + salt * 78.233) * 43758.5453
+  return wave - Math.floor(wave)
+}
+
+const PLASTER_BITS = [PLASTER, "#e9c88c", "#fff1d2"] as const
+const DEBRIS_COLORS = { splinter: [WOOD, WOOD_DARK, "#b8702f"], chunk: PLASTER_BITS, crumb: PLASTER_BITS } as const
+
+const DEBRIS_SIZES = { splinter: [16, 30], chunk: [6, 13], crumb: [2, 4.5] } as const
+
+const BREAK_DEBRIS = Array.from({ length: 34 }, (_, index) => {
+  const kind = index < 10 ? "splinter" : index < 20 ? "chunk" : "crumb"
+  const [smallest, largest] = DEBRIS_SIZES[kind]
+  return {
+    kind,
+    spawn: debrisRandom(index, 1) - 0.5,
+    direction: mix(-0.1, 1.1, debrisRandom(index, 2)) * Math.PI,
+    speed: mix(140, 380, debrisRandom(index, 3)),
+    spin: mix(-9, 9, debrisRandom(index, 4)),
+    size: mix(smallest, largest, debrisRandom(index, 5)),
+    delay: debrisRandom(index, 6) * 0.22,
+    restDepth: debrisRandom(index, 7),
+    color: DEBRIS_COLORS[kind][index % 3] ?? PLASTER,
+  }
+})
+
+type DebrisPiece = (typeof BREAK_DEBRIS)[number]
+
+const DEBRIS_GRAVITY = 1500
+
+const drawDebrisPiece = (context: Context, piece: DebrisPiece, pieceX: number, pieceY: number, rotation: number) => {
+  const { size } = piece
+  if (piece.kind === "crumb") {
+    paintFill(context, piece.color, ellipsePath(pieceX, pieceY, size, size))
+    return
+  }
+  context.save()
+  context.translate(pieceX, pieceY)
+  context.rotate(rotation)
+  context.lineWidth = 2
+  paintShape(context, piece.color, (path) => {
+    if (piece.kind === "splinter") {
+      path.moveTo(-size / 2, -size * 0.12)
+      path.lineTo(size * 0.3, -size * 0.14)
+      path.lineTo(size / 2, 0)
+      path.lineTo(size * 0.32, size * 0.12)
+      path.lineTo(-size * 0.42, size * 0.14)
+      path.lineTo(-size * 0.36, 0)
+    } else {
+      path.moveTo(-size, -size * 0.5)
+      path.lineTo(size * 0.2, -size)
+      path.lineTo(size, -size * 0.2)
+      path.lineTo(size * 0.6, size * 0.8)
+      path.lineTo(-size * 0.7, size * 0.6)
+    }
+    path.closePath()
+  })
+  context.restore()
+}
+
+const drawBreakDebris = (context: Context, width: number, height: number, ceilingY: number, floorY: number, sinceBreak: number) => {
+  if (sinceBreak <= 0) return
+  const { holeX, holeY, radiusX } = holePlacement(width, ceilingY, 1)
+  for (const piece of BREAK_DEBRIS) {
+    const flight = sinceBreak - piece.delay
+    if (flight <= 0) continue
+    const velocityX = Math.cos(piece.direction) * piece.speed
+    const velocityY = Math.sin(piece.direction) * piece.speed
+    const restY = mix(floorY + 2, height - 8, piece.restDepth * 0.7)
+    const landing = (-velocityY + Math.sqrt(velocityY ** 2 + 2 * DEBRIS_GRAVITY * (restY - holeY))) / DEBRIS_GRAVITY
+    const airTime = Math.min(flight, landing)
+    const spun = piece.spin * airTime
+    const rotation = flight >= landing && piece.kind === "splinter" ? Math.round(spun / Math.PI) * Math.PI : spun
+    const pieceX = holeX + piece.spawn * radiusX * 1.5 + velocityX * airTime
+    const pieceY = holeY + velocityY * airTime + 0.5 * DEBRIS_GRAVITY * airTime ** 2
+    drawDebrisPiece(context, piece, pieceX, pieceY, rotation)
+  }
+}
+
+const BREAK_PUFFS = [
+  { offset: -0.6, drift: 30, size: 1 },
+  { offset: -0.2, drift: 55, size: 1.3 },
+  { offset: 0.25, drift: 45, size: 1.15 },
+  { offset: 0.65, drift: 25, size: 0.9 },
+  { offset: 0, drift: 80, size: 1.5 },
+  { offset: -0.4, drift: 95, size: 0.8 },
+  { offset: 0.45, drift: 100, size: 0.85 },
+] as const
+
+const drawBreakDust = (context: Context, width: number, ceilingY: number, sinceBreak: number) => {
+  const billow = stageProgress(sinceBreak, 0, 1.6)
+  if (billow <= 0 || billow >= 1) return
+  const { holeX, holeY, radiusX, radiusY } = holePlacement(width, ceilingY, 1)
+  const grow = easeOut(billow)
+  for (const puff of BREAK_PUFFS) {
+    const puffRadius = radiusY * puff.size * mix(0.4, 1.3, grow)
+    const puffX = holeX + puff.offset * radiusX * mix(0.6, 1.2, grow)
+    const puffY = holeY + radiusY * 0.6 + puff.drift * grow * 1.6
+    paintFill(context, `rgba(243, 222, 182, ${0.6 * (1 - billow)})`, ellipsePath(puffX, puffY, puffRadius * 1.3, puffRadius))
+  }
+}
+
+const BURST_RAYS = 12
+
+const drawBreakBurst = (context: Context, width: number, ceilingY: number, sinceBreak: number) => {
+  const burst = stageProgress(sinceBreak, 0, 0.35)
+  if (burst <= 0 || burst >= 1) return
+  const { holeX, holeY, radiusX } = holePlacement(width, ceilingY, 1)
+  const glowRadius = radiusX * 1.6
+  const glow = context.createRadialGradient(holeX, holeY, 0, holeX, holeY, glowRadius)
+  glow.addColorStop(0, `rgba(255, 250, 225, ${0.8 * (1 - burst)})`)
+  glow.addColorStop(1, "rgba(255, 250, 225, 0)")
+  paintFill(context, glow, ellipsePath(holeX, holeY, glowRadius, glowRadius))
+  const inner = mix(1.1, 1.6, burst)
+  const outer = mix(1.4, 2.4, easeOut(burst))
+  for (let ray = 0; ray < BURST_RAYS; ray += 1) {
+    const angle = (ray / BURST_RAYS) * Math.PI * 2 + 0.2
+    const rayX = Math.cos(angle) * radiusX
+    const rayY = Math.sin(angle) * radiusX * 0.6
+    paintLine(context, OUTLINE, 3 * (1 - burst) + 0.5, linePath(holeX + rayX * inner, holeY + rayY * inner, holeX + rayX * outer, holeY + rayY * outer))
   }
 }
 
@@ -427,31 +581,40 @@ const drawDust = (context: Context, landingX: number, floorY: number, sceneSecon
 }
 
 const drawCrashRadi = (context: Context, landingX: number, floorY: number, scale: number, time: number, sceneSeconds: number) => {
-  const { fall, feetY, spin, squash, flail } = crashMotion(sceneSeconds, floorY, scale, time)
-  const hasLanded = fall >= 1
-  if (fall > 0.62) paintFill(context, "rgba(80, 42, 20, 0.16)", ellipsePath(landingX, floorY, 22 * scale * (1 + squash * 0.4), 4 * scale))
+  const { fall, feetY, spin, stand, lie } = crashMotion(sceneSeconds, floorY, scale)
+  const grounded = fall >= 1
+  const flail = grounded ? 0 : Math.sin(time * 16)
+  const cleaning = grounded && sceneSeconds >= GET_UP_END ? cleaningPose(sceneSeconds) : null
+  const fallingHands: readonly [Point, Point] = [[-18 - flail * 6, -54], [18 + flail * 6, -48]]
+  const settledHands = mixHands(BACK_HANDS, SIDE_HANDS, stand)
+  if (fall > 0.62) paintFill(context, "rgba(80, 42, 20, 0.16)", ellipsePath(landingX - lie * 34 * scale, floorY, mix(22, 64, lie) * scale, mix(4, 8, lie) * scale))
   context.save()
-  context.translate(landingX, feetY)
+  context.translate(landingX, feetY - 22 * scale * lie)
   context.rotate(spin)
-  context.scale(1 + squash * 0.22, 1 - squash * 0.32)
-  drawRadi(context, CRASH_LOOK, 0, 0, scale, {
-    faceTurn: hasLanded ? Math.sin(time * 1.4) * 0.08 : flail * 0.2,
-    legLifts: hasLanded ? [6, 5] : [7 + flail * 4, 7 - flail * 4],
-    kneeBends: hasLanded ? [11, 10] : [3, 3],
-    hands: hasLanded ? [[-30, -28], [28, -30]] : [[-18 - flail * 6, -54], [18 + flail * 6, -48]],
+  drawRadi(context, stand > 0.82 ? bookwormRadiLook : CRASH_LOOK, 0, 0, scale, {
+    faceTurn: grounded ? 0 : flail * 0.2,
+    legLifts: grounded ? [0, 0] : [7 + flail * 4, 7 - flail * 4],
+    kneeBends: grounded ? [0, 0] : [3, 3],
+    hands: cleaning ? cleaning.hands : mixHands(fallingHands, settledHands, Math.max(lie, grounded ? 1 : 0)),
+    elbowBends: cleaning ? cleaning.elbows : [0, 0],
   })
+  if (cleaning?.brush && cleaning.puff > 0.05) {
+    const [brushX, brushY] = cleaning.brush
+    paintFill(context, `rgba(232, 206, 164, ${0.55 * cleaning.puff})`, ellipsePath(brushX * scale, brushY * scale, 4.2 * scale, 2.4 * scale))
+    paintFill(context, `rgba(255, 248, 230, ${0.4 * cleaning.puff})`, ellipsePath((brushX + 8) * scale, (brushY + 6) * scale, 2.6 * scale, 1.6 * scale))
+  }
   context.restore()
 }
 
 export const drawLibraryScene = (context: Context, width: number, height: number, time: number, sceneSeconds: number) => {
   const { scale, floorY, ceilingY, landingX } = libraryLayout(width, height)
   const sinceImpact = sceneSeconds - FALL_END
-  const { lowestY } = crashMotion(sceneSeconds, floorY, scale, time)
+  const { lowestY } = crashMotion(sceneSeconds, floorY, scale)
   const breaking = ceilingBreak(lowestY, ceilingY)
+  const sinceBreak = sceneSeconds - breakStartSeconds(floorY, scale, ceilingY)
   const breakShake = breaking.travel > 0 && breaking.travel < 130 ? (1 - breaking.travel / 130) * 8 : 0
   const shake = Math.max(sinceImpact >= 0 ? (1 - stageProgress(sinceImpact, 0, SHAKE_SECONDS)) * SHAKE_STRENGTH : 0, breakShake)
   const flash = sinceImpact >= 0 ? 0.55 * (1 - stageProgress(sinceImpact, 0, FLASH_SECONDS)) : 0
-  const globeRoll = easeOut(stageProgress(sceneSeconds, FALL_END, SETTLE_END)) * 28
   context.lineJoin = "round"
   context.lineCap = "round"
   context.lineWidth = 3
@@ -460,14 +623,14 @@ export const drawLibraryScene = (context: Context, width: number, height: number
   context.translate(Math.sin(time * 80) * shake, Math.cos(time * 66) * shake * 0.6)
   drawRoom(context, width, height, floorY, ceilingY)
   drawNightHole(context, width, ceilingY, breaking.holeOpen, time)
-  drawBreakDust(context, width, ceilingY, breaking.holeOpen, breaking.travel)
-  drawGlobe(context, width * 0.42, floorY, -globeRoll)
   drawCrashRadi(context, landingX, floorY, scale, time, sceneSeconds)
-  drawFlyingBooks(context, landingX, floorY, sceneSeconds)
   drawCeilingBoards(context, width, ceilingY, breaking.holeOpen)
   drawCeilingCracks(context, width, ceilingY, breaking.holeOpen < 0.55 ? breaking.cracks : 0)
   drawHoleRim(context, width, ceilingY, breaking.holeOpen)
-  drawBreakShards(context, width, ceilingY, floorY, breaking.travel)
+  drawHangingPlanks(context, width, height, ceilingY, floorY, breaking.holeOpen, sinceBreak)
+  drawBreakBurst(context, width, ceilingY, sinceBreak)
+  drawBreakDust(context, width, ceilingY, sinceBreak)
+  drawBreakDebris(context, width, height, ceilingY, floorY, sinceBreak)
   drawBookcase(context, 12, ceilingY - 6, width * 0.2, floorY + 8)
   drawBookcase(context, width * 0.8, ceilingY - 6, width - 12, floorY + 8)
   drawLadder(context, width * 0.75, floorY, height * 0.36)

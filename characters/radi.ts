@@ -46,7 +46,7 @@ export type RadiExpression = "grin" | "tongue" | "puff" | "surprised" | "angry"
 type RadiPose = "wave" | "peace" | "hold"
 export type RadiShoes = "sneakers" | "highTops" | "tsarvuli" | "partyHeels" | "folkFlats"
 type DrawShoe = (context: Context, side: number, isPolished: boolean) => void
-type RadiTop = { color: string; pattern?: RadiPattern }
+type RadiTop = { color: string; pattern?: RadiPattern; label?: string }
 export type RadiBottom = { kind: "skirt" | "shorts"; color: string; pattern?: RadiPattern }
 type CurveLine = readonly [number, number, number, number, number, number]
 export type Point = readonly [number, number]
@@ -468,20 +468,32 @@ const drawBottom = (context: Context, bottom: RadiBottom, isPolished: boolean) =
   }, { ...shadeIf(isPolished), decorateInside: decorationFor(bottom.pattern) })
 }
 
+const drawShirtLabel = (context: Context, label: string, halfWidth: number) => {
+  if (halfWidth < 9) return
+  const maxWidth = halfWidth * 1.35
+  context.font = `bold ${halfWidth * 0.62}px "Comic Sans MS", "Comic Sans", cursive`
+  const measured = context.measureText(label).width
+  const fontSize = halfWidth * 0.62 * (measured > maxWidth ? maxWidth / measured : 1)
+  context.fillStyle = WHITE
+  context.textAlign = "center"
+  context.textBaseline = "middle"
+  context.font = `bold ${fontSize}px "Comic Sans MS", "Comic Sans", cursive`
+  context.fillText(label, 0, -38.5)
+}
+
 export const drawTorso = (context: Context, top: RadiTop, isPolished: boolean, halfWidth = 9) => {
   const pattern = decorationFor(top.pattern)
   paintShape(context, top.color, (path) => path.roundRect(-halfWidth, -49, halfWidth * 2, 19, 5), {
     ...shadeIf(isPolished),
-    decorateInside: isPolished
-      ? (torsoContext) => {
-          if (pattern) {
-            torsoContext.save()
-            pattern(torsoContext)
-            torsoContext.restore()
-          }
-          paintFill(torsoContext, SHADE, ellipsePath(0, -47.5, 8, 3))
-        }
-      : pattern,
+    decorateInside: (torsoContext) => {
+      if (pattern) {
+        torsoContext.save()
+        pattern(torsoContext)
+        torsoContext.restore()
+      }
+      if (isPolished) paintFill(torsoContext, SHADE, ellipsePath(0, -47.5, 8, 3))
+      if (top.label) drawShirtLabel(torsoContext, top.label, halfWidth)
+    },
   })
 }
 
