@@ -43,6 +43,12 @@ const SHAKE_STRENGTH = 12
 const FLASH_SECONDS = 0.35
 const IRIS_OUT_START = 18.5
 const IRIS_OUT_END = 19.8
+
+export const CLUB_SCENE_END = IRIS_OUT_END
+
+export const playedClubSeconds = (sceneSeconds: number, letsDanceSeconds: number | null) =>
+  letsDanceSeconds === null ? Math.min(sceneSeconds, FUN_BUBBLE_HOLD) : FUN_BUBBLE_HOLD + letsDanceSeconds
+
 const GROOVE_RATE = Math.PI * 2
 const MOVE_SECONDS = 2
 const MOVE_BLEND = 0.2
@@ -430,7 +436,7 @@ const drawRadiBubble = (context: Context, width: number, radiX: number, feetY: n
 }
 
 export const drawClubScene = (context: Context, width: number, height: number, time: number, sceneSeconds: number, letsDanceSeconds: number | null) => {
-  const clubSeconds = letsDanceSeconds === null ? Math.min(sceneSeconds, FUN_BUBBLE_HOLD) : FUN_BUBBLE_HOLD + letsDanceSeconds
+  const clubSeconds = playedClubSeconds(sceneSeconds, letsDanceSeconds)
   const { scale, radiX, feetY } = clubRadiPosition(width, height)
   const sinceLaunch = clubSeconds - LAUNCH_START
   const shake = sinceLaunch >= 0 ? (1 - stageProgress(sinceLaunch, 0, SHAKE_SECONDS)) * SHAKE_STRENGTH : 0
@@ -453,7 +459,7 @@ export const drawClubScene = (context: Context, width: number, height: number, t
   drawLightBeams(context, width, height, time, ballX, ballY)
   drawCrowd(context, width, height, time, scale, true, amazement)
   drawRadiBubble(context, width, radiX, feetY, scale, bubblePopScale(clubSeconds, FUN_BUBBLE_START, FUN_BUBBLE_END), ["And I like to have fun", "and dance!"], FUN_BUBBLE_TEXT_OFFSET)
-  drawRadiBubble(context, width, radiX, feetY, scale, bubblePopScale(clubSeconds, ONLY_DANCE_BUBBLE_START, ONLY_DANCE_BUBBLE_END), ["But this is not the only", "type of dancing I like!"])
+  drawRadiBubble(context, width, radiX, feetY, scale, bubblePopScale(clubSeconds, ONLY_DANCE_BUBBLE_START, ONLY_DANCE_BUBBLE_END), ["But it's not all", "fun and games..."])
   context.restore()
   if (flash > 0) paintFill(context, `rgba(255, 255, 255, ${flash})`, (path) => path.rect(0, 0, width, height))
   const fullRadius = Math.hypot(width, height)

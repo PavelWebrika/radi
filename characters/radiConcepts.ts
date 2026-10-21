@@ -94,6 +94,19 @@ const radiConcepts: RadiConcept[] = [
   polishConcept(gaidaConcept, { hair: "tucked", extras: ["pendant", "gaida", "kalpak"], shoes: "tsarvuli" }),
   polishedNightClubConcept,
   polishConcept({
+    name: "Bookworm Radi",
+    background: "#7ec8c3",
+    look: {
+      hair: "bob",
+      expression: "grin",
+      pose: "wave",
+      top: { color: "#ff6d8f" },
+      bottom: { kind: "shorts", color: "#1b2438", pattern: "tropical" },
+      extras: ["readingGlasses"],
+      shoes: "sneakers",
+    },
+  }),
+  polishConcept({
     name: "Folk Dance Radi",
     background: "#7cc8ff",
     look: {

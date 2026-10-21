@@ -109,7 +109,18 @@ const sideLooseHairPath = (bend: BendPoint): BuildPath => (path) => {
   path.closePath()
 }
 
+const sideBobHairPath: BuildPath = (path) => {
+  path.moveTo(21, -78)
+  path.bezierCurveTo(20, -101, -20, -103, -25, -78)
+  path.quadraticCurveTo(-28, -62, -22, -50)
+  path.quadraticCurveTo(-10, -47, 3, -50)
+  path.quadraticCurveTo(-2, -62, 4, -73)
+  path.quadraticCurveTo(12, -76, 21, -78)
+  path.closePath()
+}
+
 const drawSideHairBack = (context: Context, hair: RadiHair, isPolished: boolean) => {
+  if (hair === "bob") return
   if (hair === "bun") {
     paintShape(context, HAIR, ellipsePath(-10, -96, 7.5, 6.5), shadeIf(isPolished))
     return
@@ -158,7 +169,13 @@ const drawSideHairBack = (context: Context, hair: RadiHair, isPolished: boolean)
 
 const drawSideHairFront = (context: Context, hair: RadiHair, isPolished: boolean, bend: BendPoint) => {
   const isLoose = hair === "loose"
-  paintShape(context, HAIR, isLoose ? sideLooseHairPath(bend) : sideHairCapPath, shadeIf(isPolished))
+  const isBob = hair === "bob"
+  paintShape(context, HAIR, isLoose ? sideLooseHairPath(bend) : isBob ? sideBobHairPath : sideHairCapPath, shadeIf(isPolished))
+  if (isBob) {
+    paintLine(context, HAIR_HIGHLIGHT, 1.4, curvesPath([[10, -86, 6, -92, -2, -94], [-8, -88, -14, -90, -19, -84], [-20, -74, -23, -64, -20, -56]]))
+    if (isPolished) paintLine(context, HAIR_STRAND, 0.6, curvesPath([[4, -78, 10, -80, 18, -80], [-12, -80, -20, -84, -22, -72], [-10, -74, -14, -62, -12, -52]]))
+    return
+  }
   paintLine(context, HAIR_HIGHLIGHT, 1.4, curvesPath([[10, -86, 6, -92, -2, -94], [-8, -88, -14, -90, -19, -84]]))
   if (isLoose) paintLine(context, HAIR_HIGHLIGHT, 1.2, curvesPath(bendCurves([[-21, -74, -26, -60, -23, -46]], bend)))
   if (isPolished) paintLine(context, HAIR_STRAND, 0.6, curvesPath([[16, -80, 12, -90, 2, -95], [-12, -80, -20, -84, -22, -72]]))
@@ -403,6 +420,12 @@ const drawSideHeadwear = (context: Context, look: RadiLook, isPolished: boolean)
   }
 }
 
+const drawSideReadingGlasses = (context: Context) => {
+  paintLine(context, OUTLINE, 1.35, (path) => path.roundRect(10, -70.2, 8.8, 12.2, 3.6))
+  paintLine(context, "rgba(255, 255, 255, 0.9)", 0.8, linePath(11.2, -68.4, 14.4, -67.5))
+  paintLine(context, OUTLINE, 1.15, linePath(10, -66.6, -1.5, -65.2))
+}
+
 const drawSideSunglasses = (context: Context) => {
   paintLine(context, OUTLINE, 1.2, linePath(9, -67.5, -2, -66))
   paintShape(context, "#2b8cff", (path) => {
@@ -445,6 +468,7 @@ export const drawRadiSide = (context: Context, look: RadiLook, feetX: number, fe
   drawSideHairFront(context, look.hair, isPolished, hairWind && hairWind.strength > 0 ? windBentHair(hairWind) : straightHair)
   drawSideHeadwear(context, look, isPolished)
   if (look.extras.includes("sunglasses")) drawSideSunglasses(context)
+  if (look.extras.includes("readingGlasses")) drawSideReadingGlasses(context)
   drawSideArm(context, look, isPolished, hand)
 
   context.restore()

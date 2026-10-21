@@ -3,8 +3,9 @@
 import { useEffect, useRef } from "react"
 import { drawRadiConcepts } from "@/characters/radiConcepts"
 import { anywayButtonLayout, CITY_SCENE_END, drawCityScene, DRIVE_CRUISE_SECONDS, DRIVE_MAX_BOOST, DRIVE_READY_SECONDS, KIRA_POP_PROGRESS } from "@/scenes/cityScene"
-import { drawClubScene, letsDanceButtonLayout } from "@/scenes/clubScene"
+import { CLUB_SCENE_END, drawClubScene, letsDanceButtonLayout, playedClubSeconds } from "@/scenes/clubScene"
 import { FILM_SCENES } from "@/scenes/filmScenes"
+import { drawLibraryScene } from "@/scenes/libraryScene"
 import { drawOpeningScene, greetingButtonLayout, KIRA_SCENE_END, type BubbleButtonLayout } from "@/scenes/openingScene"
 import { useFilmStore } from "@/store/film"
 
@@ -58,6 +59,7 @@ export const FilmCanvas = () => {
     let kiraStartMilliseconds: number | null = null
     let clubStartMilliseconds: number | null = null
     let letsDanceStartMilliseconds: number | null = null
+    let libraryStartMilliseconds: number | null = null
     let lastTouchY: number | null = null
     const drawFrame = (timeMilliseconds: number) => {
       const elapsedSeconds = previousTimeMilliseconds === null ? 0 : (timeMilliseconds - previousTimeMilliseconds) / 1000
@@ -68,6 +70,7 @@ export const FilmCanvas = () => {
       if (!greetingLayout) {
         meetingStartMilliseconds = null
         clubStartMilliseconds = null
+        libraryStartMilliseconds = null
       }
       const meetingSeconds = meetingStartMilliseconds === null ? null : Math.max(0, timeMilliseconds - meetingStartMilliseconds) / 1000
       const citySeconds = meetingSeconds !== null && meetingSeconds >= KIRA_SCENE_END ? meetingSeconds - KIRA_SCENE_END : null
@@ -96,10 +99,15 @@ export const FilmCanvas = () => {
       const clubSeconds = secondsSince(clubStartMilliseconds)
       if (clubSeconds === null) letsDanceStartMilliseconds = null
       const letsDanceSeconds = secondsSince(letsDanceStartMilliseconds)
+      const playedClub = clubSeconds === null ? null : playedClubSeconds(clubSeconds, letsDanceSeconds)
+      if (playedClub !== null && playedClub >= CLUB_SCENE_END) libraryStartMilliseconds ??= timeMilliseconds
+      const librarySeconds = secondsSince(libraryStartMilliseconds)
       if (isShowingConcepts) {
         context.fillStyle = "#000000"
         context.fillRect(0, 0, window.innerWidth, window.innerHeight)
         drawRadiConcepts(context, window.innerWidth, window.innerHeight)
+      } else if (librarySeconds !== null) {
+        drawLibraryScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, librarySeconds)
       } else if (clubSeconds !== null) {
         drawClubScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, clubSeconds, letsDanceSeconds)
       } else if (citySeconds !== null) {
@@ -108,7 +116,7 @@ export const FilmCanvas = () => {
         drawOpeningScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, shownProgress, meetingSeconds)
       }
       const moreLayout = isShowingConcepts || meetingSeconds !== null ? null : greetingLayout
-      const anywayLayout = isShowingConcepts || citySeconds === null || clubSeconds !== null ? null : anywayButtonLayout(window.innerWidth, window.innerHeight, citySeconds, anywaySeconds)
+      const anywayLayout = isShowingConcepts || citySeconds === null || clubSeconds !== null || librarySeconds !== null ? null : anywayButtonLayout(window.innerWidth, window.innerHeight, citySeconds, anywaySeconds)
       if (moreButtonRef.current) placeBubbleButton(moreButtonRef.current, moreLayout)
       if (anywayButtonRef.current) placeBubbleButton(anywayButtonRef.current, anywayLayout)
       const letsDanceLayout = isShowingConcepts || clubSeconds === null ? null : letsDanceButtonLayout(window.innerWidth, window.innerHeight, clubSeconds, letsDanceSeconds)
@@ -151,6 +159,7 @@ export const FilmCanvas = () => {
       meetingStartMilliseconds = startSeconds === null ? null : performance.now() - startSeconds * 1000
       anywayStartMilliseconds = null
       clubStartMilliseconds = sceneSelection.sceneId === "nightClub" ? performance.now() : null
+      libraryStartMilliseconds = sceneSelection.sceneId === "library" ? performance.now() : null
       letsDanceStartMilliseconds = null
     })
     const updateProgress = () => {
