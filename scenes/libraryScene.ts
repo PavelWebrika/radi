@@ -1,8 +1,10 @@
 import { drawKiraFront } from "@/characters/kira"
 import { ellipsePath, linePath, paintFill, paintLine, paintShape, type Context } from "@/characters/paint"
-import { drawRadi, type Point, type RadiLook } from "@/characters/radi"
+import { drawRadiBack } from "@/characters/radiBack"
+import { drawRadi, OUTLINE_WIDTH, paintTube, SKIN, WHITE, type Point, type RadiLook } from "@/characters/radi"
 import { bookwormRadiLook } from "@/characters/radiConcepts"
-import { easeOut, mix, mixPoint, paintIris, radiScale, stageProgress } from "@/scenes/openingScene"
+import { drawRadiSide } from "@/characters/radiSide"
+import { easeOut, easeOutBack, mix, mixPoint, paintComicBubble, paintIris, radiScale, stageProgress } from "@/scenes/openingScene"
 
 const OUTLINE = "#2b1d1a"
 const WALL = "#f6e2bc"
@@ -24,6 +26,35 @@ const BRASS = "#d9a441"
 const PAINTING_GOLD = "#e2a83a"
 const LADDER_RUNGS = 7
 const KIRA_PEEK_UNITS = 33
+const SAY_START = 6.9
+const SAY_END = 10.2
+const BUBBLE_POP_SECONDS = 0.4
+const BUBBLE_HIDE_SECONDS = 0.3
+const SPEECH_LINES = ["I work hard and", "learn a lot too!"] as const
+const WALK_TO_LADDER_START = 10.4
+const WALK_TO_LADDER_END = 12.2
+const CLIMB_UP_END = 14.8
+const REACH_END = 15.4
+const PULL_END = 16
+const CLIMB_DOWN_START = 16.2
+const CLIMB_DOWN_END = 18.2
+const WALK_BACK_START = 18.7
+const TURN_SECONDS = 0.4
+const WALK_BACK_END = 20.4
+const SIT_END = 22
+const OPEN_START = 22.3
+const OPEN_END = 23.1
+const PAGE_TURN_SECONDS = 3
+const PAGE_TURN_FLIP_SECONDS = 0.55
+const SKIP_HOPS = 6
+const TOP_RUNG = 2
+const READING_BOOK = "#7b5cff"
+const PAGE = "#fffaf0"
+const CHEST_HAND: Point = [6, -32]
+const REACH_HAND: Point = [22, -60]
+const RAIL_HANDS: readonly [Point, Point] = [[-16, -43], [16, -42]]
+const HOLD_HANDS: readonly [Point, Point] = [[-8, -30], [8, -28]]
+const READ_HANDS: readonly [Point, Point] = [[-12, -24], [12, -24]]
 const CEILING_VANISH = 3
 const CEILING_BEAMS = [1.12, 1.3] as const
 
@@ -233,6 +264,14 @@ const drawSign = (context: Context, centerX: number, centerY: number, width: num
   context.fillText("Library", centerX, centerY + signHeight * 0.04)
 }
 
+type LadderPlacement = { left: number; top: number; footY: number }
+
+const ladderPlacement = (width: number, height: number, floorY: number): LadderPlacement => ({ left: width * 0.75, top: height * 0.36, footY: floorY - 8 })
+
+const ladderRungY = (top: number, footY: number, rung: number) => mix(top + 14, footY - 16, rung / (LADDER_RUNGS - 1))
+
+const ladderCenterX = ({ left, top, footY }: LadderPlacement, y: number) => mix(left + 15, left + 3, (y - top) / (footY - top))
+
 const drawLadder = (context: Context, left: number, floorY: number, top: number, sinceImpact: number) => {
   const railY = top - 8
   const footY = floorY - 8
@@ -248,7 +287,7 @@ const drawLadder = (context: Context, left: number, floorY: number, top: number,
   context.translate(-(left + 15), -railY)
   context.lineWidth = 2.5
   for (let rung = 0; rung < LADDER_RUNGS; rung += 1) {
-    const rungY = mix(top + 14, footY - 16, rung / (LADDER_RUNGS - 1))
+    const rungY = ladderRungY(top, footY, rung)
     const rungLeft = railXAt(0, rungY)
     const rungRight = railXAt(1, rungY)
     paintShape(context, WOOD, (path) => path.roundRect(rungLeft, rungY - 3, rungRight - rungLeft, 6, 2))
@@ -792,6 +831,235 @@ const drawCrashRadi = (context: Context, landingX: number, floorY: number, scale
   context.restore()
 }
 
+const drawSpeechBubble = (context: Context, width: number, radiX: number, floorY: number, scale: number, popScale: number) => {
+  if (popScale <= 0) return
+  const bubbleWidth = Math.min(width * 0.4, 360)
+  const bubbleHeight = bubbleWidth * 0.5
+  const centerX = Math.min(width - bubbleWidth / 2 - 12, radiX + bubbleWidth * 0.45)
+  const centerY = Math.max(bubbleHeight / 2 + 12, floorY - 125 * scale - bubbleHeight * 0.4)
+  const headX = radiX + 12 * scale - centerX
+  const headY = floorY - 90 * scale - centerY
+  context.save()
+  context.translate(centerX, centerY)
+  context.scale(popScale, popScale)
+  paintComicBubble(context, [
+    ellipsePath(0, 0, bubbleWidth / 2, bubbleHeight / 2),
+    (path) => {
+      path.moveTo(-bubbleWidth * 0.3, bubbleHeight * 0.25)
+      path.lineTo(headX, headY)
+      path.lineTo(-bubbleWidth * 0.14, bubbleHeight * 0.38)
+      path.closePath()
+    },
+  ], Math.max(3, bubbleWidth * 0.012), SPEECH_LINES, 0, 0, bubbleWidth * 0.08)
+  context.restore()
+}
+
+const drawHeldBook = (context: Context, centerX: number, centerY: number, scale: number, tilt: number) =>
+  drawBook(context, centerX, centerY, 10 * scale, 14 * scale, READING_BOOK, tilt, "gold")
+
+const skipBounce = (phase: number) => {
+  const arc = Math.sin(phase * Math.PI)
+  const contact = Math.max(0, 1 - arc * 3)
+  return {
+    lift: 4 * phase * (1 - phase),
+    stretchY: 1 + 0.12 * Math.abs(Math.cos(phase * Math.PI)) * (1 - contact) - 0.2 * contact,
+  }
+}
+
+const drawSkippingRadi = (context: Context, fromX: number, toX: number, floorY: number, scale: number, sceneSeconds: number, start: number, end: number, isCarrying: boolean) => {
+  const stride = easeOut(stageProgress(sceneSeconds, start, end))
+  const radiX = mix(fromX, toX, stride)
+  const hopsDone = stride * SKIP_HOPS
+  const hopPhase = hopsDone - Math.floor(hopsDone)
+  const leadSide = Math.floor(hopsDone) % 2 === 0 ? 1 : -1
+  const moving = stride > 0 && stride < 1
+  const bounce = moving ? skipBounce(hopPhase) : { lift: 0, stretchY: 1 }
+  const settle = Math.min(1, stride * 6, (1 - stride) * 6)
+  const lift = bounce.lift * 18
+  const stretchY = 1 + (bounce.stretchY - 1) * settle
+  const knee = moving ? Math.sin(hopPhase * Math.PI) * 9 : 0
+  const armPump = moving ? Math.sin(hopPhase * Math.PI) * leadSide : 0
+  const lean = moving ? (0.12 + Math.sin(hopPhase * Math.PI * 2) * 0.05) * settle * Math.sign(toX - fromX) : 0
+  const skipHands: readonly [Point, Point] = isCarrying
+    ? HOLD_HANDS
+    : [[-14 - Math.abs(armPump) * 3, -33 - armPump * 10], [14 + Math.abs(armPump) * 3, -33 + armPump * 10]]
+  paintFill(context, "rgba(80, 42, 20, 0.16)", ellipsePath(radiX, floorY, 22 * scale * (1 - lift / 60), 3 * scale))
+  context.save()
+  context.translate(radiX, floorY - lift * scale)
+  context.rotate(lean)
+  context.scale(1 / stretchY, stretchY)
+  drawRadi(context, bookwormRadiLook, 0, 0, scale, {
+    faceTurn: Math.sign(toX - fromX) * 0.35 * settle,
+    legLifts: leadSide === 1 ? [knee, knee * 0.2] : [knee * 0.2, knee],
+    kneeBends: leadSide === 1 ? [knee * 0.5, knee * 0.1] : [knee * 0.1, knee * 0.5],
+    hands: skipHands,
+    elbowBends: naturalElbows(skipHands),
+  })
+  if (isCarrying) drawHeldBook(context, 2 * scale, -31 * scale, scale, 0.08)
+  context.restore()
+}
+
+const climbPose = (progress: number, levels: readonly number[]) => {
+  const steps = levels.length - 1
+  const stepIndex = Math.min(steps - 1, Math.floor(progress * steps))
+  const stepT = progress * steps - stepIndex
+  const lift = Math.sin(stepT * Math.PI)
+  const leadsLeft = stepIndex % 2 === 0
+  return {
+    feetY: mix(levels[stepIndex] ?? 0, levels[stepIndex + 1] ?? 0, easeInOut(stepT)),
+    legLifts: (leadsLeft ? [lift * 9, lift * 1.5] : [lift * 1.5, lift * 9]) as const,
+    hands: [
+      [RAIL_HANDS[0][0], RAIL_HANDS[0][1] - (leadsLeft ? lift * 6 : lift * 1.5)],
+      [RAIL_HANDS[1][0], RAIL_HANDS[1][1] - (leadsLeft ? lift * 1.5 : lift * 6)],
+    ] as const,
+  }
+}
+
+const drawClimbingRadi = (context: Context, ladder: LadderPlacement, floorY: number, scale: number, sceneSeconds: number) => {
+  const isGoingDown = sceneSeconds >= CLIMB_DOWN_START
+  const progress = isGoingDown ? 1 - stageProgress(sceneSeconds, CLIMB_DOWN_START, CLIMB_DOWN_END) : stageProgress(sceneSeconds, WALK_TO_LADDER_END, CLIMB_UP_END)
+  const levels = [floorY, ...Array.from({ length: LADDER_RUNGS - TOP_RUNG }, (_, step) => ladderRungY(ladder.top, ladder.footY, LADDER_RUNGS - 1 - step) - 2)]
+  const { feetY, legLifts, hands: climbHands } = climbPose(progress, levels)
+  const radiX = ladderCenterX(ladder, feetY)
+  const reach = easeOut(stageProgress(sceneSeconds, CLIMB_UP_END, REACH_END))
+  const pull = easeInOut(stageProgress(sceneSeconds, REACH_END, PULL_END))
+  const rightHand = isGoingDown ? CHEST_HAND : mixPoint(mixPoint(climbHands[1], REACH_HAND, reach), CHEST_HAND, pull)
+  const leftHand = isGoingDown ? RAIL_HANDS[0] : climbHands[0]
+  const hands: readonly [Point, Point] = [leftHand, rightHand]
+  const turningAway = easeInOut(stageProgress(sceneSeconds, WALK_TO_LADDER_END, WALK_TO_LADDER_END + TURN_SECONDS))
+  const turningBack = 1 - easeInOut(stageProgress(sceneSeconds, CLIMB_DOWN_END, WALK_BACK_START))
+  const turn = Math.min(turningAway, turningBack)
+  const faceRight = sceneSeconds < CLIMB_DOWN_START
+  const motion = {
+    legLifts,
+    kneeBends: [legLifts[0] * 0.55, legLifts[1] * 0.55] as const,
+    hands,
+    elbowBends: naturalElbows(hands),
+  }
+  context.save()
+  context.translate(radiX, feetY)
+  if (turn < 0.34) {
+    drawRadi(context, bookwormRadiLook, 0, 0, scale, motion)
+  } else if (turn < 0.66) {
+    context.scale(faceRight ? 1 : -1, 1)
+    drawRadiSide(context, bookwormRadiLook, 0, 0, scale, isGoingDown ? CHEST_HAND : [8, -48])
+  } else {
+    drawRadiBack(context, bookwormRadiLook, 0, 0, scale, motion)
+  }
+  if (sceneSeconds >= REACH_END && (turn < 0.34 || turn >= 0.66)) {
+    drawHeldBook(context, (rightHand[0] + 2) * scale, rightHand[1] * scale, scale, 0.15)
+  }
+  context.restore()
+}
+
+const drawSeatedLegs = (context: Context, radiX: number, seatY: number, scale: number, fold: number) => {
+  context.save()
+  context.translate(radiX, seatY)
+  context.scale(scale, scale)
+  context.lineWidth = OUTLINE_WIDTH
+  const reach = easeOut(fold)
+  for (const side of [-1, 1] as const) {
+    const hipX = side * 4
+    const hipY = -21
+    const kneeX = side * mix(5, 10, reach)
+    const kneeY = mix(-16, -15, reach)
+    const ankleX = mix(side * 5, -side * 3, reach)
+    const ankleY = mix(-12, -11, reach)
+    paintTube(context, SKIN, 5, linePath(hipX, hipY, kneeX, kneeY), true)
+    paintShape(context, SKIN, ellipsePath(kneeX, kneeY, 3.2, 3.2), { shade: "rgba(90, 40, 30, 0.22)" })
+    paintTube(context, SKIN, 4.6, linePath(kneeX, kneeY, ankleX, ankleY), true)
+    paintShape(context, WHITE, ellipsePath(ankleX, ankleY + 1.2, 3.8, 2.4), { shade: "rgba(90, 40, 30, 0.22)" })
+    paintLine(context, OUTLINE, 0.6, linePath(ankleX - 1.1, ankleY, ankleX + 1.1, ankleY + 1))
+  }
+  context.restore()
+}
+
+const drawPage = (context: Context, side: number, pageWidth: number, pageHeight: number, lift: number) => {
+  paintShape(context, PAGE, (path) => {
+    path.moveTo(0, -pageHeight * 0.42)
+    path.lineTo(side * pageWidth * 0.72, -pageHeight * 0.5 - lift)
+    path.lineTo(side * pageWidth, pageHeight * 0.58 + lift * 0.2)
+    path.lineTo(0, pageHeight * 0.48)
+    path.closePath()
+  })
+  for (let line = 0; line < 4; line += 1) {
+    const lineY = -pageHeight * 0.22 + line * pageHeight * 0.16
+    paintLine(context, "rgba(43, 29, 26, 0.35)", 1, linePath(side * pageWidth * 0.16, lineY, side * pageWidth * 0.78, lineY + line * 0.4))
+  }
+}
+
+const drawReadingBook = (context: Context, centerX: number, centerY: number, scale: number, open: number, pageTurn: number) => {
+  const pageWidth = 16 * scale
+  const pageHeight = 11 * scale
+  context.save()
+  context.translate(centerX, centerY)
+  if (open < 0.45) {
+    context.rotate(mix(-0.15, 0.4, open / 0.45))
+    drawHeldBook(context, 0, 0, scale, 0)
+  } else {
+    const spread = easeOut((open - 0.45) / 0.55)
+    context.scale(1, mix(0.55, 1, spread))
+    context.lineWidth = 2
+    paintShape(context, READING_BOOK, (path) => {
+      path.moveTo(-pageWidth * 0.78 * spread, -pageHeight * 0.56)
+      path.lineTo(pageWidth * 0.78 * spread, -pageHeight * 0.56)
+      path.lineTo(pageWidth * 1.04 * spread, pageHeight * 0.64)
+      path.lineTo(-pageWidth * 1.04 * spread, pageHeight * 0.64)
+      path.closePath()
+    })
+    drawPage(context, -1, pageWidth * spread, pageHeight, 0)
+    drawPage(context, 1, pageWidth * spread, pageHeight, 0)
+    paintFill(context, "#e8d8b0", (path) => path.rect(-1.2, -pageHeight * 0.42, 2.4, pageHeight * 0.9))
+    if (pageTurn > 0 && pageTurn < 1) {
+      const flip = Math.cos(pageTurn * Math.PI)
+      drawPage(context, flip >= 0 ? 1 : -1, pageWidth * spread * Math.abs(flip), pageHeight, Math.sin(pageTurn * Math.PI) * pageHeight * 0.35)
+    }
+  }
+  context.restore()
+}
+
+const drawReadingRadi = (context: Context, radiX: number, floorY: number, scale: number, sceneSeconds: number) => {
+  const sit = stageProgress(sceneSeconds, WALK_BACK_END, SIT_END)
+  const crouch = easeOut(stageProgress(sit, 0, 0.38))
+  const fold = easeInOut(stageProgress(sit, 0.28, 0.88))
+  const settle = easeOut(stageProgress(sit, 0.7, 1))
+  const open = stageProgress(sceneSeconds, OPEN_START, OPEN_END)
+  const readingSeconds = sceneSeconds - OPEN_END - 0.8
+  const pageTurn = readingSeconds > 0 ? (readingSeconds % PAGE_TURN_SECONDS) / PAGE_TURN_FLIP_SECONDS : 0
+  const seated = fold > 0.4
+  const hands: readonly [Point, Point] = seated
+    ? mixHands(HOLD_HANDS, READ_HANDS, settle)
+    : mixHands(HOLD_HANDS, [[-10, -24], [10, -22]], crouch)
+  const drop = (4 * crouch + 7 * fold) * scale
+  const lean = mix(0.1, 0.02, settle) * (seated ? 1 : crouch)
+  const [bookX, bookY] = mixPoint([2, -31], [0, -18], seated ? settle : crouch * 0.3)
+  paintFill(context, "rgba(80, 42, 20, 0.16)", ellipsePath(radiX, floorY, mix(22, 36, fold) * scale, mix(4, 7, fold) * scale))
+  context.save()
+  context.translate(radiX, floorY + drop)
+  context.rotate(lean)
+  drawRadi(context, bookwormRadiLook, 0, 0, scale, {
+    hideLegs: seated,
+    faceTurn: open >= 1 ? Math.sin(sceneSeconds * 0.9) * 0.12 : 0,
+    legLifts: seated ? [0, 0] : [crouch * 4, crouch * 4],
+    kneeBends: seated ? [0, 0] : [crouch * 8, crouch * 8],
+    hands,
+    elbowBends: naturalElbows(hands),
+  })
+  if (fold > 0.32) drawSeatedLegs(context, 0, 0, scale, fold)
+  drawReadingBook(context, bookX * scale, bookY * scale, scale, open, pageTurn)
+  context.restore()
+}
+
+const drawLibraryRadi = (context: Context, width: number, height: number, floorY: number, landingX: number, scale: number, time: number, sceneSeconds: number) => {
+  const ladder = ladderPlacement(width, height, floorY)
+  const ladderX = ladderCenterX(ladder, floorY)
+  if (sceneSeconds < WALK_TO_LADDER_START) drawCrashRadi(context, landingX, floorY, scale, time, sceneSeconds)
+  else if (sceneSeconds < WALK_TO_LADDER_END) drawSkippingRadi(context, landingX, ladderX, floorY, scale, sceneSeconds, WALK_TO_LADDER_START, WALK_TO_LADDER_END, false)
+  else if (sceneSeconds < WALK_BACK_START) drawClimbingRadi(context, ladder, floorY, scale, sceneSeconds)
+  else if (sceneSeconds < WALK_BACK_END) drawSkippingRadi(context, ladderX, landingX, floorY, scale, sceneSeconds, WALK_BACK_START, WALK_BACK_END, true)
+  else drawReadingRadi(context, landingX, floorY, scale, sceneSeconds)
+}
+
 export const drawLibraryScene = (context: Context, width: number, height: number, time: number, sceneSeconds: number) => {
   const { scale, floorY, ceilingY, landingX } = libraryLayout(width, height)
   const sinceImpact = sceneSeconds - FALL_END
@@ -809,7 +1077,9 @@ export const drawLibraryScene = (context: Context, width: number, height: number
   context.translate(Math.sin(time * 80) * shake, Math.cos(time * 66) * shake * 0.6)
   drawRoom(context, width, height, floorY, ceilingY, sinceImpact)
   drawNightHole(context, width, ceilingY, breaking.holeOpen, time)
-  drawCrashRadi(context, landingX, floorY, scale, time, sceneSeconds)
+  const ladder = ladderPlacement(width, height, floorY)
+  drawLadder(context, ladder.left, floorY, ladder.top, sinceImpact)
+  drawLibraryRadi(context, width, height, floorY, landingX, scale, time, sceneSeconds)
   drawCeilingBoards(context, width, ceilingY, breaking.holeOpen)
   drawCeilingCracks(context, width, ceilingY, breaking.holeOpen < 0.55 ? breaking.cracks : 0)
   drawHoleRim(context, width, ceilingY, breaking.holeOpen)
@@ -819,8 +1089,8 @@ export const drawLibraryScene = (context: Context, width: number, height: number
   drawBreakDebris(context, width, height, ceilingY, floorY, sinceBreak)
   drawBookcase(context, 12, ceilingY - 6, width * 0.2, floorY + 8, sinceImpact)
   drawBookcase(context, width * 0.8, ceilingY - 6, width - 12, floorY + 8, sinceImpact)
-  drawLadder(context, width * 0.75, floorY, height * 0.36, sinceImpact)
   drawDust(context, landingX, floorY, sceneSeconds)
+  drawSpeechBubble(context, width, landingX, floorY, scale, easeOutBack(stageProgress(sceneSeconds, SAY_START, SAY_START + BUBBLE_POP_SECONDS)) * (1 - stageProgress(sceneSeconds, SAY_END - BUBBLE_HIDE_SECONDS, SAY_END)))
   if (sinceImpact >= 0 && sinceImpact < 0.5) {
     const ring = stageProgress(sinceImpact, 0, 0.5)
     context.save()

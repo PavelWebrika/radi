@@ -60,6 +60,7 @@ export type RadiMotion = {
   kneeBends: PerSide
   hands: RadiHands
   elbowBends: PerSide
+  hideLegs?: boolean
 }
 
 export type RadiColors = { skin: string; hair: string; hairHighlight: string; eye: string; iris: string }
@@ -890,7 +891,7 @@ const drawHeadphones = (context: Context, isPolished: boolean) => {
 export const drawRadi = (context: Context, look: RadiLook, feetX: number, feetY: number, scale: number, motion: Partial<RadiMotion> = {}) => {
   const hasExtra = (extra: RadiExtra) => look.extras.includes(extra)
   const isPolished = look.polished === true
-  const { faceTurn = 0, legLifts = [0, 0], kneeBends = [0, 0], hands = HAND_POSITIONS[look.pose], elbowBends = [0, 0] } = motion
+  const { faceTurn = 0, legLifts = [0, 0], kneeBends = [0, 0], hands = HAND_POSITIONS[look.pose], elbowBends = [0, 0], hideLegs = false } = motion
 
   activeColors = look.colors ?? RADI_COLORS
   context.save()
@@ -902,7 +903,7 @@ export const drawRadi = (context: Context, look: RadiLook, feetX: number, feetY:
   context.strokeStyle = OUTLINE
 
   drawHairBack(context, look.hair, isPolished)
-  drawLegs(context, look.shoes ?? "sneakers", legLifts, kneeBends, isPolished)
+  if (!hideLegs) drawLegs(context, look.shoes ?? "sneakers", legLifts, kneeBends, isPolished)
   drawBottom(context, look.bottom, isPolished)
   drawTorso(context, look.top, isPolished)
   if (hasExtra("apron")) drawApron(context, isPolished)
