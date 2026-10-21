@@ -41,9 +41,9 @@ const CLIMB_DOWN_END = 18.2
 const WALK_BACK_START = 18.7
 const TURN_SECONDS = 0.4
 const WALK_BACK_END = 20.4
-const SIT_END = 22
-const OPEN_START = 22.3
-const OPEN_END = 23.1
+const SIT_END = 21
+const OPEN_START = 21.05
+const OPEN_END = 21.2
 const PAGE_TURN_SECONDS = 3
 const PAGE_TURN_FLIP_SECONDS = 0.55
 const SKIP_HOPS = 6
@@ -253,17 +253,6 @@ const drawBookcase = (context: Context, left: number, top: number, right: number
   context.restore()
 }
 
-const drawSign = (context: Context, centerX: number, centerY: number, width: number) => {
-  const signWidth = Math.min(width * 0.22, 180)
-  const signHeight = signWidth * 0.38
-  paintShape(context, "#fff8ea", (path) => path.roundRect(centerX - signWidth / 2, centerY - signHeight / 2, signWidth, signHeight, 12))
-  context.fillStyle = OUTLINE
-  context.font = `${signWidth * 0.28}px "Comic Sans MS", "Comic Sans", cursive`
-  context.textAlign = "center"
-  context.textBaseline = "middle"
-  context.fillText("Library", centerX, centerY + signHeight * 0.04)
-}
-
 type LadderPlacement = { left: number; top: number; footY: number }
 
 const ladderPlacement = (width: number, height: number, floorY: number): LadderPlacement => ({ left: width * 0.75, top: height * 0.36, footY: floorY - 8 })
@@ -388,7 +377,6 @@ const drawRoom = (context: Context, width: number, height: number, floorY: numbe
   paintShape(context, RUG, ellipsePath(width * 0.52, floorY + 4, width * 0.14, height * 0.035))
   drawBookcase(context, width * 0.2, height * 0.34, width * 0.38, floorY, sinceImpact, "plant")
   drawBookcase(context, width * 0.66, height * 0.34, width * 0.84, floorY, sinceImpact, "clock")
-  drawSign(context, width * 0.3, ceilingY + (height * 0.34 - ceilingY) * 0.42, width)
   drawPainting(context, width * 0.52, height * 0.31, Math.min(width * 0.16, height * 0.26), sinceImpact)
 }
 
@@ -997,11 +985,10 @@ const drawReadingBook = (context: Context, centerX: number, centerY: number, sca
   const pageHeight = 11 * scale
   context.save()
   context.translate(centerX, centerY)
-  if (open < 0.45) {
-    context.rotate(mix(-0.15, 0.4, open / 0.45))
+  if (open <= 0) {
     drawHeldBook(context, 0, 0, scale, 0)
   } else {
-    const spread = easeOut((open - 0.45) / 0.55)
+    const spread = easeOut(open)
     context.scale(1, mix(0.55, 1, spread))
     context.lineWidth = 2
     paintShape(context, READING_BOOK, (path) => {

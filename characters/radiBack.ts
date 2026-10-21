@@ -84,20 +84,20 @@ const drawBackLegs = (context: Context, legLifts: readonly [number, number], kne
   })
 }
 
-const drawBackArm = (context: Context, side: number, hand: Point, bendAmount: number, isPolished: boolean) => {
+const drawBackArm = (context: Context, side: number, hand: Point, bendAmount: number, isPolished: boolean, dropElbow = false, showHand = true) => {
   const [handX, handY] = hand
   const shoulderX = side * 8.5
   const shoulderY = -42.5
   const reach = Math.hypot(handX - shoulderX, handY - shoulderY) || 1
   const bend = bendAmount / reach
-  const elbowX = (shoulderX + handX) / 2 + side * (handY - shoulderY) * bend
-  const elbowY = (shoulderY + handY) / 2 - side * (handX - shoulderX) * bend
+  const elbowX = dropElbow ? side * 14 : (shoulderX + handX) / 2 + side * (handY - shoulderY) * bend
+  const elbowY = dropElbow ? -32 : (shoulderY + handY) / 2 - side * (handX - shoulderX) * bend
   paintTube(context, SKIN, 4.5, (path) => {
     path.moveTo(shoulderX, shoulderY)
     path.lineTo(elbowX, elbowY)
     path.lineTo(handX, handY)
   }, isPolished)
-  paintShape(context, SKIN, ellipsePath(handX, handY, 2.8, 2.8), shadeIf(isPolished))
+  if (showHand) paintShape(context, SKIN, ellipsePath(handX, handY, 2.8, 2.8), shadeIf(isPolished))
 }
 
 export type BackArms = {
@@ -117,7 +117,7 @@ export const drawRadiBack = (context: Context, look: RadiLook, feetX: number, fe
   context.strokeStyle = OUTLINE
   if (arms) {
     arms.behind.forEach((hand, index) => {
-      if (hand) drawBackArm(context, index === 0 ? -1 : 1, hand, elbowBends[index] ?? 0, isPolished)
+      if (hand) drawBackArm(context, index === 0 ? -1 : 1, hand, elbowBends[index] ?? 0, isPolished, true, false)
     })
   }
   if (!hideLegs) drawBackLegs(context, legLifts, kneeBends, isPolished)
