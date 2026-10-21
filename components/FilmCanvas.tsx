@@ -5,7 +5,15 @@ import { drawRadiConcepts } from "@/characters/radiConcepts"
 import { anywayButtonLayout, CITY_SCENE_END, drawCityScene, DRIVE_CRUISE_SECONDS, DRIVE_MAX_BOOST, DRIVE_READY_SECONDS, KIRA_POP_PROGRESS, RADI_EXIT_START } from "@/scenes/cityScene"
 import { CLUB_SCENE_END, drawClubScene, LAUNCH_START, letsDanceButtonLayout, playedClubSeconds } from "@/scenes/clubScene"
 import { FILM_SCENES } from "@/scenes/filmScenes"
-import { captainChoiceLayouts, drawLibraryScene, type CaptainChoice } from "@/scenes/libraryScene"
+import {
+  drawLibraryScene,
+  libraryQuizChoiceLayouts,
+  QUIZ_ADVANCE_AFTER_WRONG,
+  RIGHT_CHEER_SECONDS,
+  type CaptainChoice,
+  type JokeChoice,
+  type LibraryQuizPhase,
+} from "@/scenes/libraryScene"
 import { drawOpeningScene, greetingButtonLayout, KIRA_SCENE_END, type BubbleButtonLayout } from "@/scenes/openingScene"
 import { useFilmStore } from "@/store/film"
 
@@ -110,9 +118,15 @@ export const FilmCanvas = () => {
     let clubStartMilliseconds: number | null = null
     let letsDanceStartMilliseconds: number | null = null
     let libraryStartMilliseconds: number | null = null
+    let libraryQuizPhase: LibraryQuizPhase = "captain"
     let captainChoice: CaptainChoice | null = null
     let hoveredCaptain: CaptainChoice | null = null
+    let jokeChoice: JokeChoice | null = null
+    let hoveredJoke: JokeChoice | null = null
+    let jokeQuizStartSeconds: number | null = null
+    let finalQuizStartSeconds: number | null = null
     let wrongStartMilliseconds: number | null = null
+    let cheerStartMilliseconds: number | null = null
     let lastTouchY: number | null = null
     const drawFrame = (timeMilliseconds: number) => {
       const elapsedSeconds = previousTimeMilliseconds === null ? 0 : (timeMilliseconds - previousTimeMilliseconds) / 1000
@@ -174,7 +188,44 @@ export const FilmCanvas = () => {
         drawRadiConcepts(context, window.innerWidth, window.innerHeight)
       } else if (librarySeconds !== null) {
         const wrongSeconds = secondsSince(wrongStartMilliseconds)
-        drawLibraryScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, librarySeconds, captainChoice, hoveredCaptain, wrongSeconds)
+        if (wrongSeconds !== null && wrongSeconds >= QUIZ_ADVANCE_AFTER_WRONG) {
+          if (libraryQuizPhase === "captain") {
+            libraryQuizPhase = "joke"
+            jokeQuizStartSeconds = librarySeconds
+            wrongStartMilliseconds = null
+            captainChoice = null
+            hoveredCaptain = null
+          } else if (libraryQuizPhase === "joke") {
+            libraryQuizPhase = "final"
+            finalQuizStartSeconds = librarySeconds
+            wrongStartMilliseconds = null
+            jokeChoice = null
+            hoveredJoke = null
+          }
+        }
+        let cheerSeconds = secondsSince(cheerStartMilliseconds)
+        if (cheerSeconds !== null && cheerSeconds >= RIGHT_CHEER_SECONDS) {
+          if (libraryQuizPhase === "captain") startJokeQuiz(librarySeconds)
+          else if (libraryQuizPhase === "joke") startFinalQuiz(librarySeconds)
+          cheerStartMilliseconds = null
+          cheerSeconds = null
+        }
+        drawLibraryScene(
+          context,
+          window.innerWidth,
+          window.innerHeight,
+          timeMilliseconds / 1000,
+          librarySeconds,
+          libraryQuizPhase,
+          captainChoice,
+          hoveredCaptain,
+          jokeChoice,
+          hoveredJoke,
+          secondsSince(wrongStartMilliseconds),
+          jokeQuizStartSeconds,
+          finalQuizStartSeconds,
+          cheerSeconds,
+        )
       } else if (clubSeconds !== null) {
         drawClubScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, clubSeconds, letsDanceSeconds)
       } else if (citySeconds !== null) {
@@ -189,19 +240,32 @@ export const FilmCanvas = () => {
       const letsDanceLayout = isShowingConcepts || clubSeconds === null ? null : letsDanceButtonLayout(window.innerWidth, window.innerHeight, clubSeconds, letsDanceSeconds)
       if (letsDanceButtonRef.current) placeBubbleButton(letsDanceButtonRef.current, letsDanceLayout)
       if (librarySeconds === null) {
+        libraryQuizPhase = "captain"
         captainChoice = null
         hoveredCaptain = null
+        jokeChoice = null
+        hoveredJoke = null
+        jokeQuizStartSeconds = null
+        finalQuizStartSeconds = null
         wrongStartMilliseconds = null
+        cheerStartMilliseconds = null
       }
       const wrongSeconds = librarySeconds === null ? null : secondsSince(wrongStartMilliseconds)
-      const captainLayouts = isShowingConcepts || librarySeconds === null ? null : captainChoiceLayouts(window.innerWidth, window.innerHeight, librarySeconds, wrongSeconds)
-      const captainButtons = [
-        [nemoButtonRef.current, "nemo"],
-        [americaButtonRef.current, "america"],
-        [janewayButtonRef.current, "janeway"],
-      ] as const
-      captainButtons.forEach(([button, choice], index) => {
-        if (button) placeQuizButton(button, captainLayouts?.[index] ?? null, captainChoice === choice)
+      const cheering = librarySeconds !== null && cheerStartMilliseconds !== null
+      const quizLayouts = isShowingConcepts || librarySeconds === null || cheering
+        ? null
+        : libraryQuizChoiceLayouts(window.innerWidth, window.innerHeight, libraryQuizPhase, librarySeconds, wrongSeconds, jokeQuizStartSeconds)
+      const quizButtons = [nemoButtonRef.current, americaButtonRef.current, janewayButtonRef.current]
+      const quizChoices = libraryQuizPhase === "captain"
+        ? (["nemo", "america", "janeway"] as const)
+        : libraryQuizPhase === "joke"
+          ? (["furmidable", "catastrophe", "purplexing"] as const)
+          : null
+      const chosenQuiz = libraryQuizPhase === "captain" ? captainChoice : libraryQuizPhase === "joke" ? jokeChoice : null
+      quizButtons.forEach((button, index) => {
+        if (!button) return
+        const choice = quizChoices?.[index] ?? null
+        placeQuizButton(button, quizLayouts?.[index] ?? null, choice !== null && chosenQuiz === choice)
       })
       animationFrameId = requestAnimationFrame(drawFrame)
     }
@@ -266,9 +330,15 @@ export const FilmCanvas = () => {
       anywayStartMilliseconds = null
       clubStartMilliseconds = sceneSelection.sceneId === "nightClub" ? performance.now() : null
       libraryStartMilliseconds = sceneSelection.sceneId === "library" ? performance.now() : null
+      libraryQuizPhase = "captain"
       captainChoice = null
       hoveredCaptain = null
+      jokeChoice = null
+      hoveredJoke = null
+      jokeQuizStartSeconds = null
+      finalQuizStartSeconds = null
       wrongStartMilliseconds = null
+      cheerStartMilliseconds = null
       letsDanceStartMilliseconds = null
     })
     const updateProgress = () => {
@@ -293,35 +363,76 @@ export const FilmCanvas = () => {
     anywayButton?.addEventListener("click", startCoolRadi)
     const letsDanceButton = letsDanceButtonRef.current
     letsDanceButton?.addEventListener("click", startDancing)
-    const chooseCaptain = (choice: CaptainChoice) => {
-      if (wrongStartMilliseconds !== null) return
-      captainChoice = choice
-      if (choice === "nemo" || choice === "america") wrongStartMilliseconds = performance.now()
+    const startJokeQuiz = (librarySeconds: number) => {
+      libraryQuizPhase = "joke"
+      jokeQuizStartSeconds = librarySeconds
+      captainChoice = null
+      hoveredCaptain = null
     }
-    const chooseNemo = () => chooseCaptain("nemo")
-    const chooseAmerica = () => chooseCaptain("america")
-    const chooseJaneway = () => chooseCaptain("janeway")
+    const startFinalQuiz = (librarySeconds: number) => {
+      libraryQuizPhase = "final"
+      finalQuizStartSeconds = librarySeconds
+      jokeChoice = null
+      hoveredJoke = null
+    }
+    const chooseCaptain = (choice: CaptainChoice) => {
+      if (libraryQuizPhase !== "captain" || wrongStartMilliseconds !== null || cheerStartMilliseconds !== null) return
+      captainChoice = choice
+      if (choice === "janeway") {
+        cheerStartMilliseconds = performance.now()
+        return
+      }
+      wrongStartMilliseconds = performance.now()
+    }
+    const chooseJoke = (choice: JokeChoice) => {
+      if (libraryQuizPhase !== "joke" || wrongStartMilliseconds !== null || cheerStartMilliseconds !== null) return
+      jokeChoice = choice
+      if (choice === "catastrophe") {
+        cheerStartMilliseconds = performance.now()
+        return
+      }
+      wrongStartMilliseconds = performance.now()
+    }
+    const chooseQuizA = () => {
+      if (libraryQuizPhase === "captain") chooseCaptain("nemo")
+      else if (libraryQuizPhase === "joke") chooseJoke("furmidable")
+    }
+    const chooseQuizB = () => {
+      if (libraryQuizPhase === "captain") chooseCaptain("america")
+      else if (libraryQuizPhase === "joke") chooseJoke("catastrophe")
+    }
+    const chooseQuizC = () => {
+      if (libraryQuizPhase === "captain") chooseCaptain("janeway")
+      else if (libraryQuizPhase === "joke") chooseJoke("purplexing")
+    }
     const nemoButton = nemoButtonRef.current
     const americaButton = americaButtonRef.current
     const janewayButton = janewayButtonRef.current
-    const hoverCaptain = (choice: CaptainChoice) => {
-      hoveredCaptain = choice
+    const hoverQuizA = () => {
+      if (libraryQuizPhase === "captain") hoveredCaptain = "nemo"
+      else if (libraryQuizPhase === "joke") hoveredJoke = "furmidable"
     }
-    const clearCaptainHover = () => {
+    const hoverQuizB = () => {
+      if (libraryQuizPhase === "captain") hoveredCaptain = "america"
+      else if (libraryQuizPhase === "joke") hoveredJoke = "catastrophe"
+    }
+    const hoverQuizC = () => {
+      if (libraryQuizPhase === "captain") hoveredCaptain = "janeway"
+      else if (libraryQuizPhase === "joke") hoveredJoke = "purplexing"
+    }
+    const clearQuizHover = () => {
       hoveredCaptain = null
+      hoveredJoke = null
     }
-    const hoverNemo = () => hoverCaptain("nemo")
-    const hoverAmerica = () => hoverCaptain("america")
-    const hoverJaneway = () => hoverCaptain("janeway")
-    nemoButton?.addEventListener("click", chooseNemo)
-    americaButton?.addEventListener("click", chooseAmerica)
-    janewayButton?.addEventListener("click", chooseJaneway)
-    nemoButton?.addEventListener("mouseenter", hoverNemo)
-    americaButton?.addEventListener("mouseenter", hoverAmerica)
-    janewayButton?.addEventListener("mouseenter", hoverJaneway)
-    nemoButton?.addEventListener("mouseleave", clearCaptainHover)
-    americaButton?.addEventListener("mouseleave", clearCaptainHover)
-    janewayButton?.addEventListener("mouseleave", clearCaptainHover)
+    nemoButton?.addEventListener("click", chooseQuizA)
+    americaButton?.addEventListener("click", chooseQuizB)
+    janewayButton?.addEventListener("click", chooseQuizC)
+    nemoButton?.addEventListener("mouseenter", hoverQuizA)
+    americaButton?.addEventListener("mouseenter", hoverQuizB)
+    janewayButton?.addEventListener("mouseenter", hoverQuizC)
+    nemoButton?.addEventListener("mouseleave", clearQuizHover)
+    americaButton?.addEventListener("mouseleave", clearQuizHover)
+    janewayButton?.addEventListener("mouseleave", clearQuizHover)
     return () => {
       cancelAnimationFrame(animationFrameId)
       window.removeEventListener("resize", onResize)
@@ -332,15 +443,15 @@ export const FilmCanvas = () => {
       moreButton?.removeEventListener("click", startMeetingKira)
       anywayButton?.removeEventListener("click", startCoolRadi)
       letsDanceButton?.removeEventListener("click", startDancing)
-      nemoButton?.removeEventListener("click", chooseNemo)
-      americaButton?.removeEventListener("click", chooseAmerica)
-      janewayButton?.removeEventListener("click", chooseJaneway)
-      nemoButton?.removeEventListener("mouseenter", hoverNemo)
-      americaButton?.removeEventListener("mouseenter", hoverAmerica)
-      janewayButton?.removeEventListener("mouseenter", hoverJaneway)
-      nemoButton?.removeEventListener("mouseleave", clearCaptainHover)
-      americaButton?.removeEventListener("mouseleave", clearCaptainHover)
-      janewayButton?.removeEventListener("mouseleave", clearCaptainHover)
+      nemoButton?.removeEventListener("click", chooseQuizA)
+      americaButton?.removeEventListener("click", chooseQuizB)
+      janewayButton?.removeEventListener("click", chooseQuizC)
+      nemoButton?.removeEventListener("mouseenter", hoverQuizA)
+      americaButton?.removeEventListener("mouseenter", hoverQuizB)
+      janewayButton?.removeEventListener("mouseenter", hoverQuizC)
+      nemoButton?.removeEventListener("mouseleave", clearQuizHover)
+      americaButton?.removeEventListener("mouseleave", clearQuizHover)
+      janewayButton?.removeEventListener("mouseleave", clearQuizHover)
       unsubscribeFromScenes()
       stopDriveSong()
       stopDanceSong()
