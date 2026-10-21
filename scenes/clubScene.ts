@@ -57,6 +57,7 @@ const MOVE_BLEND = 0.2
 const DANCE_SPEED_START = 1
 const DANCE_SPEED_STEP = 0.08
 const DANCE_SPEED_EVERY = 3
+const DANCE_SPEED_HOLD = 30
 const FLOOR_TOP = 0.56
 const FLOOR_ROWS = 7
 const FLOOR_COLUMNS = 12
@@ -215,27 +216,26 @@ const danceHands = (move: number, groove: number): RadiHands => {
 
 const mixHands = (from: RadiHands, to: RadiHands, amount: number): RadiHands => [mixPoint(from[0], to[0], amount), mixPoint(from[1], to[1], amount)]
 
-const dancePlaybackSeconds = (elapsed: number) => {
-  const steps = Math.floor(elapsed / DANCE_SPEED_EVERY)
-  const partial = elapsed - steps * DANCE_SPEED_EVERY
+const dancePlaybackSeconds = (sinceEyes: number) => {
+  const holdElapsed = Math.max(0, DANCE_SPEED_HOLD - OPEN_EYES_START)
+  const played = Math.min(sinceEyes, holdElapsed)
+  const steps = Math.floor(played / DANCE_SPEED_EVERY)
+  const partial = played - steps * DANCE_SPEED_EVERY
   const completed = (steps * DANCE_SPEED_START + (DANCE_SPEED_STEP * steps * (steps - 1)) / 2) * DANCE_SPEED_EVERY
-  return completed + (DANCE_SPEED_START + steps * DANCE_SPEED_STEP) * partial
+  const untilHold = completed + (DANCE_SPEED_START + steps * DANCE_SPEED_STEP) * partial
+  return untilHold + Math.max(0, sinceEyes - holdElapsed) * (DANCE_SPEED_START + steps * DANCE_SPEED_STEP)
 }
 
 const danceMotionSeconds = (clubSeconds: number) => {
   const sinceEyes = clubSeconds - OPEN_EYES_START
   if (sinceEyes <= 0) return clubSeconds - DANCE_START
-  const danceWindow = DANCE_STOP_START - OPEN_EYES_START
-  const played = Math.min(sinceEyes, danceWindow)
-  return OPEN_EYES_START - DANCE_START + dancePlaybackSeconds(played) + (sinceEyes - played)
+  return OPEN_EYES_START - DANCE_START + dancePlaybackSeconds(sinceEyes)
 }
 
 const danceGrooveTime = (time: number, clubSeconds: number) => {
   const sinceEyes = clubSeconds - OPEN_EYES_START
   if (sinceEyes <= 0) return time
-  const danceWindow = DANCE_STOP_START - OPEN_EYES_START
-  const played = Math.min(sinceEyes, danceWindow)
-  return time - sinceEyes + dancePlaybackSeconds(played) + (sinceEyes - played)
+  return time - sinceEyes + dancePlaybackSeconds(sinceEyes)
 }
 
 const radiDanceMotion = (danceSeconds: number, energy: number) => {
@@ -481,6 +481,33 @@ const drawRadiBubble = (context: Context, width: number, radiX: number, feetY: n
   context.restore()
 }
 
+const formatClubClock = (seconds: number) => seconds.toFixed(2)
+
+const drawClubTimer = (context: Context, playedSeconds: number, sceneSeconds: number, letsDanceSeconds: number | null) => {
+  const mainLine = `${formatClubClock(playedSeconds)} / ${formatClubClock(CLUB_SCENE_END)} s`
+  const detailLine = letsDanceSeconds === null
+    ? `paused · scene ${formatClubClock(sceneSeconds)}`
+    : `scene ${formatClubClock(sceneSeconds)} · dance +${formatClubClock(letsDanceSeconds)}`
+  const left = 12
+  const top = 12
+  const paddingX = 10
+  const lineHeight = 18
+  context.save()
+  context.font = '15px "Comic Sans MS", "Comic Sans", cursive'
+  const boxWidth = Math.max(context.measureText(mainLine).width, context.measureText(detailLine).width) + paddingX * 2
+  const boxHeight = lineHeight * 2 + 14
+  paintFill(context, "rgba(0, 0, 0, 0.72)", (path) => path.roundRect(left, top, boxWidth, boxHeight, 8))
+  paintLine(context, "#ffd23f", 2, (path) => path.roundRect(left, top, boxWidth, boxHeight, 8))
+  context.fillStyle = "#ffe066"
+  context.textAlign = "left"
+  context.textBaseline = "top"
+  context.fillText(mainLine, left + paddingX, top + 8)
+  context.fillStyle = "rgba(255, 255, 255, 0.85)"
+  context.font = '13px "Comic Sans MS", "Comic Sans", cursive'
+  context.fillText(detailLine, left + paddingX, top + 8 + lineHeight)
+  context.restore()
+}
+
 export const drawClubScene = (context: Context, width: number, height: number, time: number, sceneSeconds: number, letsDanceSeconds: number | null) => {
   const clubSeconds = playedClubSeconds(sceneSeconds, letsDanceSeconds)
   const { scale, radiX, feetY } = clubRadiPosition(width, height, clubSeconds)
@@ -514,4 +541,5 @@ export const drawClubScene = (context: Context, width: number, height: number, t
   const irisCenterY = home.feetY - 60 * scale
   if (clubSeconds < IRIS_IN_END) paintIris(context, width, height, home.radiX, irisCenterY, mix(0, fullRadius, stageProgress(clubSeconds, 0, IRIS_IN_END) ** 2))
   if (clubSeconds > IRIS_OUT_START) paintIris(context, width, height, home.radiX, irisCenterY, mix(fullRadius, 0, stageProgress(clubSeconds, IRIS_OUT_START, IRIS_OUT_END) ** 2))
+  drawClubTimer(context, clubSeconds, sceneSeconds, letsDanceSeconds)
 }
