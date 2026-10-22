@@ -480,14 +480,14 @@ const drawButterflies = (context: Context, width: number, height: number, time: 
   })
 }
 
-const horoPose = (horoSteps: number, time: number): HoroPose => {
+const horoPose = (horoSteps: number): HoroPose => {
   const stepIndex = Math.floor(horoSteps)
   const stepPhase = horoSteps - stepIndex
   const arc = Math.sin(stepPhase * Math.PI)
   const isKick = wrapAround(stepIndex, 3) === 2
   const footLift = arc * (isKick ? 8 : 4)
   return {
-    hop: arc * (isKick ? 4 : 2.5) + (1 + Math.sin(time * 3)) * 0.4,
+    hop: arc * (isKick ? 4 : 2.5),
     footLifts: wrapAround(stepIndex, 2) === 0 ? [footLift, 0] : [0, footLift],
     handBob: Math.sin(stepPhase * Math.PI * 2) * 1.5,
   }
@@ -690,7 +690,7 @@ const drawMusicNotes = (context: Context, emitX: number, emitY: number, scale: n
   }
 }
 
-export const drawNatureScene = (context: Context, width: number, height: number, time: number, sceneSeconds: number, horoSteps: number, showScrollHint: boolean) => {
+export const drawNatureScene = (context: Context, width: number, height: number, time: number, sceneSeconds: number, horoSteps: number, horoDanceSteps: number, showScrollHint: boolean) => {
   const scale = radiScale(width, height)
   const rowScale = scale * ROW_SCALE
   const horizonY = height * 0.56
@@ -699,7 +699,7 @@ export const drawNatureScene = (context: Context, width: number, height: number,
   const radiX = width / 2
   const travel = travelUnits(sceneSeconds)
   const camera = (travel + horoUnits(horoSteps)) * scale
-  const horo = horoPose(horoSteps, time)
+  const horo = horoPose(horoDanceSteps)
   const trailTop = feetY - height * 0.035
   const trailBottom = feetY + height * 0.05
   context.lineJoin = "round"

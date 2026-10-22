@@ -37,6 +37,7 @@ const readScrollProgress = () => {
 
 const DRIVE_BOOST_PER_PIXEL = 0.006
 const HORO_STEPS_PER_PIXEL = 0.006
+const HORO_IDLE_STEPS_PER_SECOND = 1.6
 const WHEEL_LINE_PIXELS = 16
 
 const placeQuizButton = (button: HTMLButtonElement, layout: { centerX: number; centerY: number; width: number; height: number } | null, chosen: boolean) => {
@@ -143,6 +144,7 @@ export const FilmCanvas = () => {
     let natureStartMilliseconds: number | null = null
     let horoTargetSteps = 0
     let horoSteps = 0
+    let horoIdleSteps = 0
     let hasScrolledHoro = false
     let pinnedScrollY: number | null = null
     let lastTouchY: number | null = null
@@ -209,17 +211,19 @@ export const FilmCanvas = () => {
       if (natureSeconds === null) {
         horoTargetSteps = 0
         horoSteps = 0
+        horoIdleSteps = 0
         hasScrolledHoro = false
       }
       pinnedScrollY = !isShowingConcepts && natureSeconds !== null && natureSeconds >= HORO_START ? (pinnedScrollY ?? window.scrollY) : null
       horoSteps += (horoTargetSteps - horoSteps) * (1 - Math.exp(-elapsedSeconds * 5))
+      if (pinnedScrollY !== null) horoIdleSteps += elapsedSeconds * HORO_IDLE_STEPS_PER_SECOND * Math.max(0, 1 - Math.abs(horoTargetSteps - horoSteps) * 4)
       const shakingBoring = libraryQuizPhase === "final" && boringShakeStartMilliseconds !== null && timeMilliseconds - boringShakeStartMilliseconds < 1000 && finalChoice === null
       if (isShowingConcepts) {
         context.fillStyle = "#000000"
         context.fillRect(0, 0, window.innerWidth, window.innerHeight)
         drawRadiConcepts(context, window.innerWidth, window.innerHeight)
       } else if (natureSeconds !== null) {
-        drawNatureScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, natureSeconds, horoSteps, !hasScrolledHoro)
+        drawNatureScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, natureSeconds, horoSteps, horoSteps + horoIdleSteps, !hasScrolledHoro)
       } else if (librarySeconds !== null) {
         const wrongSeconds = secondsSince(wrongStartMilliseconds)
         if (wrongSeconds !== null && wrongSeconds >= QUIZ_ADVANCE_AFTER_WRONG) {
@@ -402,6 +406,7 @@ export const FilmCanvas = () => {
       natureStartMilliseconds = sceneSelection.sceneId === "nature" ? performance.now() : null
       horoTargetSteps = 0
       horoSteps = 0
+      horoIdleSteps = 0
       hasScrolledHoro = false
       pinnedScrollY = null
       libraryQuizPhase = "captain"
