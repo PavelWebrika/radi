@@ -23,6 +23,11 @@ const GOLD = "#e8c547"
 export const SILVER = "#d5d9de"
 export const FOLK_YELLOW = "#f2cf3a"
 const LEAF_GREEN = "#3f9b4f"
+export const UNICORN_GOLD = "#ffd86b"
+export const UNICORN_LILAC = "#c9a8ff"
+const HORN_SPIRAL = "#f0a83a"
+const EAR_PINK = "#ffb3d9"
+export const RAINBOW = ["#ff5f7e", "#ffa94d", "#ffe066", "#69db7c", "#4dabf7", "#b197fc"] as const
 export const SHADE = "rgba(90, 40, 30, 0.22)"
 const SIDES = [-1, 1] as const
 
@@ -42,10 +47,11 @@ type RadiExtra =
   | "puffSleeves"
   | "hairFlower"
   | "batman"
+  | "unicorn"
 export type RadiHair = "ponytail" | "sideTail" | "loose" | "tucked" | "braid" | "bun" | "bob"
 export type RadiExpression = "grin" | "tongue" | "puff" | "surprised" | "angry" | "thinking"
 type RadiPose = "wave" | "peace" | "hold"
-export type RadiShoes = "sneakers" | "highTops" | "tsarvuli" | "partyHeels" | "folkFlats" | "boots"
+export type RadiShoes = "sneakers" | "highTops" | "tsarvuli" | "partyHeels" | "folkFlats" | "boots" | "hooves"
 type DrawShoe = (context: Context, side: number, isPolished: boolean) => void
 type RadiTop = { color: string; pattern?: RadiPattern; label?: string }
 export type RadiBottom = { kind: "skirt" | "shorts"; color: string; pattern?: RadiPattern }
@@ -432,23 +438,32 @@ const shoePainters: Record<RadiShoes, DrawShoe> = {
   boots: (context, side, isPolished) => {
     const shoeX = side * 6
     const legX = side * 5
-    paintShape(context, BLACK_FABRIC, (path) => path.roundRect(legX - 3.6, -13, 7.2, 11, 2), shadeIf(isPolished))
+    paintShape(context, BLACK_FABRIC, (path) => path.roundRect(legX - 3.6, -10, 7.2, 8, 2), shadeIf(isPolished))
     paintShape(context, BLACK_FABRIC, ellipsePath(shoeX, -3, 5.6, 3.5), {
       ...shadeIf(isPolished),
       decorateInside: isPolished ? (shoeContext) => paintFill(shoeContext, "rgba(255, 255, 255, 0.16)", ellipsePath(shoeX - 2, -4.4, 1.5, 0.7)) : undefined,
     })
   },
+  hooves: (context, side, isPolished) => {
+    const shoeX = side * 6
+    paintShape(context, UNICORN_GOLD, (path) => path.roundRect(shoeX - 5, -6, 10, 6, 2.4), {
+      ...shadeIf(isPolished),
+      decorateInside: isPolished ? (hoofContext) => paintFill(hoofContext, "rgba(255, 255, 255, 0.5)", ellipsePath(shoeX - 2, -4.4, 1.5, 0.7)) : undefined,
+    })
+    paintLine(context, OUTLINE, 0.7, linePath(shoeX, -3.6, shoeX, 0))
+    paintShape(context, UNICORN_LILAC, ellipsePath(side * 5, -6.4, 4.6, 2.4), shadeIf(isPolished))
+  },
 }
 
-export const LEG_COVERS: Partial<Record<RadiShoes, string>> = { tsarvuli: WOOL_WRAP, folkFlats: WHITE, boots: BLACK_FABRIC }
+export const LEG_COVERS: Partial<Record<RadiShoes, string>> = { tsarvuli: WOOL_WRAP, folkFlats: WHITE, boots: BLACK_FABRIC, hooves: WHITE }
 
-const drawLegs = (context: Context, shoes: RadiShoes, legLifts: PerSide, kneeBends: PerSide, isPolished: boolean) => {
+const drawLegs = (context: Context, shoes: RadiShoes, legLifts: PerSide, kneeBends: PerSide, isPolished: boolean, legColor = LEG_COVERS[shoes] ?? activeColors.skin, hipY = -19) => {
   SIDES.forEach((side, index) => {
     const legX = side * 5
     context.save()
     context.translate(0, -legLifts[index])
-    paintTube(context, LEG_COVERS[shoes] ?? activeColors.skin, 6, (path) => {
-      path.moveTo(legX, -19)
+    paintTube(context, legColor, 6, (path) => {
+      path.moveTo(legX, hipY)
       path.lineTo(legX + side * kneeBends[index], -12.5)
       path.lineTo(legX, -6)
     }, isPolished)
@@ -990,21 +1005,12 @@ export const drawBatMark = (context: Context, centerX: number, centerY: number, 
   context.restore()
 }
 
-const drawBatmanJumpsuit = (context: Context, color: string, isPolished: boolean, withLegs: boolean) => {
+const drawBatmanJumpsuit = (context: Context, color: string, isPolished: boolean) => {
   paintShape(context, color, (path) => {
     path.moveTo(-4, -49)
     path.quadraticCurveTo(-12, -49, -9.2, -43)
-    path.lineTo(-9.4, -30)
-    if (withLegs) {
-      path.lineTo(-8.2, -11)
-      path.lineTo(-1.8, -11)
-      path.quadraticCurveTo(0, -15.5, 1.8, -11)
-      path.lineTo(8.2, -11)
-    } else {
-      path.lineTo(-9.4, -18)
-      path.quadraticCurveTo(0, -15, 9.4, -18)
-    }
-    path.lineTo(9.4, -30)
+    path.lineTo(-9.4, -26)
+    path.lineTo(9.4, -26)
     path.lineTo(9.2, -43)
     path.quadraticCurveTo(12, -49, 4, -49)
     path.closePath()
@@ -1012,7 +1018,15 @@ const drawBatmanJumpsuit = (context: Context, color: string, isPolished: boolean
     ...shadeIf(isPolished),
     decorateInside: isPolished ? (suitContext) => paintFill(suitContext, SHADE, ellipsePath(0, -47.5, 8, 3)) : undefined,
   })
-  if (withLegs) SIDES.forEach((side) => shoePainters.boots(context, side, isPolished))
+  paintShape(context, BLACK_FABRIC, (path) => {
+    path.moveTo(-9.5, -29.5)
+    path.lineTo(9.5, -29.5)
+    path.lineTo(9.6, -24)
+    path.quadraticCurveTo(4.5, -23.4, 1.8, -21)
+    path.quadraticCurveTo(0, -20.2, -1.8, -21)
+    path.quadraticCurveTo(-4.5, -23.4, -9.6, -24)
+    path.closePath()
+  }, shadeIf(isPolished))
 }
 
 const drawBatmanCape = (context: Context, isPolished: boolean) => {
@@ -1064,10 +1078,103 @@ const drawBatmanCowl = (context: Context, isPolished: boolean) => {
   }
 }
 
+export const paintRainbowStreaks = (context: Context, curves: readonly CurveLine[], firstColor = 0) => {
+  curves.forEach((curve, index) => paintLine(context, RAINBOW[(firstColor + index) % RAINBOW.length], 2.2, curvesPath([curve])))
+}
+
+export const paintRainbowTail = (context: Context, [startX, startY, controlX, controlY, endX, endY]: CurveLine, [stepX, stepY]: Point) => {
+  const bands = RAINBOW.map((color, band) => ({
+    color,
+    path: curvesPath([[startX + stepX * band, startY + stepY * band, controlX + stepX * band, controlY + stepY * band, endX + stepX * band, endY + stepY * band]]),
+  }))
+  for (const { path } of bands) paintLine(context, OUTLINE, 3.6 + OUTLINE_WIDTH * 2, path)
+  for (const { color, path } of bands) paintLine(context, color, 3.6, path)
+}
+
+export const drawUnicornHorn = (context: Context, baseX: number, baseY: number, tipX: number, tipY: number, isPolished: boolean) => {
+  const length = Math.hypot(tipX - baseX, tipY - baseY)
+  context.save()
+  context.translate(baseX, baseY)
+  context.rotate(Math.atan2(tipX - baseX, baseY - tipY))
+  paintShape(context, UNICORN_GOLD, (path) => {
+    path.moveTo(-5, 0)
+    path.quadraticCurveTo(-3, -length * 0.55, 0, -length)
+    path.quadraticCurveTo(3, -length * 0.55, 5, 0)
+    path.quadraticCurveTo(0, 1.6, -5, 0)
+    path.closePath()
+  }, {
+    ...shadeIf(isPolished),
+    decorateInside: (hornContext) => {
+      for (let ring = 1; ring <= 4; ring += 1) {
+        const ringY = (-length * ring) / 5
+        paintLine(hornContext, HORN_SPIRAL, 1, curvesPath([[-6, ringY + 2.2, 0, ringY + 0.4, 6, ringY - 1.4]]))
+      }
+      paintLine(hornContext, "rgba(255, 255, 255, 0.8)", 1, linePath(-1.8, -2, -0.6, -length * 0.7))
+    },
+  })
+  context.restore()
+}
+
+export const drawUnicornEar = (context: Context, baseX: number, baseY: number, tilt: number, isPolished: boolean) => {
+  context.save()
+  context.translate(baseX, baseY)
+  context.rotate(tilt)
+  paintShape(context, WHITE, (path) => {
+    path.moveTo(-3.6, 0)
+    path.quadraticCurveTo(-3, -7, 0, -11)
+    path.quadraticCurveTo(3, -7, 3.6, 0)
+    path.closePath()
+  }, shadeIf(isPolished))
+  paintFill(context, EAR_PINK, (path) => {
+    path.moveTo(-1.6, -1)
+    path.quadraticCurveTo(-1.3, -5.5, 0, -8)
+    path.quadraticCurveTo(1.3, -5.5, 1.6, -1)
+    path.closePath()
+  })
+  context.restore()
+}
+
+export const drawStarSparkle = (context: Context, centerX: number, centerY: number, size: number, color: string) => {
+  paintFill(context, color, (path) => {
+    path.moveTo(centerX, centerY - size)
+    path.quadraticCurveTo(centerX, centerY, centerX + size, centerY)
+    path.quadraticCurveTo(centerX, centerY, centerX, centerY + size)
+    path.quadraticCurveTo(centerX, centerY, centerX - size, centerY)
+    path.quadraticCurveTo(centerX, centerY, centerX, centerY - size)
+    path.closePath()
+  })
+}
+
+const drawUnicornBackMane = (context: Context) => paintRainbowStreaks(context, [
+  [-25, -70, -29, -52, -23, -39],
+  [-21, -58, -24, -46, -17, -38],
+  [25, -70, 29, -52, 23, -39],
+  [21, -58, 24, -46, 17, -38],
+])
+
+const drawUnicornHeadpiece = (context: Context, isPolished: boolean) => {
+  paintRainbowStreaks(context, [
+    [-21, -68, -23, -82, -15, -90],
+    [-10, -77, -10, -88, -3, -93],
+    [4, -81, 6, -91, 12, -91],
+    [14, -82, 20, -88, 23, -72],
+  ], 2)
+  for (const side of SIDES) drawUnicornEar(context, side * 15, -91, side * 0.45, isPolished)
+  drawUnicornHorn(context, 0, -93, 3, -125, isPolished)
+  context.save()
+  context.translate(-25.5, -1.5)
+  drawHairFlower(context, isPolished)
+  context.restore()
+  drawStarSparkle(context, -20, -110, 4, WHITE)
+  drawStarSparkle(context, 19, -118, 3, UNICORN_GOLD)
+  drawStarSparkle(context, 27, -100, 2.4, WHITE)
+}
+
 export const drawRadi = (context: Context, look: RadiLook, feetX: number, feetY: number, scale: number, motion: Partial<RadiMotion> = {}) => {
   const hasExtra = (extra: RadiExtra) => look.extras.includes(extra)
   const isPolished = look.polished === true
   const isBatman = hasExtra("batman")
+  const isUnicorn = hasExtra("unicorn")
   const { faceTurn = 0, legLifts = [0, 0], kneeBends = [0, 0], hands = HAND_POSITIONS[look.pose], elbowBends = [0, 0], hideLegs = false, headTilt = 0 } = motion
   const drawWithHeadTilt = (drawPiece: () => void) => {
     context.save()
@@ -1087,10 +1194,14 @@ export const drawRadi = (context: Context, look: RadiLook, feetX: number, feetY:
   context.lineWidth = OUTLINE_WIDTH
   context.strokeStyle = OUTLINE
 
+  if (isUnicorn) paintRainbowTail(context, [8, -30, 32, -42, 31, -18], [-1.8, 2.9])
   if (isBatman) drawBatmanCape(context, isPolished)
-  else drawWithHeadTilt(() => drawHairBack(context, look.hair, isPolished))
-  if (isBatman) drawBatmanJumpsuit(context, look.top.color, isPolished, !hideLegs)
-  else if (!hideLegs) drawLegs(context, look.shoes ?? "sneakers", legLifts, kneeBends, isPolished)
+  else drawWithHeadTilt(() => {
+    drawHairBack(context, look.hair, isPolished)
+    if (isUnicorn) drawUnicornBackMane(context)
+  })
+  if (!hideLegs) drawLegs(context, look.shoes ?? "sneakers", legLifts, kneeBends, isPolished, isBatman ? look.top.color : undefined, isBatman ? -24 : undefined)
+  if (isBatman) drawBatmanJumpsuit(context, look.top.color, isPolished)
   if (!isBatman) {
     drawBottom(context, look.bottom, isPolished)
     drawTorso(context, look.top, isPolished)
@@ -1117,6 +1228,7 @@ export const drawRadi = (context: Context, look: RadiLook, feetX: number, feetY:
     if (hasExtra("bandana")) drawBandana(context, isPolished)
     if (hasExtra("kalpak")) drawKalpak(context, isPolished)
     if (hasExtra("hairFlower")) drawHairFlower(context, isPolished)
+    if (isUnicorn) drawUnicornHeadpiece(context, isPolished)
   })
   if (hasExtra("readingGlasses")) drawReadingGlasses(context, headTilt, faceTurn)
   drawArms(context, look, hands, elbowBends, isPolished)

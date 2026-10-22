@@ -135,7 +135,7 @@ export const FilmCanvas = () => {
     let wrongStartMilliseconds: number | null = null
     let cheerStartMilliseconds: number | null = null
     let cheerQuestionStarted = false
-    let batmanStartMilliseconds: number | null = null
+    let exitStartMilliseconds: number | null = null
     let boringShakeStartMilliseconds: number | null = null
     let lastTouchY: number | null = null
     let scrollOpen = false
@@ -244,7 +244,7 @@ export const FilmCanvas = () => {
           cheerSeconds,
           shakingBoring ? "boring" : finalChoice,
           hoveredFinal,
-          secondsSince(batmanStartMilliseconds),
+          secondsSince(exitStartMilliseconds),
           secondsSince(boringShakeStartMilliseconds),
         )
       } else if (clubSeconds !== null) {
@@ -276,12 +276,12 @@ export const FilmCanvas = () => {
         wrongStartMilliseconds = null
         cheerStartMilliseconds = null
         cheerQuestionStarted = false
-        batmanStartMilliseconds = null
+        exitStartMilliseconds = null
         boringShakeStartMilliseconds = null
       }
       const wrongSeconds = librarySeconds === null ? null : secondsSince(wrongStartMilliseconds)
       const cheering = librarySeconds !== null && cheerStartMilliseconds !== null
-      const quizLayouts = isShowingConcepts || librarySeconds === null || cheering || finalChoice === "batman"
+      const quizLayouts = isShowingConcepts || librarySeconds === null || cheering || finalChoice !== null
         ? null
         : libraryQuizChoiceLayouts(window.innerWidth, window.innerHeight, libraryQuizPhase, librarySeconds, wrongSeconds, jokeQuizStartSeconds, finalQuizStartSeconds)
       const quizButtons = [nemoButtonRef.current, americaButtonRef.current, janewayButtonRef.current]
@@ -381,7 +381,7 @@ export const FilmCanvas = () => {
       wrongStartMilliseconds = null
       cheerStartMilliseconds = null
       cheerQuestionStarted = false
-      batmanStartMilliseconds = null
+      exitStartMilliseconds = null
       boringShakeStartMilliseconds = null
       letsDanceStartMilliseconds = null
     })
@@ -461,7 +461,7 @@ export const FilmCanvas = () => {
       }
       if (finalChoice !== null || wrongStartMilliseconds !== null) return
       finalChoice = choice
-      if (choice === "batman") batmanStartMilliseconds = performance.now()
+      exitStartMilliseconds = performance.now()
     }
     const chooseQuizA = () => {
       if (libraryQuizPhase === "captain") chooseCaptain("nemo")

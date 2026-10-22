@@ -1,5 +1,5 @@
 import { drawKiraFront, drawKiraSide } from "@/characters/kira"
-import { drawRadi, type RadiLook } from "@/characters/radi"
+import { drawRadi, UNICORN_LILAC, type RadiLook } from "@/characters/radi"
 import { drawRadiSide } from "@/characters/radiSide"
 
 type RadiConcept = {
@@ -119,6 +119,22 @@ const batmanConcept = polishConcept({
 
 export const batmanRadiLook = batmanConcept.look
 
+const unicornConcept = polishConcept({
+  name: "Unicorn Radi",
+  background: "#7fe3c4",
+  look: {
+    hair: "loose",
+    expression: "grin",
+    pose: "peace",
+    top: { color: "#ffffff", pattern: "tieDye" },
+    bottom: { kind: "skirt", color: UNICORN_LILAC, pattern: "flowers" },
+    extras: ["unicorn"],
+    shoes: "hooves",
+  },
+})
+
+export const unicornRadiLook = unicornConcept.look
+
 const radiConcepts: RadiConcept[] = [
   polishConcept(everydayConcept),
   polishedPopArtConcept,
@@ -140,6 +156,7 @@ const radiConcepts: RadiConcept[] = [
     },
   }),
   batmanConcept,
+  unicornConcept,
 ]
 
 type DrawFigure = (context: CanvasRenderingContext2D, feetX: number, feetY: number, scale: number) => void

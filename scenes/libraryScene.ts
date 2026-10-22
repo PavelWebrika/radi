@@ -1,8 +1,8 @@
 import { drawKiraFront } from "@/characters/kira"
 import { ellipsePath, linePath, paintFill, paintLine, paintShape, type Context } from "@/characters/paint"
 import { drawRadiBack, type BackArms } from "@/characters/radiBack"
-import { drawBatMark, drawRadi, OUTLINE_WIDTH, paintTube, SKIN, WHITE, type Point, type RadiLook } from "@/characters/radi"
-import { batmanRadiLook, bookwormRadiLook } from "@/characters/radiConcepts"
+import { drawBatMark, drawRadi, drawStarSparkle, OUTLINE_WIDTH, paintTube, RAINBOW, SKIN, WHITE, type Point, type RadiLook } from "@/characters/radi"
+import { batmanRadiLook, bookwormRadiLook, unicornRadiLook } from "@/characters/radiConcepts"
 import { drawRadiSide } from "@/characters/radiSide"
 import { easeOut, easeOutBack, mix, mixPoint, paintComicBubble, paintIris, radiScale, stageProgress } from "@/scenes/openingScene"
 
@@ -1358,33 +1358,35 @@ const drawLibraryQuizzes = (
     drawTimedQuiz(context, width, height, sceneSeconds - jokeQuizStartSeconds, wrongSeconds, jokeCardConfig, jokeChoice, hoveredJoke, cheerSeconds)
     return
   }
-  if (phase === "final" && finalQuizStartSeconds !== null && finalChoice !== "batman") {
+  if (phase === "final" && finalQuizStartSeconds !== null && finalChoice !== "batman" && finalChoice !== "unicorn") {
     drawTimedQuiz(context, width, height, sceneSeconds - finalQuizStartSeconds, wrongSeconds, finalCardConfig, finalChoice, hoveredFinal, cheerSeconds)
   }
 }
 
-const BATMAN_BOOK_START = 0.55
-const BATMAN_BOOK_END = 1.45
-const BATMAN_SMOKE_START = 1.1
-const BATMAN_SMOKE_FULL = 1.6
-const BATMAN_SUIT_AT = 1.9
-const BATMAN_SMOKE_CLEAR = 2.2
-const BATMAN_SMOKE_END = 2.9
-const BATMAN_BATS_START = 2
-const BATMAN_BATS_LEAVE = 3
-const BATMAN_AIM_START = 2.9
+const EXIT_BOOK_START = 0.55
+const EXIT_BOOK_END = 1.45
+const EXIT_SMOKE_START = 1.1
+const EXIT_SMOKE_FULL = 1.6
+const EXIT_SUIT_AT = 1.9
+const EXIT_SMOKE_CLEAR = 2.2
+const EXIT_SMOKE_END = 2.9
+const EXIT_ORBIT_START = 2
+const EXIT_ORBIT_LEAVE = 3
+const EXIT_AIM_START = 2.9
 const BATMAN_FIRE_START = 3.2
 const BATMAN_HOOK_BITE = 3.5
-const BATMAN_ZIP_START = 3.6
-const BATMAN_ZIP_END = 4.4
-const BATMAN_RISE_END = 4.75
-const BATMAN_MOON_END = 5.5
-const BATMAN_GRIP: Point = [0, -59]
-const BATMAN_YAY_HANDS: readonly [Point, Point] = [[-18, -68], [18, -68]]
-const BATMAN_TOSS_HANDS: readonly [Point, Point] = [[-12, -28], [32, -44]]
-const BATMAN_HERO_HANDS: readonly [Point, Point] = [[-14, -30], [14, -30]]
+const EXIT_LAUNCH = 3.6
+const EXIT_ARRIVE = 4.4
+const EXIT_RISE_END = 4.75
+const EXIT_MOON_END = 5.5
+const EXIT_ANCHOR: Point = [0, -59]
+const EXIT_YAY_HANDS: readonly [Point, Point] = [[-18, -68], [18, -68]]
+const EXIT_TOSS_HANDS: readonly [Point, Point] = [[-12, -28], [32, -44]]
+const EXIT_HERO_HANDS: readonly [Point, Point] = [[-14, -30], [14, -30]]
 const BATMAN_REACH_HANDS: readonly [Point, Point] = [[-16, -30], [34, -120]]
 const BATMAN_GRIP_HANDS: readonly [Point, Point] = [[-2, -58], [2, -59]]
+const UNICORN_CROUCH_HANDS: readonly [Point, Point] = [[-18, -36], [18, -36]]
+const UNICORN_FLY_HANDS: readonly [Point, Point] = [[-15, -36], [13, -60]]
 const BAT_COLOR = "#1d1730"
 
 const SMOKE_PUFFS = Array.from({ length: 16 }, (_, index) => ({
@@ -1453,8 +1455,8 @@ const drawBat = (context: Context, centerX: number, centerY: number, size: numbe
 }
 
 const orbitBatSpot = (bat: OrbitBat, seconds: number, centerX: number, floorY: number, scale: number) => {
-  const burst = easeOut(stageProgress(seconds, BATMAN_BATS_START, BATMAN_BATS_START + 0.45))
-  const angle = bat.phase + (seconds - BATMAN_BATS_START) * bat.speed
+  const burst = easeOut(stageProgress(seconds, EXIT_ORBIT_START, EXIT_ORBIT_START + 0.45))
+  const angle = bat.phase + (seconds - EXIT_ORBIT_START) * bat.speed
   const depth = Math.sin(angle)
   return {
     x: centerX + Math.cos(angle) * bat.radiusX * scale * burst,
@@ -1464,22 +1466,30 @@ const orbitBatSpot = (bat: OrbitBat, seconds: number, centerX: number, floorY: n
   }
 }
 
-const drawOrbitBats = (context: Context, width: number, ceilingY: number, landingX: number, floorY: number, scale: number, seconds: number, isFront: boolean) => {
-  if (seconds < BATMAN_BATS_START) return
+type DrawFlier = (context: Context, centerX: number, centerY: number, size: number, flap: number, index: number) => void
+
+const drawUnicornFlier: DrawFlier = (context, centerX, centerY, size, flap, index) => {
+  const color = RAINBOW[index % RAINBOW.length]
+  if (index % 3 === 0) drawHeart(context, centerX, centerY, size * 0.8, color)
+  else drawCuteStar(context, centerX, centerY, size * (0.85 + flap * 0.15), color, flap * 0.3)
+}
+
+const drawOrbiters = (context: Context, width: number, ceilingY: number, landingX: number, floorY: number, scale: number, seconds: number, isFront: boolean, drawFlier: DrawFlier) => {
+  if (seconds < EXIT_ORBIT_START) return
   const { holeX, holeY, radiusX } = holePlacement(width, ceilingY, 1)
-  for (const bat of ORBIT_BATS) {
-    const leave = stageProgress(seconds, BATMAN_BATS_LEAVE + bat.delay, BATMAN_BATS_LEAVE + 0.75 + bat.delay)
-    if (leave >= 1) continue
+  ORBIT_BATS.forEach((bat, index) => {
+    const leave = stageProgress(seconds, EXIT_ORBIT_LEAVE + bat.delay, EXIT_ORBIT_LEAVE + 0.75 + bat.delay)
+    if (leave >= 1) return
     const spot = orbitBatSpot(bat, seconds, landingX, floorY, scale)
-    if ((leave > 0 || spot.depth >= 0) !== isFront) continue
+    if ((leave > 0 || spot.depth >= 0) !== isFront) return
     const flight = leave ** 2
-    drawBat(context, mix(spot.x, holeX + bat.target * radiusX, flight), mix(spot.y, holeY, flight), spot.size * (1 - 0.6 * flight), Math.sin(seconds * 26 + bat.phase * 3))
-  }
+    drawFlier(context, mix(spot.x, holeX + bat.target * radiusX, flight), mix(spot.y, holeY, flight), spot.size * (1 - 0.6 * flight), Math.sin(seconds * 26 + bat.phase * 3), index)
+  })
 }
 
 const drawEscapeBats = (context: Context, holeX: number, holeY: number, scale: number, seconds: number) => {
   for (const bat of ESCAPE_BATS) {
-    const flight = seconds - BATMAN_RISE_END + 0.15 - bat.delay
+    const flight = seconds - EXIT_RISE_END + 0.15 - bat.delay
     if (flight <= 0 || flight > 1.6) continue
     const batX = holeX + Math.cos(bat.angle) * bat.speed * flight * 1.4
     const batY = holeY + Math.sin(bat.angle) * bat.speed * flight * 0.7 - 150 * flight ** 2
@@ -1487,11 +1497,22 @@ const drawEscapeBats = (context: Context, holeX: number, holeY: number, scale: n
   }
 }
 
-const drawTransformSmoke = (context: Context, centerX: number, centerY: number, scale: number, seconds: number) => {
-  if (seconds < BATMAN_SMOKE_START || seconds > BATMAN_SMOKE_END + 0.2) return
+type SmokeTint = { shadow: string; body: string; light: string }
+
+const BAT_SMOKE: readonly SmokeTint[] = [{ shadow: "38, 26, 66", body: "104, 90, 146", light: "178, 166, 214" }]
+
+const UNICORN_GLITTER: readonly SmokeTint[] = [
+  { shadow: "214, 92, 160", body: "255, 158, 216", light: "255, 228, 244" },
+  { shadow: "140, 104, 220", body: "201, 168, 255", light: "240, 228, 255" },
+  { shadow: "70, 178, 160", body: "127, 227, 196", light: "220, 255, 244" },
+  { shadow: "220, 170, 60", body: "255, 224, 102", light: "255, 248, 214" },
+]
+
+const drawTransformSmoke = (context: Context, centerX: number, centerY: number, scale: number, seconds: number, tints: readonly SmokeTint[]) => {
+  if (seconds < EXIT_SMOKE_START || seconds > EXIT_SMOKE_END + 0.2) return
   const puffs = SMOKE_PUFFS.map((puff, index) => {
-    const grow = easeOut(stageProgress(seconds, BATMAN_SMOKE_START + puff.delay, BATMAN_SMOKE_FULL + puff.delay))
-    const fade = stageProgress(seconds, BATMAN_SMOKE_CLEAR + puff.delay, BATMAN_SMOKE_END + puff.delay)
+    const grow = easeOut(stageProgress(seconds, EXIT_SMOKE_START + puff.delay, EXIT_SMOKE_FULL + puff.delay))
+    const fade = stageProgress(seconds, EXIT_SMOKE_CLEAR + puff.delay, EXIT_SMOKE_END + puff.delay)
     const spread = mix(0.35, 1, grow) + fade * 0.6
     const churn = seconds * 2.2 + index
     return {
@@ -1499,11 +1520,12 @@ const drawTransformSmoke = (context: Context, centerX: number, centerY: number, 
       y: centerY + (Math.sin(puff.angle) * puff.reach * 0.9 * spread - fade * 34 + Math.cos(churn) * 3) * scale,
       radius: puff.size * scale * mix(0.3, 1, grow) * (1 + fade * 0.35),
       alpha: grow * (1 - fade),
+      tint: tints[index % tints.length],
     }
   })
-  for (const puff of puffs) paintFill(context, `rgba(38, 26, 66, ${puff.alpha})`, ellipsePath(puff.x + 3 * scale, puff.y + 4 * scale, puff.radius, puff.radius * 0.9))
-  for (const puff of puffs) paintFill(context, `rgba(104, 90, 146, ${puff.alpha})`, ellipsePath(puff.x, puff.y, puff.radius, puff.radius * 0.9))
-  for (const puff of puffs) paintFill(context, `rgba(178, 166, 214, ${puff.alpha * 0.75})`, ellipsePath(puff.x - puff.radius * 0.3, puff.y - puff.radius * 0.32, puff.radius * 0.42, puff.radius * 0.34))
+  for (const puff of puffs) paintFill(context, `rgba(${puff.tint.shadow}, ${puff.alpha})`, ellipsePath(puff.x + 3 * scale, puff.y + 4 * scale, puff.radius, puff.radius * 0.9))
+  for (const puff of puffs) paintFill(context, `rgba(${puff.tint.body}, ${puff.alpha})`, ellipsePath(puff.x, puff.y, puff.radius, puff.radius * 0.9))
+  for (const puff of puffs) paintFill(context, `rgba(${puff.tint.light}, ${puff.alpha * 0.75})`, ellipsePath(puff.x - puff.radius * 0.3, puff.y - puff.radius * 0.32, puff.radius * 0.42, puff.radius * 0.34))
 }
 
 const drawGrappleLine = (context: Context, [fromX, fromY]: Point, [toX, toY]: Point, wave: number, waves: number, phase: number, scale: number) => {
@@ -1571,7 +1593,7 @@ const drawZipStreaks = (context: Context, [gripX, gripY]: Point, [alongX, alongY
 }
 
 const drawLaunchDust = (context: Context, landingX: number, floorY: number, scale: number, seconds: number) => {
-  const puff = stageProgress(seconds, BATMAN_ZIP_START, BATMAN_ZIP_START + 0.7)
+  const puff = stageProgress(seconds, EXIT_LAUNCH, EXIT_LAUNCH + 0.7)
   if (puff <= 0 || puff >= 1) return
   const grow = easeOut(puff)
   for (let cloud = 0; cloud < 5; cloud += 1) {
@@ -1581,7 +1603,7 @@ const drawLaunchDust = (context: Context, landingX: number, floorY: number, scal
 }
 
 const drawMoonCrossing = (context: Context, width: number, ceilingY: number, seconds: number) => {
-  const cross = stageProgress(seconds, BATMAN_RISE_END, BATMAN_MOON_END)
+  const cross = stageProgress(seconds, EXIT_RISE_END, EXIT_MOON_END)
   if (cross <= 0 || cross >= 1) return
   const { holeX, holeY, radiusX, radiusY } = holePlacement(width, ceilingY, 1)
   const depth = ceilingY * 0.14
@@ -1599,6 +1621,147 @@ const drawMoonCrossing = (context: Context, width: number, ceilingY: number, sec
   context.restore()
 }
 
+const LAUNCH_STARS = Array.from({ length: 10 }, (_, index) => ({
+  angle: (index / 10) * Math.PI * 2 + seededRandom(index, 101),
+  speed: mix(120, 220, seededRandom(index, 102)),
+  size: mix(5, 9, seededRandom(index, 103)),
+}))
+
+const SHOWER_STARS = Array.from({ length: 14 }, (_, index) => ({
+  spread: seededRandom(index, 111) - 0.5,
+  drift: mix(-60, 60, seededRandom(index, 112)),
+  fall: mix(110, 200, seededRandom(index, 113)),
+  delay: seededRandom(index, 114) * 0.9,
+  size: mix(4, 8, seededRandom(index, 115)),
+}))
+
+const drawCuteStar = (context: Context, centerX: number, centerY: number, size: number, color: string, spin: number) => {
+  context.save()
+  context.translate(centerX, centerY)
+  context.rotate(spin)
+  context.lineWidth = Math.max(1.5, size * 0.16)
+  paintShape(context, color, (path) => {
+    for (let point = 0; point < 10; point += 1) {
+      const angle = (point / 10) * Math.PI * 2 - Math.PI / 2
+      const reach = point % 2 === 0 ? size : size * 0.48
+      if (point === 0) path.moveTo(Math.cos(angle) * reach, Math.sin(angle) * reach)
+      else path.lineTo(Math.cos(angle) * reach, Math.sin(angle) * reach)
+    }
+    path.closePath()
+  })
+  paintFill(context, "rgba(255, 255, 255, 0.75)", ellipsePath(-size * 0.18, -size * 0.2, size * 0.16, size * 0.12))
+  context.restore()
+}
+
+const drawHeart = (context: Context, centerX: number, centerY: number, size: number, color: string) => {
+  context.save()
+  context.translate(centerX, centerY)
+  context.lineWidth = Math.max(1.5, size * 0.16)
+  paintShape(context, color, (path) => {
+    path.moveTo(0, size * 0.85)
+    path.bezierCurveTo(-size * 1.3, 0, -size * 0.7, -size * 0.95, 0, -size * 0.35)
+    path.bezierCurveTo(size * 0.7, -size * 0.95, size * 1.3, 0, 0, size * 0.85)
+    path.closePath()
+  })
+  paintFill(context, "rgba(255, 255, 255, 0.75)", ellipsePath(-size * 0.4, -size * 0.3, size * 0.16, size * 0.12))
+  context.restore()
+}
+
+const drawRainbowBurst = (context: Context, centerX: number, centerY: number, scale: number, seconds: number) => {
+  const burst = stageProgress(seconds, EXIT_SUIT_AT, EXIT_SUIT_AT + 0.9)
+  if (burst <= 0 || burst >= 1) return
+  const grow = easeOut(burst)
+  context.save()
+  context.globalAlpha = 1 - burst
+  RAINBOW.forEach((color, band) => {
+    const radius = (40 + grow * 90 - band * 5) * scale
+    paintLine(context, color, 4.5 * scale * (1 - burst * 0.6), ellipsePath(centerX, centerY, radius, radius * 0.8))
+  })
+  context.restore()
+}
+
+const unicornFlightPoint = ([startX, startY]: Point, [endX, endY]: Point, width: number, scale: number, time: number): Point => {
+  const eased = easeInOut(time)
+  const rest = 1 - eased
+  const controls: readonly Point[] = [[startX, startY], [startX + width * 0.26, startY - 40 * scale], [endX - width * 0.3, endY + 140 * scale], [endX, endY]]
+  const weights = [rest ** 3, 3 * rest ** 2 * eased, 3 * rest * eased ** 2, eased ** 3]
+  return [
+    controls.reduce((sum, [controlX], index) => sum + controlX * weights[index], 0),
+    controls.reduce((sum, [, controlY], index) => sum + controlY * weights[index], 0),
+  ]
+}
+
+const drawRainbowTrail = (context: Context, flightAt: (time: number) => Point, seconds: number, scale: number) => {
+  const head = stageProgress(seconds, EXIT_LAUNCH, EXIT_ARRIVE)
+  const tail = stageProgress(seconds - 0.5, EXIT_LAUNCH, EXIT_ARRIVE)
+  if (head <= tail) return
+  const samples = Array.from({ length: 24 }, (_, step) => {
+    const along = step / 23
+    const [sampleX, sampleY] = flightAt(mix(tail, head, along))
+    return { sampleX, sampleY, along }
+  })
+  const bandWidth = 3.2 * scale
+  RAINBOW.forEach((color, band) => {
+    paintLine(context, color, bandWidth * 1.15, (path) => {
+      samples.forEach(({ sampleX, sampleY, along }, index) => {
+        const next = samples[Math.min(index + 1, samples.length - 1)]
+        const previous = samples[Math.max(index - 1, 0)]
+        const directionX = next.sampleX - previous.sampleX
+        const directionY = next.sampleY - previous.sampleY
+        const length = Math.hypot(directionX, directionY) || 1
+        const offset = (band - (RAINBOW.length - 1) / 2) * bandWidth * along
+        const bandX = sampleX - (directionY / length) * offset
+        const bandY = sampleY + (directionX / length) * offset
+        if (index === 0) path.moveTo(bandX, bandY)
+        else path.lineTo(bandX, bandY)
+      })
+    })
+  })
+  samples.forEach(({ sampleX, sampleY }, index) => {
+    if (index % 4 === 1) drawStarSparkle(context, sampleX, sampleY + 10 * scale, 3 * scale * (0.6 + 0.4 * Math.sin(seconds * 12 + index)), WHITE)
+  })
+}
+
+const drawLaunchStars = (context: Context, centerX: number, floorY: number, scale: number, seconds: number) => {
+  const since = seconds - EXIT_LAUNCH
+  if (since < 0 || since > 0.8) return
+  const fade = since / 0.8
+  LAUNCH_STARS.forEach((star, index) => {
+    const reach = star.speed * easeOut(fade) * scale * 0.5
+    drawCuteStar(context, centerX + Math.cos(star.angle) * reach, floorY - 10 * scale + Math.sin(star.angle) * reach * 0.5, star.size * scale * 0.6 * (1 - fade), RAINBOW[index % RAINBOW.length], since * 6)
+  })
+}
+
+const drawStarShower = (context: Context, holeX: number, holeY: number, radiusX: number, floorY: number, scale: number, seconds: number) => {
+  SHOWER_STARS.forEach((star, index) => {
+    const since = seconds - EXIT_RISE_END + 0.1 - star.delay
+    if (since <= 0) return
+    const starY = holeY + star.fall * since * scale * 0.6
+    if (starY > floorY) return
+    const starX = holeX + star.spread * radiusX * 1.6 + Math.sin(since * 3 + index) * star.drift * 0.3 + star.drift * since * 0.3
+    const twinkle = 0.8 + Math.sin(seconds * 9 + index) * 0.2
+    drawCuteStar(context, starX, starY, star.size * scale * 0.6 * twinkle, RAINBOW[index % RAINBOW.length], since * 2)
+  })
+}
+
+const drawSkyRainbow = (context: Context, width: number, ceilingY: number, seconds: number) => {
+  const reveal = easeInOut(stageProgress(seconds, EXIT_RISE_END - 0.1, EXIT_MOON_END))
+  if (reveal <= 0) return
+  const { holeX, holeY, radiusX, radiusY } = holePlacement(width, ceilingY, 1)
+  const depth = ceilingY * 0.14
+  const sky = new Path2D()
+  traceHole(sky, holeX, holeY + depth, radiusX * 0.93, radiusY * 0.88)
+  const centerX = holeX + radiusX * 0.25
+  const centerY = holeY + depth + radiusY * 0.9
+  const band = radiusY * 0.09
+  context.save()
+  context.clip(sky)
+  RAINBOW.forEach((color, index) => {
+    paintLine(context, color, band * 1.1, (path) => path.arc(centerX, centerY, radiusY * 1.15 - index * band, Math.PI, Math.PI * (1 + reveal)))
+  })
+  context.restore()
+}
+
 const clipBelowCeilingOpening = (context: Context, width: number, height: number, ceilingY: number) => {
   const { holeX, holeY, radiusX, radiusY } = holePlacement(width, ceilingY, 1)
   const visible = new Path2D()
@@ -1607,20 +1770,23 @@ const clipBelowCeilingOpening = (context: Context, width: number, height: number
   context.clip(visible)
 }
 
-const batmanShake = (seconds: number | null) => {
-  if (seconds === null) return 0
-  const bite = seconds >= BATMAN_HOOK_BITE ? 1 - stageProgress(seconds, BATMAN_HOOK_BITE, BATMAN_HOOK_BITE + 0.25) : 0
-  const launch = seconds >= BATMAN_ZIP_START ? 1 - stageProgress(seconds, BATMAN_ZIP_START, BATMAN_ZIP_START + 0.3) : 0
-  return Math.max(bite * 5, launch * 4)
+type ExitHero = "batman" | "unicorn"
+
+const exitShake = (seconds: number | null, hero: ExitHero | null) => {
+  if (seconds === null || hero === null) return 0
+  const bite = hero === "batman" && seconds >= BATMAN_HOOK_BITE ? 1 - stageProgress(seconds, BATMAN_HOOK_BITE, BATMAN_HOOK_BITE + 0.25) : 0
+  const launch = seconds >= EXIT_LAUNCH ? 1 - stageProgress(seconds, EXIT_LAUNCH, EXIT_LAUNCH + 0.3) : 0
+  return Math.max(bite * 5, launch * (hero === "batman" ? 4 : 2.5))
 }
 
-const drawBatmanBackdrop = (context: Context, width: number, height: number, floorY: number, landingX: number, scale: number, seconds: number) => {
+const drawExitBackdrop = (context: Context, width: number, height: number, floorY: number, landingX: number, scale: number, seconds: number, hero: ExitHero) => {
   const { ceilingY } = libraryLayout(width, height)
-  drawOrbitBats(context, width, ceilingY, landingX, floorY, scale, seconds, false)
-  drawMoonCrossing(context, width, ceilingY, seconds)
+  drawOrbiters(context, width, ceilingY, landingX, floorY, scale, seconds, false, hero === "batman" ? drawBat : drawUnicornFlier)
+  if (hero === "batman") drawMoonCrossing(context, width, ceilingY, seconds)
+  else drawSkyRainbow(context, width, ceilingY, seconds)
 }
 
-const drawBatmanExit = (
+const drawHeroExit = (
   context: Context,
   width: number,
   height: number,
@@ -1628,44 +1794,52 @@ const drawBatmanExit = (
   landingX: number,
   scale: number,
   seconds: number,
+  hero: ExitHero,
 ) => {
+  const isBatman = hero === "batman"
   const { ceilingY } = libraryLayout(width, height)
-  const { holeX, holeY, radiusY } = holePlacement(width, ceilingY, 1)
+  const { holeX, holeY, radiusX, radiusY } = holePlacement(width, ceilingY, 1)
   const hook: Point = [holeX, holeY]
-  const stand = easeInOut(stageProgress(seconds, BATMAN_SMOKE_START, BATMAN_SMOKE_START + 0.28))
-  const bounce = seconds < BATMAN_SMOKE_START ? Math.abs(Math.sin((seconds * Math.PI * 2) / 0.34)) * 9 * scale : 0
-  const crouch = easeOut(stageProgress(seconds, BATMAN_AIM_START, BATMAN_FIRE_START)) * (1 - easeOut(stageProgress(seconds, BATMAN_ZIP_START - 0.06, BATMAN_ZIP_START + 0.08)))
+  const stand = easeInOut(stageProgress(seconds, EXIT_SMOKE_START, EXIT_SMOKE_START + 0.28))
+  const bounce = seconds < EXIT_SMOKE_START ? Math.abs(Math.sin((seconds * Math.PI * 2) / 0.34)) * 9 * scale : 0
+  const crouch = easeOut(stageProgress(seconds, EXIT_AIM_START, isBatman ? BATMAN_FIRE_START : EXIT_LAUNCH - 0.1)) * (1 - easeOut(stageProgress(seconds, EXIT_LAUNCH - 0.06, EXIT_LAUNCH + 0.08)))
   const legBend = CROUCH_LIFT * 1.4 * crouch
-  const zipTime = stageProgress(seconds, BATMAN_ZIP_START, BATMAN_ZIP_END)
-  const zip = zipTime ** 2.2
-  const speed = zipTime ** 1.2 * (1 - stageProgress(seconds, BATMAN_ZIP_END - 0.05, BATMAN_ZIP_END + 0.12))
-  const rise = easeInOut(stageProgress(seconds, BATMAN_ZIP_END, BATMAN_RISE_END))
-  const launch: Point = [landingX, floorY - bounce + (BATMAN_GRIP[1] + 11 * (1 - stand) + legBend) * scale]
-  const anchor = rise > 0 ? mixPoint(hook, [holeX, holeY - radiusY * 0.8], rise) : mixPoint(launch, hook, zip)
+  const zipTime = stageProgress(seconds, EXIT_LAUNCH, EXIT_ARRIVE)
+  const zip = isBatman ? zipTime ** 2.2 : easeInOut(zipTime)
+  const speed = isBatman ? zipTime ** 1.2 * (1 - stageProgress(seconds, EXIT_ARRIVE - 0.05, EXIT_ARRIVE + 0.12)) : Math.sin(zipTime * Math.PI)
+  const rise = easeInOut(stageProgress(seconds, EXIT_ARRIVE, EXIT_RISE_END))
+  const launch: Point = [landingX, floorY - bounce + (EXIT_ANCHOR[1] + 11 * (1 - stand) + legBend) * scale]
+  const flightAt = (time: number): Point => (isBatman ? mixPoint(launch, hook, time ** 2.2) : unicornFlightPoint(launch, hook, width, scale, time))
+  const anchor = rise > 0 ? mixPoint(hook, [holeX, holeY - radiusY * 0.8], rise) : flightAt(zipTime)
   const bodyScale = scale * mix(1, 0.8, zip) * mix(1, 0.35, rise)
-  const swing = Math.sin((seconds - BATMAN_ZIP_START) * 10) * 0.28 * (1 - zipTime) * stageProgress(seconds, BATMAN_ZIP_START, BATMAN_ZIP_START + 0.1)
-  const stretch = 1 + 0.3 * speed - 0.18 * Math.sin(stageProgress(seconds, BATMAN_ZIP_END - 0.02, BATMAN_ZIP_END + 0.16) * Math.PI)
+  const flying = stageProgress(seconds, EXIT_LAUNCH, EXIT_LAUNCH + 0.15) * (1 - stageProgress(seconds, EXIT_ARRIVE - 0.15, EXIT_ARRIVE))
+  const [aheadX, aheadY] = flightAt(Math.min(1, zipTime + 0.02))
+  const swing = isBatman
+    ? Math.sin((seconds - EXIT_LAUNCH) * 10) * 0.28 * (1 - zipTime) * stageProgress(seconds, EXIT_LAUNCH, EXIT_LAUNCH + 0.1)
+    : Math.max(-1.1, Math.min(1.1, Math.atan2(aheadX - anchor[0], anchor[1] - aheadY))) * flying
+  const stretch = isBatman ? 1 + 0.3 * speed - 0.18 * Math.sin(stageProgress(seconds, EXIT_ARRIVE - 0.02, EXIT_ARRIVE + 0.16) * Math.PI) : 1 + 0.15 * speed
   const sideStretch = stretch ** -0.6
-  const bookFly = easeOut(stageProgress(seconds, BATMAN_BOOK_START, BATMAN_BOOK_END))
+  const bookFly = easeOut(stageProgress(seconds, EXIT_BOOK_START, EXIT_BOOK_END))
   const yay = easeOut(stageProgress(seconds, 0, 0.22))
-  const toss = easeOut(stageProgress(seconds, BATMAN_BOOK_START, BATMAN_BOOK_START + 0.32))
-  const hero = easeOut(stageProgress(seconds, BATMAN_SMOKE_FULL, BATMAN_SMOKE_FULL + 0.3))
-  const reach = easeInOut(stageProgress(seconds, BATMAN_AIM_START, BATMAN_AIM_START + 0.3))
-  const grip = easeOut(stageProgress(seconds, BATMAN_ZIP_START, BATMAN_ZIP_START + 0.12))
-  const recoil = seconds >= BATMAN_FIRE_START ? 1 - stageProgress(seconds, BATMAN_FIRE_START, BATMAN_FIRE_START + 0.18) : 0
-  const posed = mixHands(mixHands(mixHands(mixHands(READ_HANDS, BATMAN_YAY_HANDS, yay), BATMAN_TOSS_HANDS, toss), BATMAN_HERO_HANDS, hero), BATMAN_REACH_HANDS, reach)
+  const toss = easeOut(stageProgress(seconds, EXIT_BOOK_START, EXIT_BOOK_START + 0.32))
+  const heroPose = easeOut(stageProgress(seconds, EXIT_SMOKE_FULL, EXIT_SMOKE_FULL + 0.3))
+  const reach = easeInOut(stageProgress(seconds, EXIT_AIM_START, EXIT_AIM_START + 0.3))
+  const grip = easeOut(stageProgress(seconds, EXIT_LAUNCH, EXIT_LAUNCH + 0.12))
+  const recoil = isBatman && seconds >= BATMAN_FIRE_START ? 1 - stageProgress(seconds, BATMAN_FIRE_START, BATMAN_FIRE_START + 0.18) : 0
+  const posed = mixHands(mixHands(mixHands(mixHands(READ_HANDS, EXIT_YAY_HANDS, yay), EXIT_TOSS_HANDS, toss), EXIT_HERO_HANDS, heroPose), isBatman ? BATMAN_REACH_HANDS : UNICORN_CROUCH_HANDS, reach)
   const aimed: readonly [Point, Point] = [posed[0], [posed[1][0] - recoil * 4, posed[1][1] + recoil * 10]]
-  const hands = mixHands(aimed, BATMAN_GRIP_HANDS, grip)
+  const hands = mixHands(aimed, isBatman ? BATMAN_GRIP_HANDS : UNICORN_FLY_HANDS, grip)
   const toWorld = ([localX, localY]: Point): Point => {
-    const offsetX = (localX - BATMAN_GRIP[0]) * bodyScale * sideStretch
-    const offsetY = (localY - BATMAN_GRIP[1]) * bodyScale * stretch
+    const offsetX = (localX - EXIT_ANCHOR[0]) * bodyScale * sideStretch
+    const offsetY = (localY - EXIT_ANCHOR[1]) * bodyScale * stretch
     return [anchor[0] + offsetX * Math.cos(swing) - offsetY * Math.sin(swing), anchor[1] + offsetX * Math.sin(swing) + offsetY * Math.cos(swing)]
   }
-  const look = { ...(seconds >= BATMAN_SUIT_AT ? batmanRadiLook : bookwormRadiLook), expression: "grin" as const }
-  const dangle = Math.sin(seconds * 18) * 3 * grip
+  const look = { ...(seconds < EXIT_SUIT_AT ? bookwormRadiLook : isBatman ? batmanRadiLook : unicornRadiLook), expression: "grin" as const }
+  const dangle = Math.sin(seconds * (isBatman ? 18 : 14)) * (isBatman ? 3 : 1.5) * grip
+  const [trailingLift, leadLift] = isBatman ? [3, 3] : [7, 2]
   const drawTossedBook = () => {
     if (bookFly <= 0) return
-    const releaseBounce = Math.abs(Math.sin((BATMAN_BOOK_START * Math.PI * 2) / 0.34)) * 9 * scale
+    const releaseBounce = Math.abs(Math.sin((EXIT_BOOK_START * Math.PI * 2) / 0.34)) * 9 * scale
     const flyX = mix(landingX, width * 0.68, bookFly)
     const flyY = mix(floorY - releaseBounce - 7 * scale, floorY - 18 * scale, bookFly) - Math.sin(bookFly * Math.PI) * 120 * scale
     if (bookFly < 0.92) {
@@ -1680,30 +1854,39 @@ const drawBatmanExit = (
   }
   const zipLength = Math.hypot(hook[0] - launch[0], hook[1] - launch[1]) || 1
   const alongZip: Point = [(hook[0] - launch[0]) / zipLength, (hook[1] - launch[1]) / zipLength]
-  if (seconds < BATMAN_RISE_END) {
+  if (seconds < EXIT_RISE_END) {
     const [feetX, feetY] = toWorld([0, 0])
     const lift = stageProgress(floorY - feetY, 0, floorY - holeY)
     paintFill(context, "rgba(80, 42, 20, 0.16)", ellipsePath(feetX, floorY, mix(36, 8, lift) * scale, mix(7, 2, lift) * scale))
     context.save()
     clipBelowCeilingOpening(context, width, height, ceilingY)
-    drawZipStreaks(context, anchor, alongZip, speed, seconds, scale)
+    if (isBatman) drawZipStreaks(context, anchor, alongZip, speed, seconds, scale)
+    else drawRainbowTrail(context, flightAt, seconds, scale)
     context.translate(anchor[0], anchor[1])
     context.rotate(swing)
     context.scale(sideStretch, stretch)
-    context.translate(-BATMAN_GRIP[0] * bodyScale, -BATMAN_GRIP[1] * bodyScale)
+    context.translate(-EXIT_ANCHOR[0] * bodyScale, -EXIT_ANCHOR[1] * bodyScale)
     drawRadi(context, look, 0, 0, bodyScale, {
-      hideLegs: seconds < BATMAN_SUIT_AT,
+      hideLegs: seconds < EXIT_SUIT_AT,
       hands,
       elbowBends: naturalElbows(hands),
-      legLifts: [legBend + dangle + 3 * grip, legBend - dangle + 3 * grip],
+      legLifts: [legBend + dangle + trailingLift * grip, legBend - dangle + leadLift * grip],
       kneeBends: [legBend * 0.8 + 2 * grip, legBend * 0.8 + 2 * grip],
     })
-    if (stand < 0.92 && seconds < BATMAN_SMOKE_START + 0.24) drawSeatedLegs(context, 0, 0, bodyScale, 1 - stand)
+    if (stand < 0.92 && seconds < EXIT_SMOKE_START + 0.24) drawSeatedLegs(context, 0, 0, bodyScale, 1 - stand)
     if (bookFly <= 0) drawReadingBook(context, 0, -18 * bodyScale, bodyScale, 1, 0)
     context.restore()
   }
-  drawTransformSmoke(context, landingX, floorY - 50 * scale, scale, seconds)
-  if (seconds >= BATMAN_FIRE_START && seconds < BATMAN_ZIP_END) {
+  drawTransformSmoke(context, landingX, floorY - 50 * scale, scale, seconds, isBatman ? BAT_SMOKE : UNICORN_GLITTER)
+  if (!isBatman) {
+    drawRainbowBurst(context, landingX, floorY - 50 * scale, scale, seconds)
+    drawLaunchStars(context, landingX, floorY, scale, seconds)
+    drawOrbiters(context, width, ceilingY, landingX, floorY, scale, seconds, true, drawUnicornFlier)
+    drawStarShower(context, holeX, holeY, radiusX, floorY, scale, seconds)
+    drawTossedBook()
+    return
+  }
+  if (seconds >= BATMAN_FIRE_START && seconds < EXIT_ARRIVE) {
     const ropeFrom = toWorld(hands[1])
     const shot = easeOut(stageProgress(seconds, BATMAN_FIRE_START, BATMAN_HOOK_BITE))
     const sinceBite = seconds - BATMAN_HOOK_BITE
@@ -1714,7 +1897,7 @@ const drawBatmanExit = (
   }
   drawHookBite(context, holeX, holeY, scale, seconds)
   drawLaunchDust(context, landingX, floorY, scale, seconds)
-  drawOrbitBats(context, width, ceilingY, landingX, floorY, scale, seconds, true)
+  drawOrbiters(context, width, ceilingY, landingX, floorY, scale, seconds, true, drawBat)
   drawEscapeBats(context, holeX, holeY, scale, seconds)
   drawTossedBook()
 }
@@ -1732,7 +1915,8 @@ const drawLibraryRadi = (
   jokeQuizStartSeconds: number | null,
   wrongSeconds: number | null,
   cheerSeconds: number | null,
-  batmanSeconds: number | null,
+  exitSeconds: number | null,
+  exitHero: ExitHero | null,
   boringShakeSeconds: number | null,
 ) => {
   const ladder = ladderPlacement(width, height, floorY)
@@ -1741,7 +1925,7 @@ const drawLibraryRadi = (
   else if (sceneSeconds < WALK_TO_LADDER_END) drawSkippingRadi(context, landingX, ladderX, floorY, scale, sceneSeconds, WALK_TO_LADDER_START, WALK_TO_LADDER_END, false)
   else if (sceneSeconds < WALK_BACK_START) drawClimbingRadi(context, ladder, floorY, scale, sceneSeconds)
   else if (sceneSeconds < WALK_BACK_END) drawSkippingRadi(context, ladderX, landingX, floorY, scale, sceneSeconds, WALK_BACK_START, WALK_BACK_END, true)
-  else if (batmanSeconds !== null) drawBatmanBackdrop(context, width, height, floorY, landingX, scale, batmanSeconds)
+  else if (exitSeconds !== null && exitHero !== null) drawExitBackdrop(context, width, height, floorY, landingX, scale, exitSeconds, exitHero)
   else drawReadingRadi(context, landingX, floorY, scale, sceneSeconds, quizPhase, jokeQuizStartSeconds, wrongSeconds, cheerSeconds, boringShakeSeconds)
 }
 
@@ -1762,16 +1946,17 @@ export const drawLibraryScene = (
   cheerSeconds: number | null = null,
   finalChoice: FinalChoice | null = null,
   hoveredFinal: FinalChoice | null = null,
-  batmanSeconds: number | null = null,
+  exitSeconds: number | null = null,
   boringShakeSeconds: number | null = null,
 ) => {
   const { scale, floorY, ceilingY, landingX } = libraryLayout(width, height)
+  const exitHero = finalChoice === "batman" || finalChoice === "unicorn" ? finalChoice : null
   const sinceImpact = sceneSeconds - FALL_END
   const { lowestY } = crashMotion(sceneSeconds, floorY, scale)
   const breaking = ceilingBreak(lowestY, ceilingY)
   const sinceBreak = sceneSeconds - breakStartSeconds(floorY, scale, ceilingY)
   const breakShake = breaking.travel > 0 && breaking.travel < 130 ? (1 - breaking.travel / 130) * 8 : 0
-  const shake = Math.max(sinceImpact >= 0 ? (1 - stageProgress(sinceImpact, 0, SHAKE_SECONDS)) * SHAKE_STRENGTH : 0, breakShake, batmanShake(batmanSeconds))
+  const shake = Math.max(sinceImpact >= 0 ? (1 - stageProgress(sinceImpact, 0, SHAKE_SECONDS)) * SHAKE_STRENGTH : 0, breakShake, exitShake(exitSeconds, exitHero))
   const flash = sinceImpact >= 0 ? 0.55 * (1 - stageProgress(sinceImpact, 0, FLASH_SECONDS)) : 0
   context.lineJoin = "round"
   context.lineCap = "round"
@@ -1783,7 +1968,7 @@ export const drawLibraryScene = (
   drawNightHole(context, width, ceilingY, breaking.holeOpen, time)
   const ladder = ladderPlacement(width, height, floorY)
   drawLadder(context, ladder.left, floorY, ladder.top, sinceImpact)
-  drawLibraryRadi(context, width, height, floorY, landingX, scale, time, sceneSeconds, quizPhase, jokeQuizStartSeconds, wrongSeconds, cheerSeconds, batmanSeconds, boringShakeSeconds)
+  drawLibraryRadi(context, width, height, floorY, landingX, scale, time, sceneSeconds, quizPhase, jokeQuizStartSeconds, wrongSeconds, cheerSeconds, exitSeconds, exitHero, boringShakeSeconds)
   drawCeilingBoards(context, width, ceilingY, breaking.holeOpen)
   drawCeilingCracks(context, width, ceilingY, breaking.holeOpen < 0.55 ? breaking.cracks : 0)
   drawHoleRim(context, width, ceilingY, breaking.holeOpen)
@@ -1793,7 +1978,7 @@ export const drawLibraryScene = (
   drawBreakDebris(context, width, height, ceilingY, floorY, sinceBreak)
   drawBookcase(context, 12, ceilingY - 6, width * 0.2, floorY + 8, sinceImpact)
   drawBookcase(context, width * 0.8, ceilingY - 6, width - 12, floorY + 8, sinceImpact)
-  if (batmanSeconds !== null && sceneSeconds >= WALK_BACK_END) drawBatmanExit(context, width, height, floorY, landingX, scale, batmanSeconds)
+  if (exitSeconds !== null && exitHero !== null && sceneSeconds >= WALK_BACK_END) drawHeroExit(context, width, height, floorY, landingX, scale, exitSeconds, exitHero)
   drawDust(context, landingX, floorY, sceneSeconds)
   drawSpeechBubble(context, width, landingX, floorY, scale, easeOutBack(stageProgress(sceneSeconds, SAY_START, SAY_START + BUBBLE_POP_SECONDS)) * (1 - stageProgress(sceneSeconds, SAY_END - BUBBLE_HIDE_SECONDS, SAY_END)))
   drawLibraryQuizzes(
