@@ -8,6 +8,7 @@ import { FILM_SCENES } from "@/scenes/filmScenes"
 import {
   drawLibraryScene,
   LIBRARY_EXIT_END,
+  LIBRARY_LANDING_SECONDS,
   libraryQuizChoiceLayouts,
   QUIZ_ADVANCE_AFTER_WRONG,
   RIGHT_CHEER_SECONDS,
@@ -121,6 +122,26 @@ export const FilmCanvas = () => {
       danceSong.volume = danceFadeDirection === "in" ? fade : 1 - fade
       if (danceFadeDirection === "out" && fadeUnit >= 1) stopDanceSong()
     }
+    const horoFadeMilliseconds = 2000
+    let horoFadeDirection: "in" | "out" | null = null
+    let horoFadeStartedAt: number | null = null
+    let horoSongStarted = false
+    const horoSong = new Audio("/horo.webm")
+    const stopHoroSong = () => {
+      horoSong.volume = 0
+      horoSong.pause()
+      if (horoSong.currentTime > 0) horoSong.currentTime = 0
+      horoSong.volume = 1
+      horoFadeDirection = null
+      horoFadeStartedAt = null
+    }
+    const fadeHoroSong = (timeMilliseconds: number) => {
+      if (horoFadeDirection === null || horoFadeStartedAt === null) return
+      const fadeUnit = Math.min(1, Math.max(0, (timeMilliseconds - horoFadeStartedAt) / horoFadeMilliseconds))
+      const fade = fadeUnit * fadeUnit * (3 - 2 * fadeUnit)
+      horoSong.volume = horoFadeDirection === "in" ? fade : 1 - fade
+      if (horoFadeDirection === "out" && fadeUnit >= 1) stopHoroSong()
+    }
     const backgroundPlaylist = createBackgroundPlaylist()
     let arrivalStartMilliseconds: number | null = null
     let kiraStartMilliseconds: number | null = null
@@ -203,17 +224,34 @@ export const FilmCanvas = () => {
         danceFadeStartedAt = timeMilliseconds
       }
       fadeDanceSong(timeMilliseconds)
-      backgroundPlaylist.update(timeMilliseconds, songFadeDirection !== null || danceFadeDirection !== null)
       const librarySeconds = secondsSince(libraryStartMilliseconds)
       const exitSeconds = secondsSince(exitStartMilliseconds)
       if (librarySeconds !== null && exitSeconds !== null && exitSeconds >= LIBRARY_EXIT_END) natureStartMilliseconds ??= timeMilliseconds
       const natureSeconds = secondsSince(natureStartMilliseconds)
       if (natureSeconds === null) {
+        horoSongStarted = false
+        if (!horoSong.paused || horoFadeStartedAt !== null) stopHoroSong()
         horoTargetSteps = 0
         horoSteps = 0
         horoIdleSteps = 0
         hasScrolledHoro = false
+      } else if (!horoSongStarted) {
+        horoSongStarted = true
+        horoFadeDirection = "in"
+        horoFadeStartedAt = timeMilliseconds
+        horoSong.volume = 0
+        horoSong.currentTime = 0
+        void horoSong.play().catch(() => {})
+      } else if (horoFadeDirection === "in" && Number.isFinite(horoSong.duration) && horoSong.currentTime >= horoSong.duration - horoFadeMilliseconds / 1000) {
+        horoFadeDirection = "out"
+        horoFadeStartedAt = timeMilliseconds
       }
+      fadeHoroSong(timeMilliseconds)
+      const hasLeftTheCar = drive?.arrivalSeconds != null && drive.arrivalSeconds >= RADI_EXIT_START
+      const hasLandedInLibrary = librarySeconds !== null && librarySeconds >= LIBRARY_LANDING_SECONDS
+      const hasExitedAsHero = exitStartMilliseconds !== null && (finalChoice === "batman" || finalChoice === "unicorn")
+      const holdBackground = natureSeconds !== null || hasExitedAsHero || (!hasLandedInLibrary && (hasLeftTheCar || clubSeconds !== null || librarySeconds !== null))
+      backgroundPlaylist.update(timeMilliseconds, songFadeDirection !== null || danceFadeDirection !== null || holdBackground)
       pinnedScrollY = !isShowingConcepts && natureSeconds !== null && natureSeconds >= HORO_START ? (pinnedScrollY ?? window.scrollY) : null
       horoSteps += (horoTargetSteps - horoSteps) * (1 - Math.exp(-elapsedSeconds * 5))
       if (pinnedScrollY !== null) horoIdleSteps += elapsedSeconds * HORO_IDLE_STEPS_PER_SECOND * Math.max(0, 1 - Math.abs(horoTargetSteps - horoSteps) * 4)
@@ -581,6 +619,7 @@ export const FilmCanvas = () => {
       unsubscribeFromScenes()
       stopDriveSong()
       stopDanceSong()
+      stopHoroSong()
       backgroundPlaylist.stop()
     }
   }, [])
