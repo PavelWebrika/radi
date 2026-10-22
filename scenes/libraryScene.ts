@@ -116,7 +116,7 @@ const ARM_SEGMENT = 9
 const SHOULDER_X = 8.5
 const SHOULDER_Y = -42.5
 
-const easeInOut = (amount: number) => amount * amount * (3 - 2 * amount)
+export const easeInOut = (amount: number) => amount * amount * (3 - 2 * amount)
 
 const elbowBendFor = ([handX, handY]: Point, side: number) => {
   const reach = Math.hypot(handX - side * SHOULDER_X, handY - SHOULDER_Y)
@@ -125,7 +125,7 @@ const elbowBendFor = ([handX, handY]: Point, side: number) => {
 
 const naturalElbows = (hands: readonly [Point, Point]): readonly [number, number] => [elbowBendFor(hands[0], -1), elbowBendFor(hands[1], 1)]
 
-const mixHands = (from: readonly [Point, Point], to: readonly [Point, Point], amount: number): readonly [Point, Point] => [
+export const mixHands = (from: readonly [Point, Point], to: readonly [Point, Point], amount: number): readonly [Point, Point] => [
   mixPoint(from[0], to[0], amount),
   mixPoint(from[1], to[1], amount),
 ]
@@ -155,7 +155,7 @@ const libraryLayout = (width: number, height: number) => ({
 type SpineMark = (typeof SPINE_MARKS)[number]
 type ShelfOrnament = "plant" | "clock" | "none"
 
-const seededRandom = (index: number, salt: number) => {
+export const seededRandom = (index: number, salt: number) => {
   const wave = Math.sin(index * 12.9898 + salt * 78.233) * 43758.5453
   return wave - Math.floor(wave)
 }
@@ -1379,6 +1379,11 @@ const EXIT_LAUNCH = 3.6
 const EXIT_ARRIVE = 4.4
 const EXIT_RISE_END = 4.75
 const EXIT_MOON_END = 5.5
+const EXIT_IRIS_START = 5.6
+const EXIT_IRIS_FOCUS_END = 6.6
+const EXIT_IRIS_CLOSE_START = 7
+const EXIT_IRIS_CLOSE_END = 7.4
+export const LIBRARY_EXIT_END = EXIT_IRIS_CLOSE_END + 0.3
 const EXIT_ANCHOR: Point = [0, -59]
 const EXIT_YAY_HANDS: readonly [Point, Point] = [[-18, -68], [18, -68]]
 const EXIT_TOSS_HANDS: readonly [Point, Point] = [[-12, -28], [32, -44]]
@@ -1858,7 +1863,7 @@ const drawHeroExit = (
     const [feetX, feetY] = toWorld([0, 0])
     const lift = stageProgress(floorY - feetY, 0, floorY - holeY)
     paintFill(context, "rgba(80, 42, 20, 0.16)", ellipsePath(feetX, floorY, mix(36, 8, lift) * scale, mix(7, 2, lift) * scale))
-    context.save()
+  context.save()
     clipBelowCeilingOpening(context, width, height, ceilingY)
     if (isBatman) drawZipStreaks(context, anchor, alongZip, speed, seconds, scale)
     else drawRainbowTrail(context, flightAt, seconds, scale)
@@ -1874,8 +1879,8 @@ const drawHeroExit = (
       kneeBends: [legBend * 0.8 + 2 * grip, legBend * 0.8 + 2 * grip],
     })
     if (stand < 0.92 && seconds < EXIT_SMOKE_START + 0.24) drawSeatedLegs(context, 0, 0, bodyScale, 1 - stand)
-    if (bookFly <= 0) drawReadingBook(context, 0, -18 * bodyScale, bodyScale, 1, 0)
-    context.restore()
+  if (bookFly <= 0) drawReadingBook(context, 0, -18 * bodyScale, bodyScale, 1, 0)
+  context.restore()
   }
   drawTransformSmoke(context, landingX, floorY - 50 * scale, scale, seconds, isBatman ? BAT_SMOKE : UNICORN_GLITTER)
   if (!isBatman) {
@@ -2009,4 +2014,10 @@ export const drawLibraryScene = (
   if (flash > 0) paintFill(context, `rgba(255, 248, 230, ${flash})`, (path) => path.rect(0, 0, width, height))
   const fullRadius = Math.hypot(width, height)
   if (sceneSeconds < IRIS_IN_END) paintIris(context, width, height, landingX, floorY - 70 * scale, mix(0, fullRadius, stageProgress(sceneSeconds, 0, IRIS_IN_END) ** 2))
+  if (exitSeconds !== null && exitHero !== null && exitSeconds >= EXIT_IRIS_START) {
+    const { holeX, holeY, radiusX } = holePlacement(width, ceilingY, 1)
+    const focus = 1 - (1 - stageProgress(exitSeconds, EXIT_IRIS_START, EXIT_IRIS_FOCUS_END)) ** 3
+    const close = stageProgress(exitSeconds, EXIT_IRIS_CLOSE_START, EXIT_IRIS_CLOSE_END)
+    paintIris(context, width, height, holeX, holeY, mix(fullRadius, radiusX * 1.15, focus) * (1 - close ** 2))
+  }
 }

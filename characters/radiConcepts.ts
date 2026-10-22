@@ -135,26 +135,34 @@ const unicornConcept = polishConcept({
 
 export const unicornRadiLook = unicornConcept.look
 
+const polishedGaidaConcept = polishConcept(gaidaConcept, { hair: "tucked", extras: ["pendant", "gaida", "kalpak"], shoes: "tsarvuli" })
+
+export const gaidaRadiLook = polishedGaidaConcept.look
+
+const folkDanceConcept = polishConcept({
+  name: "Folk Dance Radi",
+  background: "#7cc8ff",
+  look: {
+    hair: "bun",
+    expression: "grin",
+    pose: "wave",
+    top: { color: "#1f7a45", pattern: "sukman" },
+    bottom: { kind: "skirt", color: "#1f7a45", pattern: "sukman" },
+    extras: ["apron", "pafti", "puffSleeves", "hairFlower"],
+    shoes: "folkFlats",
+  },
+})
+
+export const folkDanceRadiLook = folkDanceConcept.look
+
 const radiConcepts: RadiConcept[] = [
   polishConcept(everydayConcept),
   polishedPopArtConcept,
   polishConcept(sunnyConcept),
-  polishConcept(gaidaConcept, { hair: "tucked", extras: ["pendant", "gaida", "kalpak"], shoes: "tsarvuli" }),
+  polishedGaidaConcept,
   polishedNightClubConcept,
   bookwormConcept,
-  polishConcept({
-    name: "Folk Dance Radi",
-    background: "#7cc8ff",
-    look: {
-      hair: "bun",
-      expression: "grin",
-      pose: "wave",
-      top: { color: "#1f7a45", pattern: "sukman" },
-      bottom: { kind: "skirt", color: "#1f7a45", pattern: "sukman" },
-      extras: ["apron", "pafti", "puffSleeves", "hairFlower"],
-      shoes: "folkFlats",
-    },
-  }),
+  folkDanceConcept,
   batmanConcept,
   unicornConcept,
 ]

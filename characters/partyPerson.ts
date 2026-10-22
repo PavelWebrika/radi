@@ -3,12 +3,12 @@ import { OUTLINE, OUTLINE_WIDTH, WHITE, paintTube, type Point } from "@/characte
 
 type PartyHair = "short" | "buzz" | "long" | "curly" | "bob" | "bun" | "ponytail" | "mohawk" | "bald"
 type PartyEyes = "dot" | "round" | "sleepy" | "lashes"
-type PartyTop = "tee" | "tank" | "shirt" | "crop" | "hoodie" | "blazer"
-type PartyBottom = "jeans" | "shorts" | "skirt"
-type PartyShoes = "sneakers" | "boots" | "heels" | "loafers"
+type PartyTop = "tee" | "tank" | "shirt" | "crop" | "hoodie" | "blazer" | "folkShirt" | "sukman"
+type PartyBottom = "jeans" | "shorts" | "skirt" | "folkTrousers" | "folkSkirt"
+type PartyShoes = "sneakers" | "boots" | "heels" | "loafers" | "tsarvuli"
 type PartyBuild = "slim" | "broad" | "curvy"
 type PartyFace = "smile" | "laugh" | "vibing" | "amazed"
-type PartyExtra = "beard" | "stubble" | "mustache" | "glasses" | "sunglasses" | "cap" | "earrings" | "chain" | "drink" | "sequins"
+type PartyExtra = "beard" | "stubble" | "mustache" | "glasses" | "sunglasses" | "cap" | "earrings" | "chain" | "drink" | "sequins" | "kalpak" | "flowerCrown" | "sash" | "folkApron" | "handkerchief"
 type BuildShape = { torso: number; hip: number }
 
 export type PartyPerson = {
@@ -46,7 +46,10 @@ const EYE_Y = -63
 const ARM_SEGMENT = 12
 const LEG_SEGMENT = 8
 const GOLD = "#f2c94c"
-const LONG_SLEEVE_TOPS: readonly PartyTop[] = ["shirt", "hoodie", "blazer"]
+const LONG_SLEEVE_TOPS: readonly PartyTop[] = ["shirt", "hoodie", "blazer", "folkShirt", "sukman"]
+const FOLK_RED = "#d62828"
+const FUR = "#2a1f1a"
+const CROWN_FLOWERS = [[-19, -80, "#ff4d6d"], [-13, -88, WHITE], [-6, -92, "#ffd23f"], [1, -93.5, "#ff4d6d"], [8, -92, WHITE], [14.5, -88, "#ffd23f"], [19.5, -80, "#ff4d6d"]] as const
 
 const hasExtra = (person: PartyPerson, extra: PartyExtra) => person.extras.includes(extra)
 
@@ -136,6 +139,14 @@ const shoePainters: Record<PartyShoes, (context: Context, color: string) => void
     paintShape(context, color, ellipsePath(1, -2.8, 5.5, 2.9))
     paintLine(context, GOLD, 0.9, linePath(0, -4.6, 3, -4.6))
   },
+  tsarvuli: (context, color) => {
+    for (const strapY of [-12, -8.5]) {
+      paintLine(context, OUTLINE, 0.8, linePath(-3, strapY - 2, 3, strapY + 1.5))
+      paintLine(context, OUTLINE, 0.8, linePath(3, strapY - 2, -3, strapY + 1.5))
+    }
+    paintShape(context, color, ellipsePath(1, -2.8, 5.8, 3))
+    paintFill(context, FOLK_RED, ellipsePath(1, -5.4, 1.2, 1.2))
+  },
 }
 
 const drawLegs = (context: Context, person: PartyPerson, pose: PartyPose) => {
@@ -144,7 +155,8 @@ const drawLegs = (context: Context, person: PartyPerson, pose: PartyPose) => {
     const hip: Point = [side * 5 + pose.sway, -22 + pose.bounce]
     const foot: Point = [side * 6, -5 - footLift]
     const knee = jointBetween(hip, foot, LEG_SEGMENT, side)
-    paintTube(context, person.bottom === "jeans" ? person.bottomColor : person.skin, 6, limbPath(hip, knee, foot))
+    const legColor = person.bottom === "jeans" || person.bottom === "folkTrousers" ? person.bottomColor : person.bottom === "folkSkirt" ? WHITE : person.skin
+    paintTube(context, legColor, 6, limbPath(hip, knee, foot))
     if (person.bottom === "shorts") paintTube(context, person.bottomColor, 7.5, linePath(...hip, ...pointAlong(hip, knee, 0.8)))
     if (person.shoes === "boots") paintTube(context, person.shoeColor, 8, linePath(...knee, ...foot))
     context.save()
@@ -156,6 +168,21 @@ const drawLegs = (context: Context, person: PartyPerson, pose: PartyPose) => {
 }
 
 const drawBottom = (context: Context, person: PartyPerson, { hip }: BuildShape) => {
+  if (person.bottom === "folkSkirt") {
+    paintShape(context, person.bottomColor, (path) => {
+      path.moveTo(-hip, HIP_TOP)
+      path.lineTo(hip, HIP_TOP)
+      path.lineTo(hip + 6, -11)
+      path.quadraticCurveTo(0, -9, -hip - 6, -11)
+      path.closePath()
+    }, {
+      decorateInside: (skirtContext) => {
+        paintFill(skirtContext, person.accentColor, (path) => path.rect(-hip - 8, -16, hip * 2 + 16, 4))
+        for (let dotX = -hip - 4; dotX <= hip + 4; dotX += 3.5) paintFill(skirtContext, WHITE, ellipsePath(dotX, -14, 0.7, 0.7))
+      },
+    })
+    return
+  }
   if (person.bottom !== "skirt") {
     paintShape(context, person.bottomColor, (path) => path.roundRect(-hip, HIP_TOP, hip * 2, 10, 3))
     return
@@ -191,7 +218,44 @@ const drawTop = (context: Context, person: PartyPerson, { torso }: BuildShape) =
     paintFill(context, OUTLINE, ellipsePath(0, -33, 0.7, 0.9))
     return
   }
+  if (top === "sukman") {
+    paintShape(context, WHITE, (path) => path.roundRect(-torso, TORSO_TOP, torso * 2, torsoHeight, 5))
+    paintShape(context, topColor, (path) => {
+      path.moveTo(-torso, TORSO_BOTTOM)
+      path.lineTo(-torso, -42)
+      path.lineTo(-torso + 3, TORSO_TOP)
+      path.lineTo(-4, TORSO_TOP)
+      path.lineTo(0, -40)
+      path.lineTo(4, TORSO_TOP)
+      path.lineTo(torso - 3, TORSO_TOP)
+      path.lineTo(torso, -42)
+      path.lineTo(torso, TORSO_BOTTOM)
+      path.closePath()
+    })
+    paintLine(context, accentColor, 1.4, (path) => {
+      path.moveTo(-4.5, TORSO_TOP + 0.5)
+      path.lineTo(0, -39)
+      path.lineTo(4.5, TORSO_TOP + 0.5)
+    })
+    return
+  }
   paintShape(context, topColor, (path) => path.roundRect(-torso, TORSO_TOP, torso * 2, torsoHeight, 5), { decorateInside: sequins })
+  if (top === "folkShirt") {
+    paintLine(context, accentColor, 1.6, (path) => {
+      path.moveTo(-5, TORSO_TOP + 0.5)
+      path.quadraticCurveTo(0, -45, 5, TORSO_TOP + 0.5)
+    })
+    paintLine(context, accentColor, 1.2, linePath(0, -45.5, 0, -38))
+    for (const [diamondX, diamondY] of [[-5, -36], [5, -36], [0, -33]]) {
+      paintFill(context, accentColor, (path) => {
+        path.moveTo(diamondX, diamondY - 1.6)
+        path.lineTo(diamondX + 1.6, diamondY)
+        path.lineTo(diamondX, diamondY + 1.6)
+        path.lineTo(diamondX - 1.6, diamondY)
+        path.closePath()
+      })
+    }
+  }
   if (top === "tee") {
     paintShape(context, accentColor, (path) => {
       for (let pointIndex = 0; pointIndex < 10; pointIndex += 1) {
@@ -245,15 +309,39 @@ const drawCup = (context: Context, [handX, handY]: Point) => {
   paintLine(context, WHITE, 0.8, linePath(handX - 2.4, handY - 6, handX + 2.4, handY - 6))
 }
 
+const drawHandkerchief = (context: Context, [handX, handY]: Point) => {
+  paintShape(context, FOLK_RED, (path) => {
+    path.moveTo(handX, handY)
+    path.quadraticCurveTo(handX + 7, handY - 5, handX + 12, handY + 1)
+    path.quadraticCurveTo(handX + 8, handY + 5, handX + 4, handY + 11)
+    path.quadraticCurveTo(handX + 2, handY + 5, handX, handY)
+    path.closePath()
+  })
+}
+
+const drawFolkWaist = (context: Context, person: PartyPerson, { hip }: BuildShape) => {
+  if (hasExtra(person, "folkApron")) {
+    paintShape(context, person.accentColor, (path) => path.roundRect(-6.5, TORSO_BOTTOM - 1, 13, 18, 2), {
+      decorateInside: (apronContext) => {
+        for (const [stripeY, stripeColor] of [[-27, FUR], [-22, GOLD], [-17, WHITE]] as const) paintFill(apronContext, stripeColor, (path) => path.rect(-7, stripeY, 14, 2))
+      },
+    })
+  }
+  if (hasExtra(person, "sash")) paintShape(context, person.accentColor, (path) => path.roundRect(-hip - 0.5, TORSO_BOTTOM - 3, hip * 2 + 1, 5, 1.5))
+}
+
 const drawArms = (context: Context, person: PartyPerson, { torso }: BuildShape, hands: PartyPose["hands"]) => {
   const hasLongSleeves = LONG_SLEEVE_TOPS.includes(person.top)
   SIDES.forEach((side, index) => {
     const shoulder: Point = [side * (torso - 0.5), SHOULDER_Y]
     const hand = hands[index]
     const elbow = jointBetween(shoulder, hand, ARM_SEGMENT, side)
+    const isFolkTop = person.top === "folkShirt" || person.top === "sukman"
     if (index === 1 && hasExtra(person, "drink")) drawCup(context, hand)
-    paintTube(context, hasLongSleeves ? person.topColor : person.skin, 4.5, limbPath(shoulder, elbow, hand))
+    if (index === 1 && hasExtra(person, "handkerchief")) drawHandkerchief(context, hand)
+    paintTube(context, person.top === "sukman" ? WHITE : hasLongSleeves ? person.topColor : person.skin, 4.5, limbPath(shoulder, elbow, hand))
     if (person.top === "tee") paintTube(context, person.topColor, 6.5, linePath(...shoulder, ...pointAlong(shoulder, elbow, 0.6)))
+    if (isFolkTop) paintTube(context, person.accentColor, 4.6, linePath(...pointAlong(elbow, hand, 0.62), ...pointAlong(elbow, hand, 0.8)))
     paintShape(context, person.skin, ellipsePath(hand[0], hand[1], 2.8, 2.8))
   })
 }
@@ -412,6 +500,27 @@ const drawHairFront = (context: Context, { hair, hairColor }: PartyPerson) => {
 }
 
 const drawHeadwear = (context: Context, person: PartyPerson) => {
+  if (hasExtra(person, "kalpak")) {
+    paintShape(context, FUR, (path) => {
+      path.moveTo(-20, -79)
+      path.lineTo(-17, -105)
+      path.quadraticCurveTo(0, -111, 17, -105)
+      path.lineTo(20, -79)
+      path.quadraticCurveTo(0, -83, -20, -79)
+      path.closePath()
+    })
+    for (const [furX, furY] of [[-10, -98], [0, -101], [10, -97], [-5, -89], [6, -88]]) paintLine(context, "#5a4636", 0.8, (path) => path.arc(furX, furY, 2, Math.PI * 1.1, Math.PI * 1.9))
+  }
+  if (hasExtra(person, "flowerCrown")) {
+    paintLine(context, "#2f9e44", 1.6, (path) => {
+      path.moveTo(-21, -76)
+      path.quadraticCurveTo(0, -110, 21, -76)
+    })
+    for (const [flowerX, flowerY, flowerColor] of CROWN_FLOWERS) {
+      paintShape(context, flowerColor, ellipsePath(flowerX, flowerY, 3.4, 3.4))
+      paintFill(context, flowerColor === "#ffd23f" ? FOLK_RED : "#ffd23f", ellipsePath(flowerX, flowerY, 1.2, 1.2))
+    }
+  }
   if (hasExtra(person, "cap")) {
     paintShape(context, person.accentColor, (path) => {
       path.moveTo(-23, -74)
@@ -457,6 +566,7 @@ export const drawPartyPerson = (context: Context, person: PartyPerson, feetX: nu
   if (person.top === "hoodie") paintShape(context, person.topColor, ellipsePath(0, -47, 15, 6))
   drawBottom(context, person, build)
   drawTop(context, person, build)
+  drawFolkWaist(context, person, build)
   drawArms(context, person, build, pose.hands)
   withHeadTilt(() => {
     drawFace(context, person, pose.lookUp)

@@ -7,6 +7,7 @@ import { CLUB_SCENE_END, drawClubScene, LAUNCH_START, letsDanceButtonLayout, pla
 import { FILM_SCENES } from "@/scenes/filmScenes"
 import {
   drawLibraryScene,
+  LIBRARY_EXIT_END,
   libraryQuizChoiceLayouts,
   QUIZ_ADVANCE_AFTER_WRONG,
   RIGHT_CHEER_SECONDS,
@@ -16,6 +17,7 @@ import {
   type JokeChoice,
   type LibraryQuizPhase,
 } from "@/scenes/libraryScene"
+import { drawNatureScene, HORO_START } from "@/scenes/natureScene"
 import { drawOpeningScene, greetingButtonLayout, KIRA_SCENE_END, startButtonLayout, type BubbleButtonLayout } from "@/scenes/openingScene"
 import { createBackgroundPlaylist } from "@/audio/backgroundPlaylist"
 import { useFilmStore } from "@/store/film"
@@ -34,6 +36,7 @@ const readScrollProgress = () => {
 }
 
 const DRIVE_BOOST_PER_PIXEL = 0.006
+const HORO_STEPS_PER_PIXEL = 0.006
 const WHEEL_LINE_PIXELS = 16
 
 const placeQuizButton = (button: HTMLButtonElement, layout: { centerX: number; centerY: number; width: number; height: number } | null, chosen: boolean) => {
@@ -137,6 +140,11 @@ export const FilmCanvas = () => {
     let cheerQuestionStarted = false
     let exitStartMilliseconds: number | null = null
     let boringShakeStartMilliseconds: number | null = null
+    let natureStartMilliseconds: number | null = null
+    let horoTargetSteps = 0
+    let horoSteps = 0
+    let hasScrolledHoro = false
+    let pinnedScrollY: number | null = null
     let lastTouchY: number | null = null
     let scrollOpen = false
     const drawFrame = (timeMilliseconds: number) => {
@@ -149,6 +157,7 @@ export const FilmCanvas = () => {
         meetingStartMilliseconds = null
         clubStartMilliseconds = null
         libraryStartMilliseconds = null
+        natureStartMilliseconds = null
       }
       const meetingSeconds = meetingStartMilliseconds === null ? null : Math.max(0, timeMilliseconds - meetingStartMilliseconds) / 1000
       const citySeconds = meetingSeconds !== null && meetingSeconds >= KIRA_SCENE_END ? meetingSeconds - KIRA_SCENE_END : null
@@ -194,11 +203,23 @@ export const FilmCanvas = () => {
       fadeDanceSong(timeMilliseconds)
       backgroundPlaylist.update(timeMilliseconds, songFadeDirection !== null || danceFadeDirection !== null)
       const librarySeconds = secondsSince(libraryStartMilliseconds)
+      const exitSeconds = secondsSince(exitStartMilliseconds)
+      if (librarySeconds !== null && exitSeconds !== null && exitSeconds >= LIBRARY_EXIT_END) natureStartMilliseconds ??= timeMilliseconds
+      const natureSeconds = secondsSince(natureStartMilliseconds)
+      if (natureSeconds === null) {
+        horoTargetSteps = 0
+        horoSteps = 0
+        hasScrolledHoro = false
+      }
+      pinnedScrollY = !isShowingConcepts && natureSeconds !== null && natureSeconds >= HORO_START ? (pinnedScrollY ?? window.scrollY) : null
+      horoSteps += (horoTargetSteps - horoSteps) * (1 - Math.exp(-elapsedSeconds * 5))
       const shakingBoring = libraryQuizPhase === "final" && boringShakeStartMilliseconds !== null && timeMilliseconds - boringShakeStartMilliseconds < 1000 && finalChoice === null
       if (isShowingConcepts) {
         context.fillStyle = "#000000"
         context.fillRect(0, 0, window.innerWidth, window.innerHeight)
         drawRadiConcepts(context, window.innerWidth, window.innerHeight)
+      } else if (natureSeconds !== null) {
+        drawNatureScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, natureSeconds, horoSteps, !hasScrolledHoro)
       } else if (librarySeconds !== null) {
         const wrongSeconds = secondsSince(wrongStartMilliseconds)
         if (wrongSeconds !== null && wrongSeconds >= QUIZ_ADVANCE_AFTER_WRONG) {
@@ -244,7 +265,7 @@ export const FilmCanvas = () => {
           cheerSeconds,
           shakingBoring ? "boring" : finalChoice,
           hoveredFinal,
-          secondsSince(exitStartMilliseconds),
+          exitSeconds,
           secondsSince(boringShakeStartMilliseconds),
         )
       } else if (clubSeconds !== null) {
@@ -254,11 +275,11 @@ export const FilmCanvas = () => {
       } else {
         drawOpeningScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, shownProgress, meetingSeconds, scrollOpen)
       }
-      const onOpening = !isShowingConcepts && meetingSeconds === null && citySeconds === null && clubSeconds === null && librarySeconds === null
+      const onOpening = !isShowingConcepts && meetingSeconds === null && citySeconds === null && clubSeconds === null && librarySeconds === null && natureSeconds === null
       const startLayout = scrollOpen || !onOpening ? null : startButtonLayout(window.innerWidth, window.innerHeight, timeMilliseconds / 1000)
       if (startButtonRef.current) placeBubbleButton(startButtonRef.current, startLayout)
       const moreLayout = isShowingConcepts || meetingSeconds !== null ? null : greetingLayout
-      const anywayLayout = isShowingConcepts || citySeconds === null || clubSeconds !== null || librarySeconds !== null ? null : anywayButtonLayout(window.innerWidth, window.innerHeight, citySeconds, anywaySeconds)
+      const anywayLayout = isShowingConcepts || citySeconds === null || clubSeconds !== null || librarySeconds !== null || natureSeconds !== null ? null : anywayButtonLayout(window.innerWidth, window.innerHeight, citySeconds, anywaySeconds)
       if (moreButtonRef.current) placeBubbleButton(moreButtonRef.current, moreLayout)
       if (anywayButtonRef.current) placeBubbleButton(anywayButtonRef.current, anywayLayout)
       const letsDanceLayout = isShowingConcepts || clubSeconds === null ? null : letsDanceButtonLayout(window.innerWidth, window.innerHeight, clubSeconds, letsDanceSeconds)
@@ -343,10 +364,16 @@ export const FilmCanvas = () => {
       }
       driveBoost = Math.min(DRIVE_MAX_BOOST, driveBoost + scrollPixels * DRIVE_BOOST_PER_PIXEL)
     }
+    const stepHoro = (scrollPixels: number) => {
+      if (pinnedScrollY === null) return
+      horoTargetSteps += scrollPixels * HORO_STEPS_PER_PIXEL
+      hasScrolledHoro = true
+    }
     const onWheel = (event: WheelEvent) => {
       backgroundPlaylist.nudge()
       const wheelPixels = event.deltaMode === WheelEvent.DOM_DELTA_PIXEL ? event.deltaY : event.deltaY * WHEEL_LINE_PIXELS
       pressGas(wheelPixels)
+      stepHoro(wheelPixels)
     }
     const onTouchStart = (event: TouchEvent) => {
       lastTouchY = event.touches[0]?.clientY ?? null
@@ -355,7 +382,10 @@ export const FilmCanvas = () => {
       const touchY = event.touches[0]?.clientY
       if (touchY === undefined) return
       backgroundPlaylist.nudge()
-      if (lastTouchY !== null) pressGas(lastTouchY - touchY)
+      if (lastTouchY !== null) {
+        pressGas(lastTouchY - touchY)
+        stepHoro(lastTouchY - touchY)
+      }
       lastTouchY = touchY
     }
     const unsubscribeFromScenes = useFilmStore.subscribe(({ sceneSelection }, previousState) => {
@@ -369,6 +399,11 @@ export const FilmCanvas = () => {
       anywayStartMilliseconds = null
       clubStartMilliseconds = sceneSelection.sceneId === "nightClub" ? performance.now() : null
       libraryStartMilliseconds = sceneSelection.sceneId === "library" ? performance.now() : null
+      natureStartMilliseconds = sceneSelection.sceneId === "nature" ? performance.now() : null
+      horoTargetSteps = 0
+      horoSteps = 0
+      hasScrolledHoro = false
+      pinnedScrollY = null
       libraryQuizPhase = "captain"
       captainChoice = null
       hoveredCaptain = null
@@ -391,6 +426,10 @@ export const FilmCanvas = () => {
     const onScroll = () => {
       if (!scrollOpen) {
         if (window.scrollY !== 0) window.scrollTo(0, 0)
+        return
+      }
+      if (pinnedScrollY !== null) {
+        if (window.scrollY !== pinnedScrollY) window.scrollTo(0, pinnedScrollY)
         return
       }
       backgroundPlaylist.nudge()

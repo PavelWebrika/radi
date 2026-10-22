@@ -6,6 +6,7 @@ export const FILM_SCENES = [
   { id: "cityStreet", name: "3. City Street", meetingStartSeconds: KIRA_SCENE_END },
   { id: "nightClub", name: "4. Night Club", meetingStartSeconds: KIRA_SCENE_END },
   { id: "library", name: "5. Library", meetingStartSeconds: KIRA_SCENE_END },
+  { id: "nature", name: "6. Nature Walk", meetingStartSeconds: KIRA_SCENE_END },
 ] as const
 
 export type FilmSceneId = (typeof FILM_SCENES)[number]["id"]

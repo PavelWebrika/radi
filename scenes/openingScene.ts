@@ -176,7 +176,7 @@ const drawFlowers = (context: Context, width: number, height: number) => {
   })
 }
 
-const drawCloud = (context: Context, centerX: number, centerY: number, unit: number) => {
+export const drawCloud = (context: Context, centerX: number, centerY: number, unit: number) => {
   const cloudShape: BuildPath = (path) => {
     for (const [offsetX, offsetY, radius] of CLOUD_PUFFS) {
       path.moveTo(centerX + (offsetX + radius) * unit, centerY + offsetY * unit)
@@ -324,7 +324,7 @@ export const easeOut = (amount: number) => 1 - (1 - amount) ** 2
 export const easeOutBack = (amount: number) => 1 + 2.7 * (amount - 1) ** 3 + 1.7 * (amount - 1) ** 2
 export const mix = (from: number, to: number, amount: number) => from + (to - from) * amount
 
-const bounce = (phase: number) => {
+export const bounce = (phase: number) => {
   const arc = Math.sin(phase * Math.PI)
   const contact = Math.max(0, 1 - arc * 3)
   return {
