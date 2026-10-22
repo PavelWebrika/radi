@@ -227,16 +227,29 @@ export const paintComicBubble = (context: Context, bubbleParts: BuildPath[], out
   context.fillText(lines[1], centerX, centerY + fontSize * 0.6)
 }
 
-const drawScrollHintBubble = (context: Context, width: number, height: number, time: number, opacity: number) => {
-  if (opacity <= 0) return
+const scrollHintGeometry = (width: number, height: number, time: number) => {
   const bubbleWidth = Math.min(width * 0.72, 560)
-  const bubbleHeight = bubbleWidth * 0.42
-  const centerX = width / 2
-  const centerY = height * 0.38 + Math.sin(time * 1.6) * height * 0.008
+  return {
+    bubbleWidth,
+    bubbleHeight: bubbleWidth * 0.42,
+    centerX: width / 2,
+    centerY: height * 0.38 + Math.sin(time * 1.6) * height * 0.008,
+  }
+}
+
+export const startButtonLayout = (width: number, height: number, time: number): BubbleButtonLayout => {
+  const { bubbleWidth, centerX, centerY } = scrollHintGeometry(width, height, time)
+  return { centerX, centerY, width: bubbleWidth * 0.86, fontSize: Math.max(16, bubbleWidth * 0.055) }
+}
+
+const drawScrollHintBubble = (context: Context, width: number, height: number, time: number, opacity: number, scrollOpen: boolean) => {
+  if (opacity <= 0) return
+  const { bubbleWidth, bubbleHeight, centerX, centerY } = scrollHintGeometry(width, height, time)
   const outlineWidth = Math.max(4, bubbleWidth * 0.012)
+  const lines: readonly [string, string] = scrollOpen ? ["Scroll down", "to meet me!"] : ["", ""]
   context.save()
   context.globalAlpha = opacity
-  paintComicBubble(context, [ellipsePath(centerX, centerY, bubbleWidth / 2, bubbleHeight / 2)], outlineWidth, ["Scroll down", "to meet me!"], centerX, centerY, bubbleWidth * 0.09)
+  paintComicBubble(context, [ellipsePath(centerX, centerY, bubbleWidth / 2, bubbleHeight / 2)], outlineWidth, lines, centerX, centerY, bubbleWidth * 0.09)
   context.restore()
 }
 
@@ -591,7 +604,7 @@ const drawSkippingRadi = (context: Context, width: number, height: number, time:
   }
 }
 
-export const drawOpeningScene = (context: Context, width: number, height: number, time: number, progress: number, meetingSeconds: number | null) => {
+export const drawOpeningScene = (context: Context, width: number, height: number, time: number, progress: number, meetingSeconds: number | null, scrollOpen: boolean) => {
   const horizonY = height * 0.6
   context.lineJoin = "round"
   context.lineCap = "round"
@@ -604,6 +617,6 @@ export const drawOpeningScene = (context: Context, width: number, height: number
   drawFlowers(context, width, height)
   drawClouds(context, width, height, time)
   drawBird(context, width, height, time)
-  drawScrollHintBubble(context, width, height, time, 1 - stageProgress(progress, 0, 0.08))
+  drawScrollHintBubble(context, width, height, time, scrollOpen ? 1 - stageProgress(progress, 0, 0.08) : 1, scrollOpen)
   drawSkippingRadi(context, width, height, time, progress, meetingSeconds)
 }

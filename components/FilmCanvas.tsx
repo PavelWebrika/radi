@@ -16,7 +16,8 @@ import {
   type JokeChoice,
   type LibraryQuizPhase,
 } from "@/scenes/libraryScene"
-import { drawOpeningScene, greetingButtonLayout, KIRA_SCENE_END, type BubbleButtonLayout } from "@/scenes/openingScene"
+import { drawOpeningScene, greetingButtonLayout, KIRA_SCENE_END, startButtonLayout, type BubbleButtonLayout } from "@/scenes/openingScene"
+import { createBackgroundPlaylist } from "@/audio/backgroundPlaylist"
 import { useFilmStore } from "@/store/film"
 
 const resizeCanvas = (canvas: HTMLCanvasElement, context: CanvasRenderingContext2D) => {
@@ -58,6 +59,7 @@ const placeBubbleButton = (button: HTMLButtonElement, layout: BubbleButtonLayout
 
 export const FilmCanvas = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const startButtonRef = useRef<HTMLButtonElement>(null)
   const moreButtonRef = useRef<HTMLButtonElement>(null)
   const anywayButtonRef = useRef<HTMLButtonElement>(null)
   const letsDanceButtonRef = useRef<HTMLButtonElement>(null)
@@ -115,6 +117,7 @@ export const FilmCanvas = () => {
       danceSong.volume = danceFadeDirection === "in" ? fade : 1 - fade
       if (danceFadeDirection === "out" && fadeUnit >= 1) stopDanceSong()
     }
+    const backgroundPlaylist = createBackgroundPlaylist()
     let arrivalStartMilliseconds: number | null = null
     let kiraStartMilliseconds: number | null = null
     let clubStartMilliseconds: number | null = null
@@ -135,6 +138,7 @@ export const FilmCanvas = () => {
     let batmanStartMilliseconds: number | null = null
     let boringShakeStartMilliseconds: number | null = null
     let lastTouchY: number | null = null
+    let scrollOpen = false
     const drawFrame = (timeMilliseconds: number) => {
       const elapsedSeconds = previousTimeMilliseconds === null ? 0 : (timeMilliseconds - previousTimeMilliseconds) / 1000
       previousTimeMilliseconds = timeMilliseconds
@@ -188,6 +192,7 @@ export const FilmCanvas = () => {
         danceFadeStartedAt = timeMilliseconds
       }
       fadeDanceSong(timeMilliseconds)
+      backgroundPlaylist.update(timeMilliseconds, songFadeDirection !== null || danceFadeDirection !== null)
       const librarySeconds = secondsSince(libraryStartMilliseconds)
       const shakingBoring = libraryQuizPhase === "final" && boringShakeStartMilliseconds !== null && timeMilliseconds - boringShakeStartMilliseconds < 1000 && finalChoice === null
       if (isShowingConcepts) {
@@ -247,8 +252,11 @@ export const FilmCanvas = () => {
       } else if (citySeconds !== null) {
         drawCityScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, citySeconds, anywaySeconds, drive)
       } else {
-        drawOpeningScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, shownProgress, meetingSeconds)
+        drawOpeningScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, shownProgress, meetingSeconds, scrollOpen)
       }
+      const onOpening = !isShowingConcepts && meetingSeconds === null && citySeconds === null && clubSeconds === null && librarySeconds === null
+      const startLayout = scrollOpen || !onOpening ? null : startButtonLayout(window.innerWidth, window.innerHeight, timeMilliseconds / 1000)
+      if (startButtonRef.current) placeBubbleButton(startButtonRef.current, startLayout)
       const moreLayout = isShowingConcepts || meetingSeconds !== null ? null : greetingLayout
       const anywayLayout = isShowingConcepts || citySeconds === null || clubSeconds !== null || librarySeconds !== null ? null : anywayButtonLayout(window.innerWidth, window.innerHeight, citySeconds, anywaySeconds)
       if (moreButtonRef.current) placeBubbleButton(moreButtonRef.current, moreLayout)
@@ -290,6 +298,13 @@ export const FilmCanvas = () => {
       })
       animationFrameId = requestAnimationFrame(drawFrame)
     }
+    const openScroll = () => {
+      if (scrollOpen) return
+      scrollOpen = true
+      document.documentElement.dataset.scrollOpen = "true"
+      if (startButtonRef.current) startButtonRef.current.dataset.visible = "false"
+      backgroundPlaylist.nudge()
+    }
     const startMeetingKira = () => {
       meetingStartMilliseconds = performance.now()
     }
@@ -329,7 +344,9 @@ export const FilmCanvas = () => {
       driveBoost = Math.min(DRIVE_MAX_BOOST, driveBoost + scrollPixels * DRIVE_BOOST_PER_PIXEL)
     }
     const onWheel = (event: WheelEvent) => {
-      pressGas(event.deltaMode === WheelEvent.DOM_DELTA_PIXEL ? event.deltaY : event.deltaY * WHEEL_LINE_PIXELS)
+      backgroundPlaylist.nudge()
+      const wheelPixels = event.deltaMode === WheelEvent.DOM_DELTA_PIXEL ? event.deltaY : event.deltaY * WHEEL_LINE_PIXELS
+      pressGas(wheelPixels)
     }
     const onTouchStart = (event: TouchEvent) => {
       lastTouchY = event.touches[0]?.clientY ?? null
@@ -337,6 +354,7 @@ export const FilmCanvas = () => {
     const onTouchMove = (event: TouchEvent) => {
       const touchY = event.touches[0]?.clientY
       if (touchY === undefined) return
+      backgroundPlaylist.nudge()
       if (lastTouchY !== null) pressGas(lastTouchY - touchY)
       lastTouchY = touchY
     }
@@ -370,6 +388,14 @@ export const FilmCanvas = () => {
     const updateProgress = () => {
       useFilmStore.getState().setProgress(readScrollProgress())
     }
+    const onScroll = () => {
+      if (!scrollOpen) {
+        if (window.scrollY !== 0) window.scrollTo(0, 0)
+        return
+      }
+      backgroundPlaylist.nudge()
+      updateProgress()
+    }
     const onResize = () => {
       resizeCanvas(canvas, context)
       updateProgress()
@@ -379,10 +405,15 @@ export const FilmCanvas = () => {
     updateProgress()
     animationFrameId = requestAnimationFrame(drawFrame)
     window.addEventListener("resize", onResize)
-    window.addEventListener("scroll", updateProgress, { passive: true })
+    window.addEventListener("scroll", onScroll, { passive: true })
     window.addEventListener("wheel", onWheel, { passive: true })
     window.addEventListener("touchstart", onTouchStart, { passive: true })
     window.addEventListener("touchmove", onTouchMove, { passive: true })
+    window.addEventListener("pointerdown", backgroundPlaylist.nudge, true)
+    window.addEventListener("keydown", backgroundPlaylist.nudge, true)
+    const startButton = startButtonRef.current
+    startButton?.addEventListener("pointerdown", backgroundPlaylist.nudge)
+    startButton?.addEventListener("click", openScroll)
     const moreButton = moreButtonRef.current
     moreButton?.addEventListener("click", startMeetingKira)
     const anywayButton = anywayButtonRef.current
@@ -482,10 +513,15 @@ export const FilmCanvas = () => {
     return () => {
       cancelAnimationFrame(animationFrameId)
       window.removeEventListener("resize", onResize)
-      window.removeEventListener("scroll", updateProgress)
+      window.removeEventListener("scroll", onScroll)
       window.removeEventListener("wheel", onWheel)
       window.removeEventListener("touchstart", onTouchStart)
       window.removeEventListener("touchmove", onTouchMove)
+      window.removeEventListener("pointerdown", backgroundPlaylist.nudge, true)
+      window.removeEventListener("keydown", backgroundPlaylist.nudge, true)
+      delete document.documentElement.dataset.scrollOpen
+      startButton?.removeEventListener("pointerdown", backgroundPlaylist.nudge)
+      startButton?.removeEventListener("click", openScroll)
       moreButton?.removeEventListener("click", startMeetingKira)
       anywayButton?.removeEventListener("click", startCoolRadi)
       letsDanceButton?.removeEventListener("click", startDancing)
@@ -501,12 +537,16 @@ export const FilmCanvas = () => {
       unsubscribeFromScenes()
       stopDriveSong()
       stopDanceSong()
+      backgroundPlaylist.stop()
     }
   }, [])
 
   return (
     <>
       <canvas ref={canvasRef} />
+      <button ref={startButtonRef} type="button" className="more-button start-button" data-visible="false" tabIndex={-1}>
+        Let's get started
+      </button>
       <button ref={moreButtonRef} type="button" className="more-button" data-visible="false" tabIndex={-1}>
         {"Don't you want to know more about me?"}
       </button>
