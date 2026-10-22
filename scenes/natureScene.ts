@@ -33,21 +33,25 @@ const GAIDA_HANDS: Hands = [[5.5, -21], [5.5, -29]]
 const REST_HANDS: Hands = [[-14, -32], [14, -32]]
 const YAY_HANDS: Hands = [[-18, -66], [18, -66]]
 const CHANTER_END: Point = [6, -9]
-const WALK_END = 15
+const WALK_END = 14
 const STOP_SECONDS = 2
 const STOP_END = WALK_END + STOP_SECONDS
 const SPOT_HOP_END = STOP_END + 0.4
-const WAVE_END = 18.6
-const SWIRL_START = 18.7
-const SWIRL_FULL = 19.3
-const LOOK_SWAP = 19.45
-const SWIRL_CLEAR = 19.6
-const SWIRL_END = 20.3
-const ARMS_DOWN_END = 20.5
-const JOIN_HOP_START = 20.5
-const JOIN_HOP_END = 21.2
-const HANDS_JOIN_END = 21.8
+const WAVE_END = 17.6
+const SWIRL_START = 17.7
+const SWIRL_FULL = 18.3
+const LOOK_SWAP = 18.45
+const SWIRL_CLEAR = 18.6
+const SWIRL_END = 19.3
+const ARMS_DOWN_END = 19.5
+const JOIN_HOP_START = 19.5
+const JOIN_HOP_END = 20.2
+const HANDS_JOIN_END = 20.8
 export const HORO_START = HANDS_JOIN_END
+export const HORO_DANCE_START = HORO_START - 2
+const HORO_DANCE_SECONDS = 40
+const HORO_IRIS_START = HORO_DANCE_START + HORO_DANCE_SECONDS - 1
+const HORO_IRIS_END = HORO_IRIS_START + 1.3
 const ROW_SCALE = 0.92
 const DANCER_SPACING = 56
 const HELD_HAND_Y = -28
@@ -728,5 +732,7 @@ export const drawNatureScene = (context: Context, width: number, height: number,
   drawFolkSwirl(context, width, height, radiX, feetY, scale, sceneSeconds)
   drawFrontGrass(context, width, height, camera, scale)
   drawScrollDanceHint(context, width, height, time, showScrollHint ? easeOutBack(stageProgress(sceneSeconds, HORO_START, HORO_START + 0.4)) : 0)
-  if (sceneSeconds < IRIS_IN_END) paintIris(context, width, height, radiX, feetY - 60 * scale, Math.hypot(width, height) * stageProgress(sceneSeconds, 0, IRIS_IN_END) ** 2)
+  const fullRadius = Math.hypot(width, height)
+  if (sceneSeconds < IRIS_IN_END) paintIris(context, width, height, radiX, feetY - 60 * scale, fullRadius * stageProgress(sceneSeconds, 0, IRIS_IN_END) ** 2)
+  if (sceneSeconds > HORO_IRIS_START) paintIris(context, width, height, radiX, feetY - 60 * scale, mix(fullRadius, 0, stageProgress(sceneSeconds, HORO_IRIS_START, HORO_IRIS_END) ** 2))
 }

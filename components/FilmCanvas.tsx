@@ -18,7 +18,7 @@ import {
   type JokeChoice,
   type LibraryQuizPhase,
 } from "@/scenes/libraryScene"
-import { drawNatureScene, HORO_START } from "@/scenes/natureScene"
+import { drawNatureScene, HORO_DANCE_START, HORO_START } from "@/scenes/natureScene"
 import { drawOpeningScene, greetingButtonLayout, KIRA_SCENE_END, startButtonLayout, type BubbleButtonLayout } from "@/scenes/openingScene"
 import { createBackgroundPlaylist } from "@/audio/backgroundPlaylist"
 import { useFilmStore } from "@/store/film"
@@ -142,6 +142,23 @@ export const FilmCanvas = () => {
       horoSong.volume = horoFadeDirection === "in" ? fade : 1 - fade
       if (horoFadeDirection === "out" && fadeUnit >= 1) stopHoroSong()
     }
+    let horoDanceStarted = false
+    let horoDanceFadeStartedAt: number | null = null
+    const horoDanceSong = new Audio("/horodance.webm")
+    const stopHoroDanceSong = () => {
+      horoDanceSong.volume = 0
+      horoDanceSong.pause()
+      if (horoDanceSong.currentTime > 0) horoDanceSong.currentTime = 0
+      horoDanceSong.volume = 1
+      horoDanceFadeStartedAt = null
+    }
+    const fadeHoroDanceSong = (timeMilliseconds: number) => {
+      if (horoDanceFadeStartedAt === null) return
+      const fadeUnit = Math.min(1, Math.max(0, (timeMilliseconds - horoDanceFadeStartedAt) / horoFadeMilliseconds))
+      const fade = fadeUnit * fadeUnit * (3 - 2 * fadeUnit)
+      horoDanceSong.volume = 1 - fade
+      if (fadeUnit >= 1) stopHoroDanceSong()
+    }
     const backgroundPlaylist = createBackgroundPlaylist()
     let arrivalStartMilliseconds: number | null = null
     let kiraStartMilliseconds: number | null = null
@@ -230,7 +247,9 @@ export const FilmCanvas = () => {
       const natureSeconds = secondsSince(natureStartMilliseconds)
       if (natureSeconds === null) {
         horoSongStarted = false
+        horoDanceStarted = false
         if (!horoSong.paused || horoFadeStartedAt !== null) stopHoroSong()
+        if (!horoDanceSong.paused || horoDanceFadeStartedAt !== null) stopHoroDanceSong()
         horoTargetSteps = 0
         horoSteps = 0
         horoIdleSteps = 0
@@ -247,6 +266,15 @@ export const FilmCanvas = () => {
         horoFadeStartedAt = timeMilliseconds
       }
       fadeHoroSong(timeMilliseconds)
+      if (natureSeconds !== null && natureSeconds >= HORO_DANCE_START && !horoDanceStarted) {
+        horoDanceStarted = true
+        horoDanceSong.volume = 1
+        horoDanceSong.currentTime = 0
+        void horoDanceSong.play().catch(() => {})
+      } else if (horoDanceStarted && !horoDanceSong.paused && horoDanceFadeStartedAt === null && Number.isFinite(horoDanceSong.duration) && horoDanceSong.currentTime >= horoDanceSong.duration - horoFadeMilliseconds / 1000) {
+        horoDanceFadeStartedAt = timeMilliseconds
+      }
+      fadeHoroDanceSong(timeMilliseconds)
       const hasLeftTheCar = drive?.arrivalSeconds != null && drive.arrivalSeconds >= RADI_EXIT_START
       const hasLandedInLibrary = librarySeconds !== null && librarySeconds >= LIBRARY_LANDING_SECONDS
       const hasExitedAsHero = exitStartMilliseconds !== null && (finalChoice === "batman" || finalChoice === "unicorn")
@@ -620,6 +648,7 @@ export const FilmCanvas = () => {
       stopDriveSong()
       stopDanceSong()
       stopHoroSong()
+      stopHoroDanceSong()
       backgroundPlaylist.stop()
     }
   }, [])
