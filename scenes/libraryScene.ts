@@ -1,8 +1,8 @@
 import { drawKiraFront } from "@/characters/kira"
 import { ellipsePath, linePath, paintFill, paintLine, paintShape, type Context } from "@/characters/paint"
 import { drawRadiBack, type BackArms } from "@/characters/radiBack"
-import { drawRadi, OUTLINE_WIDTH, paintTube, SKIN, WHITE, type Point, type RadiLook } from "@/characters/radi"
-import { bookwormRadiLook } from "@/characters/radiConcepts"
+import { drawBatMark, drawRadi, OUTLINE_WIDTH, paintTube, SKIN, WHITE, type Point, type RadiLook } from "@/characters/radi"
+import { batmanRadiLook, bookwormRadiLook } from "@/characters/radiConcepts"
 import { drawRadiSide } from "@/characters/radiSide"
 import { easeOut, easeOutBack, mix, mixPoint, paintComicBubble, paintIris, radiScale, stageProgress } from "@/scenes/openingScene"
 
@@ -77,7 +77,7 @@ const JOKE_QUESTION_LINES = [
 const FINAL_CHOICES = [
   { id: "batman", letter: "A", name: "Batman" },
   { id: "unicorn", letter: "B", name: "Unicorn" },
-  { id: "radi", letter: "C", name: "Radi" },
+  { id: "boring", letter: "C", name: "Boring" },
 ] as const
 
 const FINAL_QUESTION_LINES = [
@@ -1057,6 +1057,7 @@ const drawReadingRadi = (
   jokeQuizStartSeconds: number | null,
   wrongSeconds: number | null,
   cheerSeconds: number | null,
+  boringShakeSeconds: number | null,
 ) => {
   const sit = stageProgress(sceneSeconds, WALK_BACK_END, SIT_END)
   const crouch = easeOut(stageProgress(sit, 0, 0.38))
@@ -1077,11 +1078,13 @@ const drawReadingRadi = (
   context.translate(radiX, floorY + drop)
   context.rotate(lean)
   const armsUp = cheerSeconds !== null && cheerSeconds < RIGHT_CHEER_SECONDS
+  const disapproving = boringShakeSeconds !== null && boringShakeSeconds < BORING_SHAKE_SECONDS
   const captainQuizzing = quizPhase === "captain" && sceneSeconds >= QUIZ_START && wrongSeconds === null && !armsUp
   const jokeQuizzing = quizPhase === "joke" && jokeQuizStartSeconds !== null && sceneSeconds >= jokeQuizStartSeconds && wrongSeconds === null && !armsUp
-  const quizzing = captainQuizzing || jokeQuizzing || (quizPhase === "final" && !armsUp && wrongSeconds === null)
+  const quizzing = !disapproving && (captainQuizzing || jokeQuizzing || (quizPhase === "final" && !armsUp && wrongSeconds === null))
   const reacting = wrongSeconds !== null && wrongSeconds < 1
-  const smiling = armsUp || (wrongSeconds !== null && wrongSeconds >= 2)
+  const smiling = armsUp
+  const headTilt = disapproving ? Math.sin(boringShakeSeconds * 24) * 0.26 * (1 - boringShakeSeconds / BORING_SHAKE_SECONDS) : 0
   const headSway = quizzing ? Math.sin(sceneSeconds * 1.3) * 0.42 : 0
   const shake = reacting ? Math.sin(wrongSeconds * 16) * (1 - wrongSeconds) : 0
   const cheer = cheerArmAmount(cheerSeconds)
@@ -1095,9 +1098,10 @@ const drawReadingRadi = (
     context.rotate(shake * 0.08)
     context.translate(0, 74 * scale)
   }
-  drawRadi(context, smiling || (!reacting && !quizzing && wrongSeconds === null) ? bookwormRadiLook : { ...bookwormRadiLook, expression: "thinking" }, 0, 0, scale, {
+  drawRadi(context, disapproving ? { ...bookwormRadiLook, expression: "angry" } : smiling || (!reacting && !quizzing && wrongSeconds === null) ? bookwormRadiLook : { ...bookwormRadiLook, expression: "thinking" }, 0, 0, scale, {
     hideLegs: seated,
-    faceTurn: reacting ? shake * 0.9 : quizzing ? headSway : open >= 1 ? Math.sin(sceneSeconds * 0.9) * 0.12 : 0,
+    headTilt,
+    faceTurn: disapproving ? 0 : reacting ? shake * 0.9 : quizzing ? headSway : open >= 1 ? Math.sin(sceneSeconds * 0.9) * 0.12 : 0,
     legLifts: seated ? [0, 0] : [crouch * 4, crouch * 4],
     kneeBends: seated ? [0, 0] : [crouch * 8, crouch * 8],
     hands: poseHands,
@@ -1198,6 +1202,7 @@ const NEXT_QUESTION_AT = 2
 export const QUIZ_ADVANCE_AFTER_WRONG = NEXT_QUESTION_AT + QUIZ_POP_SECONDS
 export const CHEER_MOVE_SECONDS = 0.28
 export const RIGHT_CHEER_SECONDS = 1.2
+export const BORING_SHAKE_SECONDS = 0.85
 const cheerArmAmount = (cheerSeconds: number | null) => {
   if (cheerSeconds === null) return 0
   if (cheerSeconds < CHEER_MOVE_SECONDS) return easeOut(cheerSeconds / CHEER_MOVE_SECONDS)
@@ -1356,9 +1361,170 @@ const drawLibraryQuizzes = (
     drawTimedQuiz(context, width, height, sceneSeconds - jokeQuizStartSeconds, wrongSeconds, jokeCardConfig, jokeChoice, hoveredJoke, cheerSeconds)
     return
   }
-  if (phase === "final" && finalQuizStartSeconds !== null) {
+  if (phase === "final" && finalQuizStartSeconds !== null && finalChoice !== "batman") {
     drawTimedQuiz(context, width, height, sceneSeconds - finalQuizStartSeconds, wrongSeconds, finalCardConfig, finalChoice, hoveredFinal, cheerSeconds)
   }
+}
+
+const BATMAN_BOOK_START = 0.55
+const BATMAN_BOOK_END = 1.45
+const BATMAN_SPIN_START = 1.2
+const BATMAN_SPIN_END = 2.6
+const BATMAN_REACH_START = 2.6
+const BATMAN_LINE_START = 2.95
+const BATMAN_LINE_END = 3.4
+const BATMAN_ZIP_END = 4.75
+const BATMAN_YAY_HANDS: readonly [Point, Point] = [[-18, -68], [18, -68]]
+const BATMAN_TOSS_HANDS: readonly [Point, Point] = [[-12, -28], [32, -44]]
+const BATMAN_SPIN_HANDS: readonly [Point, Point] = [[-36, -50], [36, -50]]
+const BATMAN_REACH_HANDS: readonly [Point, Point] = [[-16, -30], [34, -120]]
+
+const drawSpinStreaks = (context: Context, seconds: number, scale: number) => {
+  const spin = stageProgress(seconds, BATMAN_SPIN_START, BATMAN_SPIN_END)
+  if (spin <= 0 || spin >= 1) return
+  const strength = Math.sin(spin * Math.PI)
+  for (let streak = 0; streak < 9; streak += 1) {
+    const angle = spin * Math.PI * 8 + streak * ((Math.PI * 2) / 9)
+    const streakX = Math.cos(angle) * 40 * scale
+    const streakY = -58 * scale + Math.sin(angle) * 48 * scale
+    const tipX = streakX - Math.sin(angle) * 16 * scale
+    const tipY = streakY + Math.cos(angle) * 7 * scale
+    paintLine(context, OUTLINE, 2.2 * scale * strength, linePath(streakX, streakY, tipX, tipY))
+  }
+}
+
+const drawBatZip = (context: Context, fromX: number, fromY: number, holeX: number, holeY: number, shot: number, scale: number) => {
+  if (shot <= 0) return
+  const endX = mix(fromX, holeX, shot)
+  const endY = mix(fromY, holeY, shot)
+  paintLine(context, "#1a1a1a", Math.max(4.5, 2.6 * scale), linePath(fromX, fromY, endX, endY))
+  paintLine(context, "#f2cf3a", Math.max(1.7, 0.95 * scale), linePath(fromX, fromY, endX, endY))
+  if (shot > 0.86) drawBatMark(context, holeX, holeY, Math.max(1.8, scale * 1.15))
+}
+
+const drawSqueezedRadi = (
+  context: Context,
+  look: RadiLook,
+  hands: readonly [Point, Point],
+  bodyScale: number,
+  squeeze: number,
+  hideLegs: boolean,
+) => {
+  const flip = Math.abs(squeeze) < 0.14 ? (squeeze < 0 ? -0.14 : 0.14) : squeeze
+  context.save()
+  context.translate(0, -55 * bodyScale)
+  context.scale(flip, 1)
+  context.translate(0, 55 * bodyScale)
+  drawRadi(context, look, 0, 0, bodyScale, {
+    hideLegs,
+    hands,
+    elbowBends: naturalElbows(hands),
+  })
+  context.restore()
+}
+
+const drawBatmanExit = (
+  context: Context,
+  width: number,
+  height: number,
+  floorY: number,
+  landingX: number,
+  scale: number,
+  seconds: number,
+) => {
+  const { ceilingY } = libraryLayout(width, height)
+  const { holeX, holeY } = holePlacement(width, ceilingY, 1)
+  const stand = easeInOut(stageProgress(seconds, BATMAN_SPIN_START, BATMAN_SPIN_START + 0.28))
+  const drop = 11 * scale * (1 - stand)
+  const bounce = seconds < BATMAN_SPIN_START ? Math.abs(Math.sin((seconds * Math.PI * 2) / 0.34)) * 9 * scale : 0
+  const spinUnit = easeInOut(stageProgress(seconds, BATMAN_SPIN_START, BATMAN_SPIN_END))
+  const spinning = seconds >= BATMAN_SPIN_START && seconds < BATMAN_SPIN_END
+  const spinAngle = spinUnit * Math.PI * 8
+  const squeeze = spinning ? Math.cos(spinAngle) : 1
+  const suited = spinUnit >= 0.58 || seconds >= BATMAN_SPIN_END
+  const reach = easeInOut(stageProgress(seconds, BATMAN_REACH_START, BATMAN_REACH_START + 0.38))
+  const zip = easeOut(stageProgress(seconds, BATMAN_LINE_END, BATMAN_ZIP_END))
+  const feetX = mix(landingX, holeX, zip)
+  const feetY = mix(floorY, holeY - 10, zip) - bounce
+  const bodyScale = scale * mix(1, 0.5, zip)
+  const bookFly = easeOut(stageProgress(seconds, BATMAN_BOOK_START, BATMAN_BOOK_END))
+  const yay = easeOut(stageProgress(seconds, 0, 0.22))
+  const toss = easeOut(stageProgress(seconds, BATMAN_BOOK_START, BATMAN_BOOK_START + 0.32))
+  const whirl = easeInOut(stageProgress(seconds, BATMAN_SPIN_START, BATMAN_SPIN_START + 0.22))
+  const hands = mixHands(
+    mixHands(mixHands(mixHands(READ_HANDS, BATMAN_YAY_HANDS, yay), BATMAN_TOSS_HANDS, toss), BATMAN_SPIN_HANDS, whirl),
+    BATMAN_REACH_HANDS,
+    reach,
+  )
+  const originY = feetY + drop * (bodyScale / scale)
+  const look = { ...(suited ? batmanRadiLook : bookwormRadiLook), expression: "grin" as const }
+  const hideLegs = seconds < BATMAN_SPIN_END
+  const drawTossedBook = () => {
+    if (bookFly <= 0) return
+    const releaseBounce = Math.abs(Math.sin((BATMAN_BOOK_START * Math.PI * 2) / 0.34)) * 9 * scale
+    const flyX = mix(landingX, width * 0.68, bookFly)
+    const flyY = mix(floorY - releaseBounce - 7 * scale, floorY - 18 * scale, bookFly) - Math.sin(bookFly * Math.PI) * 120 * scale
+    if (bookFly < 0.92) {
+      paintLine(context, OUTLINE, 2.2, linePath(flyX - 16 * scale, flyY + 4 * scale, flyX - 42 * scale, flyY + 14 * scale))
+      paintLine(context, OUTLINE, 2.2, linePath(flyX - 12 * scale, flyY - 10 * scale, flyX - 36 * scale, flyY - 2 * scale))
+    }
+    context.save()
+    context.translate(flyX, flyY)
+    context.rotate(bookFly * Math.PI * 2.2)
+    drawReadingBook(context, 0, 0, scale, 1 - easeOut(Math.min(1, bookFly * 2.5)), 0)
+    context.restore()
+  }
+  if (seconds > BATMAN_ZIP_END + 0.45) {
+    drawTossedBook()
+    return
+  }
+  const [shootX, shootY] = hands[1]
+  const handX = feetX + shootX * bodyScale * (Math.abs(squeeze) < 0.14 ? (squeeze < 0 ? -0.14 : 0.14) : squeeze)
+  const handY = originY + shootY * bodyScale
+  paintFill(context, "rgba(80, 42, 20, 0.16)", ellipsePath(feetX, floorY, mix(36, 14, zip) * scale, mix(7, 3, zip) * scale))
+  context.save()
+  context.translate(feetX, originY)
+  drawSpinStreaks(context, seconds, bodyScale)
+  if (spinning) {
+    for (const offset of [0.85, 1.7]) {
+      context.save()
+      context.globalAlpha = 0.22
+      drawSqueezedRadi(context, look, hands, bodyScale, Math.cos(spinAngle + offset), true)
+      context.restore()
+    }
+  }
+  if (seconds < BATMAN_ZIP_END) drawSqueezedRadi(context, look, hands, bodyScale, squeeze, hideLegs)
+  if (stand < 0.92 && seconds < BATMAN_SPIN_START + 0.24) drawSeatedLegs(context, 0, 0, bodyScale, 1 - stand)
+  if (bookFly <= 0) drawReadingBook(context, 0, -18 * bodyScale, bodyScale, 1, 0)
+  context.restore()
+  const lineShown = seconds >= BATMAN_LINE_START
+    ? seconds > BATMAN_ZIP_END
+      ? 1 - stageProgress(seconds, BATMAN_ZIP_END, BATMAN_ZIP_END + 0.45)
+      : 1
+    : 0
+  if (lineShown > 0) {
+    const shot = easeOut(stageProgress(seconds, BATMAN_LINE_START, BATMAN_LINE_END))
+    context.save()
+    context.globalAlpha = lineShown
+    drawBatZip(context, handX, handY, holeX, holeY, shot, scale)
+    if (shot > 0.9 && seconds < BATMAN_LINE_END + 0.28) {
+      const spark = 1 - stageProgress(seconds, BATMAN_LINE_END, BATMAN_LINE_END + 0.28)
+      for (let mark = 0; mark < 6; mark += 1) {
+        const angle = mark * (Math.PI / 3) + 0.4
+        const near = 8 * scale
+        const far = (8 + 16 * spark) * scale
+        paintLine(context, "#f2cf3a", 2, linePath(holeX + Math.cos(angle) * near, holeY + Math.sin(angle) * near, holeX + Math.cos(angle) * far, holeY + Math.sin(angle) * far))
+      }
+    }
+    context.restore()
+  }
+  if (zip > 0.05 && zip < 0.95) {
+    for (let trail = 0; trail < 3; trail += 1) {
+      const trailY = feetY + (12 + trail * 16) * scale
+      paintLine(context, OUTLINE, 2, linePath(feetX - 10 * scale, trailY, feetX + 8 * scale, trailY + 7 * scale))
+    }
+  }
+  drawTossedBook()
 }
 
 const drawLibraryRadi = (
@@ -1374,6 +1540,8 @@ const drawLibraryRadi = (
   jokeQuizStartSeconds: number | null,
   wrongSeconds: number | null,
   cheerSeconds: number | null,
+  batmanSeconds: number | null,
+  boringShakeSeconds: number | null,
 ) => {
   const ladder = ladderPlacement(width, height, floorY)
   const ladderX = ladderCenterX(ladder, floorY)
@@ -1381,7 +1549,8 @@ const drawLibraryRadi = (
   else if (sceneSeconds < WALK_TO_LADDER_END) drawSkippingRadi(context, landingX, ladderX, floorY, scale, sceneSeconds, WALK_TO_LADDER_START, WALK_TO_LADDER_END, false)
   else if (sceneSeconds < WALK_BACK_START) drawClimbingRadi(context, ladder, floorY, scale, sceneSeconds)
   else if (sceneSeconds < WALK_BACK_END) drawSkippingRadi(context, ladderX, landingX, floorY, scale, sceneSeconds, WALK_BACK_START, WALK_BACK_END, true)
-  else drawReadingRadi(context, landingX, floorY, scale, sceneSeconds, quizPhase, jokeQuizStartSeconds, wrongSeconds, cheerSeconds)
+  else if (batmanSeconds !== null) drawBatmanExit(context, width, height, floorY, landingX, scale, batmanSeconds)
+  else drawReadingRadi(context, landingX, floorY, scale, sceneSeconds, quizPhase, jokeQuizStartSeconds, wrongSeconds, cheerSeconds, boringShakeSeconds)
 }
 
 export const drawLibraryScene = (
@@ -1401,6 +1570,8 @@ export const drawLibraryScene = (
   cheerSeconds: number | null = null,
   finalChoice: FinalChoice | null = null,
   hoveredFinal: FinalChoice | null = null,
+  batmanSeconds: number | null = null,
+  boringShakeSeconds: number | null = null,
 ) => {
   const { scale, floorY, ceilingY, landingX } = libraryLayout(width, height)
   const sinceImpact = sceneSeconds - FALL_END
@@ -1420,7 +1591,7 @@ export const drawLibraryScene = (
   drawNightHole(context, width, ceilingY, breaking.holeOpen, time)
   const ladder = ladderPlacement(width, height, floorY)
   drawLadder(context, ladder.left, floorY, ladder.top, sinceImpact)
-  drawLibraryRadi(context, width, height, floorY, landingX, scale, time, sceneSeconds, quizPhase, jokeQuizStartSeconds, wrongSeconds, cheerSeconds)
+  drawLibraryRadi(context, width, height, floorY, landingX, scale, time, sceneSeconds, quizPhase, jokeQuizStartSeconds, wrongSeconds, cheerSeconds, batmanSeconds, boringShakeSeconds)
   drawCeilingBoards(context, width, ceilingY, breaking.holeOpen)
   drawCeilingCracks(context, width, ceilingY, breaking.holeOpen < 0.55 ? breaking.cracks : 0)
   drawHoleRim(context, width, ceilingY, breaking.holeOpen)

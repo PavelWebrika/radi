@@ -103,6 +103,22 @@ const bookwormConcept = polishConcept({
 
 export const bookwormRadiLook = bookwormConcept.look
 
+const batmanConcept = polishConcept({
+  name: "Batman Radi",
+  background: "#6b8cff",
+  look: {
+    hair: "tucked",
+    expression: "grin",
+    pose: "wave",
+    top: { color: "#1d1d1d" },
+    bottom: { kind: "shorts", color: "#1d1d1d" },
+    extras: ["batman"],
+    shoes: "boots",
+  },
+})
+
+export const batmanRadiLook = batmanConcept.look
+
 const radiConcepts: RadiConcept[] = [
   polishConcept(everydayConcept),
   polishedPopArtConcept,
@@ -123,19 +139,7 @@ const radiConcepts: RadiConcept[] = [
       shoes: "folkFlats",
     },
   }),
-  polishConcept({
-    name: "Batman Radi",
-    background: "#6b8cff",
-    look: {
-      hair: "tucked",
-      expression: "grin",
-      pose: "wave",
-      top: { color: "#1d1d1d" },
-      bottom: { kind: "shorts", color: "#1d1d1d" },
-      extras: ["batman"],
-      shoes: "boots",
-    },
-  }),
+  batmanConcept,
 ]
 
 type DrawFigure = (context: CanvasRenderingContext2D, feetX: number, feetY: number, scale: number) => void

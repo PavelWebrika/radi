@@ -62,6 +62,7 @@ export type RadiMotion = {
   hands: RadiHands
   elbowBends: PerSide
   hideLegs?: boolean
+  headTilt?: number
 }
 
 export type RadiColors = { skin: string; hair: string; hairHighlight: string; eye: string; iris: string }
@@ -790,17 +791,62 @@ const drawFace = (context: Context, expression: RadiExpression, isPolished: bool
   }
 }
 
-export const drawReadingGlasses = (context: Context) => {
+const glassesPoint = (x: number, y: number, headTilt: number, faceTurn: number): [number, number] => {
+  const localX = x + faceTurn * 4
+  const dy = y + 42
+  const cos = Math.cos(headTilt)
+  const sin = Math.sin(headTilt)
+  return [localX * cos - dy * sin, -42 + localX * sin + dy * cos]
+}
+
+const traceTiltedRoundedRect = (path: Path2D, x: number, y: number, width: number, height: number, radius: number, headTilt: number, faceTurn: number) => {
+  const right = x + width
+  const bottom = y + height
+  const points: [number, number][] = []
+  const arc = (centerX: number, centerY: number, start: number, end: number) => {
+    for (let step = 0; step <= 5; step += 1) {
+      const angle = start + ((end - start) * step) / 5
+      points.push(glassesPoint(centerX + Math.cos(angle) * radius, centerY + Math.sin(angle) * radius, headTilt, faceTurn))
+    }
+  }
+  arc(right - radius, y + radius, -Math.PI / 2, 0)
+  arc(right - radius, bottom - radius, 0, Math.PI / 2)
+  arc(x + radius, bottom - radius, Math.PI / 2, Math.PI)
+  arc(x + radius, y + radius, Math.PI, Math.PI * 1.5)
+  path.moveTo(points[0][0], points[0][1])
+  for (let index = 1; index < points.length; index += 1) path.lineTo(points[index][0], points[index][1])
+  path.closePath()
+}
+
+const drawReadingGlassTemples = (context: Context, headTilt: number, faceTurn: number) => {
+  for (const side of SIDES) {
+    const templeStart = glassesPoint(side * 15.2, -67.4, headTilt, faceTurn)
+    const templeEnd = glassesPoint(side * 23, -69.2, headTilt, faceTurn)
+    paintLine(context, OUTLINE, 1.15, (path) => {
+      path.moveTo(templeStart[0], templeStart[1])
+      path.lineTo(templeEnd[0], templeEnd[1])
+    })
+  }
+}
+
+export const drawReadingGlasses = (context: Context, headTilt = 0, faceTurn = 0) => {
   for (const side of SIDES) {
     const centerX = side * 9
-    paintLine(context, OUTLINE, 1.35, (path) => path.roundRect(centerX - 6.2, -70.6, 12.4, 13.2, 4.2))
+    paintLine(context, OUTLINE, 1.35, (path) => traceTiltedRoundedRect(path, centerX - 6.2, -70.6, 12.4, 13.2, 4.2, headTilt, faceTurn))
+    const shineStart = glassesPoint(centerX - 3.4, -68.8, headTilt, faceTurn)
+    const shineBend = glassesPoint(centerX - 1.2, -67.4, headTilt, faceTurn)
+    const shineEnd = glassesPoint(centerX + 1.4, -68.6, headTilt, faceTurn)
     paintLine(context, "rgba(255, 255, 255, 0.9)", 0.9, (path) => {
-      path.moveTo(centerX - 3.4, -68.8)
-      path.quadraticCurveTo(centerX - 1.2, -67.4, centerX + 1.4, -68.6)
+      path.moveTo(shineStart[0], shineStart[1])
+      path.quadraticCurveTo(shineBend[0], shineBend[1], shineEnd[0], shineEnd[1])
     })
-    paintLine(context, OUTLINE, 1.15, linePath(side * 15.2, -67.4, side * 23, -69.2))
   }
-  paintLine(context, OUTLINE, 1.35, linePath(-2.8, -66.6, 2.8, -66.6))
+  const bridgeStart = glassesPoint(-2.8, -66.6, headTilt, faceTurn)
+  const bridgeEnd = glassesPoint(2.8, -66.6, headTilt, faceTurn)
+  paintLine(context, OUTLINE, 1.35, (path) => {
+    path.moveTo(bridgeStart[0], bridgeStart[1])
+    path.lineTo(bridgeEnd[0], bridgeEnd[1])
+  })
 }
 
 export const drawSunglasses = (context: Context) => {
@@ -989,7 +1035,15 @@ export const drawRadi = (context: Context, look: RadiLook, feetX: number, feetY:
   const hasExtra = (extra: RadiExtra) => look.extras.includes(extra)
   const isPolished = look.polished === true
   const isBatman = hasExtra("batman")
-  const { faceTurn = 0, legLifts = [0, 0], kneeBends = [0, 0], hands = HAND_POSITIONS[look.pose], elbowBends = [0, 0], hideLegs = false } = motion
+  const { faceTurn = 0, legLifts = [0, 0], kneeBends = [0, 0], hands = HAND_POSITIONS[look.pose], elbowBends = [0, 0], hideLegs = false, headTilt = 0 } = motion
+  const drawWithHeadTilt = (drawPiece: () => void) => {
+    context.save()
+    context.translate(0, -42)
+    context.rotate(headTilt)
+    context.translate(0, 42)
+    drawPiece()
+    context.restore()
+  }
 
   activeColors = look.colors ?? RADI_COLORS
   context.save()
@@ -1001,7 +1055,7 @@ export const drawRadi = (context: Context, look: RadiLook, feetX: number, feetY:
   context.strokeStyle = OUTLINE
 
   if (isBatman) drawBatmanCape(context, isPolished)
-  else drawHairBack(context, look.hair, isPolished)
+  else drawWithHeadTilt(() => drawHairBack(context, look.hair, isPolished))
   if (!hideLegs) drawLegs(context, look.shoes ?? "sneakers", legLifts, kneeBends, isPolished)
   drawBottom(context, look.bottom, isPolished)
   drawTorso(context, look.top, isPolished)
@@ -1012,18 +1066,23 @@ export const drawRadi = (context: Context, look: RadiLook, feetX: number, feetY:
   if (hasExtra("pendant")) drawPendant(context, isPolished)
   if (hasExtra("heartNecklace")) drawHeartNecklace(context, isPolished)
   if (hasExtra("gaida")) drawGaida(context, isPolished)
-  drawHead(context, look.hair, hasExtra("kalpak"), isPolished)
-  context.save()
-  context.translate(faceTurn * 4, 0)
-  drawFace(context, look.expression, isPolished)
-  context.restore()
-  if (hasExtra("sunglasses")) drawSunglasses(context)
-  if (hasExtra("readingGlasses")) drawReadingGlasses(context)
-  if (isBatman) drawBatmanCowl(context, isPolished)
-  else drawHairFront(context, look.hair, isPolished)
-  if (hasExtra("bandana")) drawBandana(context, isPolished)
-  if (hasExtra("kalpak")) drawKalpak(context, isPolished)
-  if (hasExtra("hairFlower")) drawHairFlower(context, isPolished)
+  drawWithHeadTilt(() => {
+    drawHead(context, look.hair, hasExtra("kalpak"), isPolished)
+    context.save()
+    context.translate(faceTurn * 4, 0)
+    drawFace(context, look.expression, isPolished)
+    if (hasExtra("sunglasses")) drawSunglasses(context)
+    context.restore()
+  })
+  if (hasExtra("readingGlasses")) drawReadingGlassTemples(context, headTilt, faceTurn)
+  drawWithHeadTilt(() => {
+    if (isBatman) drawBatmanCowl(context, isPolished)
+    else drawHairFront(context, look.hair, isPolished)
+    if (hasExtra("bandana")) drawBandana(context, isPolished)
+    if (hasExtra("kalpak")) drawKalpak(context, isPolished)
+    if (hasExtra("hairFlower")) drawHairFlower(context, isPolished)
+  })
+  if (hasExtra("readingGlasses")) drawReadingGlasses(context, headTilt, faceTurn)
   drawArms(context, look, hands, elbowBends, isPolished)
   if (hasExtra("puffSleeves")) drawPuffSleeves(context, isPolished)
   if (hasExtra("headphones")) drawHeadphones(context, isPolished)
