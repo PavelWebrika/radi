@@ -921,7 +921,7 @@ export const drawKalpak = (context: Context, isPolished: boolean) => {
 
 const drawArms = (context: Context, look: RadiLook, hands: RadiHands, elbowBends: PerSide, isPolished: boolean) => {
   const isBatman = look.extras.includes("batman")
-  const sleeveColor = look.extras.includes("denimJacket") ? DENIM : isBatman ? BLACK_FABRIC : activeColors.skin
+  const sleeveColor = look.extras.includes("denimJacket") ? DENIM : isBatman ? look.top.color : activeColors.skin
   const handColor = isBatman ? BLACK_FABRIC : activeColors.skin
   SIDES.forEach((side, index) => {
     const [handX, handY] = hands[index]
@@ -935,6 +935,14 @@ const drawArms = (context: Context, look: RadiLook, hands: RadiHands, elbowBends
       path.lineTo(elbowX, elbowY)
       path.lineTo(handX, handY)
     }, isPolished)
+    if (isBatman) {
+      paintTube(context, BLACK_FABRIC, 4.7, linePath(
+        elbowX + (handX - elbowX) * 0.55,
+        elbowY + (handY - elbowY) * 0.55,
+        handX,
+        handY,
+      ), isPolished)
+    }
     if (look.pose === "peace" && side === 1) {
       paintTube(context, activeColors.skin, 1.8, linePath(handX, handY, handX - 1.5, handY - 6))
       paintTube(context, activeColors.skin, 1.8, linePath(handX, handY, handX + 2.5, handY - 6))
@@ -980,6 +988,31 @@ export const drawBatMark = (context: Context, centerX: number, centerY: number, 
   context.scale(scale, scale)
   paintFill(context, OUTLINE, batMarkPath)
   context.restore()
+}
+
+const drawBatmanJumpsuit = (context: Context, color: string, isPolished: boolean, withLegs: boolean) => {
+  paintShape(context, color, (path) => {
+    path.moveTo(-4, -49)
+    path.quadraticCurveTo(-12, -49, -9.2, -43)
+    path.lineTo(-9.4, -30)
+    if (withLegs) {
+      path.lineTo(-8.2, -11)
+      path.lineTo(-1.8, -11)
+      path.quadraticCurveTo(0, -15.5, 1.8, -11)
+      path.lineTo(8.2, -11)
+    } else {
+      path.lineTo(-9.4, -18)
+      path.quadraticCurveTo(0, -15, 9.4, -18)
+    }
+    path.lineTo(9.4, -30)
+    path.lineTo(9.2, -43)
+    path.quadraticCurveTo(12, -49, 4, -49)
+    path.closePath()
+  }, {
+    ...shadeIf(isPolished),
+    decorateInside: isPolished ? (suitContext) => paintFill(suitContext, SHADE, ellipsePath(0, -47.5, 8, 3)) : undefined,
+  })
+  if (withLegs) SIDES.forEach((side) => shoePainters.boots(context, side, isPolished))
 }
 
 const drawBatmanCape = (context: Context, isPolished: boolean) => {
@@ -1056,9 +1089,12 @@ export const drawRadi = (context: Context, look: RadiLook, feetX: number, feetY:
 
   if (isBatman) drawBatmanCape(context, isPolished)
   else drawWithHeadTilt(() => drawHairBack(context, look.hair, isPolished))
-  if (!hideLegs) drawLegs(context, look.shoes ?? "sneakers", legLifts, kneeBends, isPolished)
-  drawBottom(context, look.bottom, isPolished)
-  drawTorso(context, look.top, isPolished)
+  if (isBatman) drawBatmanJumpsuit(context, look.top.color, isPolished, !hideLegs)
+  else if (!hideLegs) drawLegs(context, look.shoes ?? "sneakers", legLifts, kneeBends, isPolished)
+  if (!isBatman) {
+    drawBottom(context, look.bottom, isPolished)
+    drawTorso(context, look.top, isPolished)
+  }
   if (isBatman) drawBatmanChest(context, isPolished)
   if (hasExtra("apron")) drawApron(context, isPolished)
   if (hasExtra("pafti")) drawPafti(context, isPolished)

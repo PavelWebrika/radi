@@ -453,6 +453,24 @@ const drawSideSunglasses = (context: Context) => {
   }, { decorateInside: (lensContext) => paintLine(lensContext, "#bfe4ff", 1.5, linePath(11, -61, 17, -68)) })
 }
 
+const drawSideBatmanJumpsuit = (context: Context, color: string, isPolished: boolean) => {
+  paintShape(context, color, (path) => {
+    path.moveTo(-4, -49)
+    path.quadraticCurveTo(-9, -49, -7, -42)
+    path.lineTo(-6.2, -24)
+    path.lineTo(-5.6, -11)
+    path.lineTo(6.2, -11)
+    path.lineTo(7.4, -24)
+    path.lineTo(7.6, -40)
+    path.quadraticCurveTo(9, -49, 3, -49)
+    path.closePath()
+  }, {
+    ...shadeIf(isPolished),
+    decorateInside: isPolished ? (suitContext) => paintFill(suitContext, SHADE, ellipsePath(1, -47.2, 5, 2.4)) : undefined,
+  })
+  for (const legX of [-2.5, 2.5]) sideShoePainters.boots(context, legX, isPolished)
+}
+
 const drawSideBatmanCape = (context: Context, isPolished: boolean) => {
   paintShape(context, BLACK_FABRIC, (path) => {
     path.moveTo(-2, -46)
@@ -495,8 +513,9 @@ const drawSideArm = (context: Context, look: RadiLook, isPolished: boolean, hand
   const isHolding = look.pose === "hold"
   const isBatman = look.extras.includes("batman")
   const [handX, handY] = hand ?? (isHolding ? [10, -35] : [3, -31])
-  const armColor = look.extras.includes("denimJacket") ? DENIM : isBatman ? BLACK_FABRIC : SKIN
+  const armColor = look.extras.includes("denimJacket") ? DENIM : isBatman ? look.top.color : SKIN
   paintTube(context, armColor, 4.5, linePath(0, -41.5, handX, handY), isPolished)
+  if (isBatman) paintTube(context, BLACK_FABRIC, 4.7, linePath(handX * 0.58, -41.5 + (handY + 41.5) * 0.58, handX, handY), isPolished)
   paintShape(context, isBatman ? BLACK_FABRIC : SKIN, ellipsePath(handX, handY, 2.8, 2.8), shadeIf(isPolished))
   if (look.extras.includes("puffSleeves")) {
     paintShape(context, WHITE, ellipsePath(0, -39.9, 3.8, 3.4), shadeIf(isPolished))
@@ -518,9 +537,12 @@ export const drawRadiSide = (context: Context, look: RadiLook, feetX: number, fe
 
   if (isBatman) drawSideBatmanCape(context, isPolished)
   else drawSideHairBack(context, look.hair, isPolished)
-  drawSideLegs(context, look.shoes ?? "sneakers", isPolished, stride)
-  drawSideBottom(context, look.bottom, isPolished)
-  drawTorso(context, look.top, isPolished, 7)
+  if (isBatman) drawSideBatmanJumpsuit(context, look.top.color, isPolished)
+  else {
+    drawSideLegs(context, look.shoes ?? "sneakers", isPolished, stride)
+    drawSideBottom(context, look.bottom, isPolished)
+    drawTorso(context, look.top, isPolished, 7)
+  }
   drawSideExtrasOnBody(context, look, isPolished)
   if (isBatman) drawSideBatmanChest(context, isPolished)
   drawSideHead(context, look.expression, isPolished)
