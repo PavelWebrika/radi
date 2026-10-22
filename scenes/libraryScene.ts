@@ -1078,15 +1078,14 @@ const drawReadingRadi = (
   context.translate(radiX, floorY + drop)
   context.rotate(lean)
   const armsUp = cheerSeconds !== null && cheerSeconds < RIGHT_CHEER_SECONDS
-  const disapproving = boringShakeSeconds !== null && boringShakeSeconds < BORING_SHAKE_SECONDS
+  const reactionSeconds = wrongSeconds ?? (boringShakeSeconds !== null && boringShakeSeconds < 1 ? boringShakeSeconds : null)
+  const reacting = reactionSeconds !== null && reactionSeconds < 1
   const captainQuizzing = quizPhase === "captain" && sceneSeconds >= QUIZ_START && wrongSeconds === null && !armsUp
   const jokeQuizzing = quizPhase === "joke" && jokeQuizStartSeconds !== null && sceneSeconds >= jokeQuizStartSeconds && wrongSeconds === null && !armsUp
-  const quizzing = !disapproving && (captainQuizzing || jokeQuizzing || (quizPhase === "final" && !armsUp && wrongSeconds === null))
-  const reacting = wrongSeconds !== null && wrongSeconds < 1
+  const quizzing = !reacting && wrongSeconds === null && (captainQuizzing || jokeQuizzing || (quizPhase === "final" && !armsUp))
   const smiling = armsUp
-  const headTilt = disapproving ? Math.sin(boringShakeSeconds * 24) * 0.26 * (1 - boringShakeSeconds / BORING_SHAKE_SECONDS) : 0
   const headSway = quizzing ? Math.sin(sceneSeconds * 1.3) * 0.42 : 0
-  const shake = reacting ? Math.sin(wrongSeconds * 16) * (1 - wrongSeconds) : 0
+  const shake = reacting ? Math.sin(reactionSeconds * 16) * (1 - reactionSeconds) : 0
   const cheer = cheerArmAmount(cheerSeconds)
   const poseHands = cheer > 0 ? mixHands(hands, CHEER_HANDS, cheer) : hands
   const restingElbows = naturalElbows(hands)
@@ -1098,10 +1097,9 @@ const drawReadingRadi = (
     context.rotate(shake * 0.08)
     context.translate(0, 74 * scale)
   }
-  drawRadi(context, disapproving ? { ...bookwormRadiLook, expression: "angry" } : smiling || (!reacting && !quizzing && wrongSeconds === null) ? bookwormRadiLook : { ...bookwormRadiLook, expression: "thinking" }, 0, 0, scale, {
+  drawRadi(context, smiling || (!reacting && !quizzing && wrongSeconds === null) ? bookwormRadiLook : { ...bookwormRadiLook, expression: "thinking" }, 0, 0, scale, {
     hideLegs: seated,
-    headTilt,
-    faceTurn: disapproving ? 0 : reacting ? shake * 0.9 : quizzing ? headSway : open >= 1 ? Math.sin(sceneSeconds * 0.9) * 0.12 : 0,
+    faceTurn: reacting ? shake * 0.9 : quizzing ? headSway : open >= 1 ? Math.sin(sceneSeconds * 0.9) * 0.12 : 0,
     legLifts: seated ? [0, 0] : [crouch * 4, crouch * 4],
     kneeBends: seated ? [0, 0] : [crouch * 8, crouch * 8],
     hands: poseHands,
@@ -1202,7 +1200,6 @@ const NEXT_QUESTION_AT = 2
 export const QUIZ_ADVANCE_AFTER_WRONG = NEXT_QUESTION_AT + QUIZ_POP_SECONDS
 export const CHEER_MOVE_SECONDS = 0.28
 export const RIGHT_CHEER_SECONDS = 1.2
-export const BORING_SHAKE_SECONDS = 0.85
 const cheerArmAmount = (cheerSeconds: number | null) => {
   if (cheerSeconds === null) return 0
   if (cheerSeconds < CHEER_MOVE_SECONDS) return easeOut(cheerSeconds / CHEER_MOVE_SECONDS)

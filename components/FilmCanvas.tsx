@@ -11,7 +11,6 @@ import {
   QUIZ_ADVANCE_AFTER_WRONG,
   RIGHT_CHEER_SECONDS,
   CHEER_MOVE_SECONDS,
-  BORING_SHAKE_SECONDS,
   type CaptainChoice,
   type FinalChoice,
   type JokeChoice,
@@ -190,7 +189,7 @@ export const FilmCanvas = () => {
       }
       fadeDanceSong(timeMilliseconds)
       const librarySeconds = secondsSince(libraryStartMilliseconds)
-      const shakingBoring = libraryQuizPhase === "final" && boringShakeStartMilliseconds !== null && timeMilliseconds - boringShakeStartMilliseconds < BORING_SHAKE_SECONDS * 1000 && finalChoice === null
+      const shakingBoring = libraryQuizPhase === "final" && boringShakeStartMilliseconds !== null && timeMilliseconds - boringShakeStartMilliseconds < 1000 && finalChoice === null
       if (isShowingConcepts) {
         context.fillStyle = "#000000"
         context.fillRect(0, 0, window.innerWidth, window.innerHeight)
