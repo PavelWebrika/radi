@@ -11,6 +11,11 @@ body {
 html[data-scroll-open] {
   height: auto;
   overflow: auto;
+  scrollbar-width: none;
+}
+
+html[data-scroll-open]::-webkit-scrollbar {
+  display: none;
 }
 
 html[data-scroll-open] body {

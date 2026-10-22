@@ -19,7 +19,7 @@ import {
   type LibraryQuizPhase,
 } from "@/scenes/libraryScene"
 import { drawNatureScene, HORO_DANCE_START, HORO_START } from "@/scenes/natureScene"
-import { drawOpeningScene, greetingButtonLayout, KIRA_SCENE_END, startButtonLayout, type BubbleButtonLayout } from "@/scenes/openingScene"
+import { drawOpeningScene, greetingButtonLayout, KIRA_SCENE_END, startButtonLayout, WAVE_START, type BubbleButtonLayout } from "@/scenes/openingScene"
 import { createBackgroundPlaylist } from "@/audio/backgroundPlaylist"
 import { useFilmStore } from "@/store/film"
 
@@ -30,11 +30,15 @@ const resizeCanvas = (canvas: HTMLCanvasElement, context: CanvasRenderingContext
   context.setTransform(ratio, 0, 0, ratio, 0, 0)
 }
 
+const scrollableHeight = () => Math.max(0, document.documentElement.scrollHeight - window.innerHeight)
+
 const readScrollProgress = () => {
-  const scrollableHeight = document.documentElement.scrollHeight - window.innerHeight
-  if (scrollableHeight <= 0) return 0
-  return Math.min(1, Math.max(0, window.scrollY / scrollableHeight))
+  const scrollHeight = scrollableHeight()
+  if (scrollHeight <= 0) return 0
+  return Math.min(1, Math.max(0, window.scrollY / scrollHeight))
 }
+
+const scrollYForProgress = (progress: number) => scrollableHeight() * progress
 
 const DRIVE_BOOST_PER_PIXEL = 0.006
 const HORO_STEPS_PER_PIXEL = 0.006
@@ -187,13 +191,15 @@ export const FilmCanvas = () => {
     let pinnedScrollY: number | null = null
     let lastTouchY: number | null = null
     let scrollOpen = false
+    let scrollFloorProgress = 0
     const drawFrame = (timeMilliseconds: number) => {
       const elapsedSeconds = previousTimeMilliseconds === null ? 0 : (timeMilliseconds - previousTimeMilliseconds) / 1000
       previousTimeMilliseconds = timeMilliseconds
       const { progress: targetProgress, isShowingConcepts } = useFilmStore.getState()
       shownProgress += (targetProgress - shownProgress) * (1 - Math.exp(-elapsedSeconds * 6))
+      if (scrollFloorProgress > 0) shownProgress = Math.max(shownProgress, scrollFloorProgress)
       const greetingLayout = greetingButtonLayout(window.innerWidth, window.innerHeight, shownProgress)
-      if (!greetingLayout) {
+      if (!greetingLayout && scrollFloorProgress === 0) {
         meetingStartMilliseconds = null
         clubStartMilliseconds = null
         libraryStartMilliseconds = null
@@ -398,6 +404,7 @@ export const FilmCanvas = () => {
     }
     const startMeetingKira = () => {
       meetingStartMilliseconds = performance.now()
+      scrollFloorProgress = WAVE_START
     }
     const startCoolRadi = () => {
       anywayStartMilliseconds = performance.now()
@@ -439,9 +446,13 @@ export const FilmCanvas = () => {
       horoTargetSteps += scrollPixels * HORO_STEPS_PER_PIXEL
       hasScrolledHoro = true
     }
+    const scrollFloorY = () => scrollYForProgress(scrollFloorProgress)
+    const aboveScrollFloor = () => scrollFloorProgress > 0 && window.scrollY < scrollFloorY() - 0.5
+    const blockUpwardScroll = () => scrollFloorProgress > 0 && window.scrollY <= scrollFloorY() + 1
     const onWheel = (event: WheelEvent) => {
       backgroundPlaylist.nudge()
       const wheelPixels = event.deltaMode === WheelEvent.DOM_DELTA_PIXEL ? event.deltaY : event.deltaY * WHEEL_LINE_PIXELS
+      if (wheelPixels < 0 && blockUpwardScroll()) event.preventDefault()
       pressGas(wheelPixels)
       stepHoro(wheelPixels)
     }
@@ -453,8 +464,10 @@ export const FilmCanvas = () => {
       if (touchY === undefined) return
       backgroundPlaylist.nudge()
       if (lastTouchY !== null) {
-        pressGas(lastTouchY - touchY)
-        stepHoro(lastTouchY - touchY)
+        const touchPixels = lastTouchY - touchY
+        if (touchPixels < 0 && blockUpwardScroll()) event.preventDefault()
+        pressGas(touchPixels)
+        stepHoro(touchPixels)
       }
       lastTouchY = touchY
     }
@@ -462,6 +475,7 @@ export const FilmCanvas = () => {
       if (!sceneSelection || sceneSelection === previousState.sceneSelection) return
       const chosenScene = FILM_SCENES.find(({ id }) => id === sceneSelection.sceneId)
       const startSeconds = chosenScene?.meetingStartSeconds ?? null
+      scrollFloorProgress = startSeconds === null ? 0 : WAVE_START
       window.scrollTo({ top: startSeconds === null ? 0 : document.documentElement.scrollHeight, behavior: "instant" })
       updateProgress()
       shownProgress = useFilmStore.getState().progress
@@ -503,8 +517,18 @@ export const FilmCanvas = () => {
         if (window.scrollY !== pinnedScrollY) window.scrollTo(0, pinnedScrollY)
         return
       }
+      if (aboveScrollFloor()) {
+        window.scrollTo(0, scrollFloorY())
+        useFilmStore.getState().setProgress(scrollFloorProgress)
+        return
+      }
       backgroundPlaylist.nudge()
       updateProgress()
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      backgroundPlaylist.nudge()
+      const scrollingUp = event.key === "ArrowUp" || event.key === "PageUp" || event.key === "Home" || (event.key === " " && event.shiftKey)
+      if (scrollingUp && (event.key === "Home" ? scrollFloorProgress > 0 : blockUpwardScroll())) event.preventDefault()
     }
     const onResize = () => {
       resizeCanvas(canvas, context)
@@ -516,11 +540,11 @@ export const FilmCanvas = () => {
     animationFrameId = requestAnimationFrame(drawFrame)
     window.addEventListener("resize", onResize)
     window.addEventListener("scroll", onScroll, { passive: true })
-    window.addEventListener("wheel", onWheel, { passive: true })
+    window.addEventListener("wheel", onWheel, { passive: false })
     window.addEventListener("touchstart", onTouchStart, { passive: true })
-    window.addEventListener("touchmove", onTouchMove, { passive: true })
+    window.addEventListener("touchmove", onTouchMove, { passive: false })
     window.addEventListener("pointerdown", backgroundPlaylist.nudge, true)
-    window.addEventListener("keydown", backgroundPlaylist.nudge, true)
+    window.addEventListener("keydown", onKeyDown, true)
     const startButton = startButtonRef.current
     startButton?.addEventListener("pointerdown", backgroundPlaylist.nudge)
     startButton?.addEventListener("click", openScroll)
@@ -628,7 +652,7 @@ export const FilmCanvas = () => {
       window.removeEventListener("touchstart", onTouchStart)
       window.removeEventListener("touchmove", onTouchMove)
       window.removeEventListener("pointerdown", backgroundPlaylist.nudge, true)
-      window.removeEventListener("keydown", backgroundPlaylist.nudge, true)
+      window.removeEventListener("keydown", onKeyDown, true)
       delete document.documentElement.dataset.scrollOpen
       startButton?.removeEventListener("pointerdown", backgroundPlaylist.nudge)
       startButton?.removeEventListener("click", openScroll)
