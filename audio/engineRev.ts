@@ -1,12 +1,13 @@
 const REV_SRC = "/motorcycle-rev.mp3"
-const VOLUME = 0.75
+const VOLUME = 0.375
 const RETRIGGER_MS = 150
+const DRIVE_START = 2.5
 const ENTRANCE_VOLUME = 1
 const ENTRANCE_RATE = 0.75
 
-const rewindClip = (clip: HTMLAudioElement) => {
+const seekClip = (clip: HTMLAudioElement, seconds: number) => {
   try {
-    if (clip.currentTime > 0) clip.currentTime = 0
+    if (Math.abs(clip.currentTime - seconds) > 0.02) clip.currentTime = seconds
   } catch {
     return false
   }
@@ -27,7 +28,7 @@ export const createEngineRev = () => {
   const stopDrive = () => {
     lastVroomAt = 0
     drive.pause()
-    rewindClip(drive)
+    seekClip(drive, DRIVE_START)
   }
 
   const vroom = (boost: number) => {
@@ -36,18 +37,18 @@ export const createEngineRev = () => {
     lastVroomAt = now
     drive.playbackRate = Math.min(1, 0.8 + boost * 0.05)
     drive.volume = VOLUME
-    if (!rewindClip(drive)) return
+    if (!seekClip(drive, DRIVE_START)) return
     void drive.play().catch(() => {})
   }
 
   const stopEntrance = () => {
     entrance.pause()
-    rewindClip(entrance)
+    seekClip(entrance, 0)
   }
 
   const arrive = () => {
     entrance.volume = ENTRANCE_VOLUME
-    if (!rewindClip(entrance)) return
+    if (!seekClip(entrance, 0)) return
     void entrance.play().catch(() => {})
   }
 
@@ -65,7 +66,7 @@ export const createEngineRev = () => {
     void entrance.play().then(() => {
       if (announced) return
       entrance.pause()
-      rewindClip(entrance)
+      seekClip(entrance, 0)
     }).catch(() => {})
   }
 
