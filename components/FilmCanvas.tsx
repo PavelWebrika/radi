@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react"
 import { drawRadiConcepts } from "@/characters/radiConcepts"
-import { anywayButtonLayout, CAR_ENTRANCE_SOUND, cityWalkSteps, CITY_SCENE_END, drawCityScene, DRIVE_CRUISE_SECONDS, DRIVE_MAX_BOOST, DRIVE_READY_SECONDS, KIRA_POP_PROGRESS, RADI_EXIT_START } from "@/scenes/cityScene"
+import { anywayButtonLayout, CAR_ENTRANCE_SOUND, cityWalkSteps, CITY_SCENE_END, drawCityScene, DRIVE_CRUISE_SECONDS, DRIVE_MAX_BOOST, DRIVE_READY_SECONDS, KIRA_POP_PROGRESS, KIRA_WOOF_START, RADI_EXIT_START } from "@/scenes/cityScene"
 import { CLUB_SCENE_END, clubWalkSteps, drawClubScene, LAUNCH_START, letsDanceButtonLayout, playedClubSeconds } from "@/scenes/clubScene"
 import { FILM_SCENES } from "@/scenes/filmScenes"
 import {
@@ -26,6 +26,7 @@ import { drawNatureScene, HORO_DANCE_START, HORO_START } from "@/scenes/natureSc
 import { drawOpeningScene, greetingButtonLayout, kiraWalkSteps, KIRA_SCENE_END, openingWalkSteps, startButtonLayout, WAVE_START, type BubbleButtonLayout } from "@/scenes/openingScene"
 import { createBackgroundPlaylist } from "@/audio/backgroundPlaylist"
 import { createEngineRev } from "@/audio/engineRev"
+import { createKiraWoof } from "@/audio/kiraWoof"
 import { createFootsteps } from "@/audio/footsteps"
 import { createHeroReveal } from "@/audio/heroReveal"
 import { createLibraryCrash } from "@/audio/libraryCrash"
@@ -175,6 +176,7 @@ export const FilmCanvas = () => {
     const footsteps = createFootsteps()
     const kiraFootsteps = createFootsteps()
     const engineRev = createEngineRev()
+    const kiraWoof = createKiraWoof()
     const libraryCrash = createLibraryCrash(LIBRARY_FALL_START, LIBRARY_LANDING_SECONDS)
     const heroReveal = createHeroReveal(LIBRARY_HERO_REVEAL)
     let arrivalStartMilliseconds: number | null = null
@@ -424,6 +426,7 @@ export const FilmCanvas = () => {
       footsteps.sync(walkSteps)
       kiraFootsteps.sync(isShowingConcepts ? null : kiraWalkSteps(meetingSeconds))
       engineRev.syncEntrance(citySeconds === null ? null : anywaySeconds, CAR_ENTRANCE_SOUND)
+      kiraWoof.sync(drive?.kiraSeconds ?? null, KIRA_WOOF_START)
       libraryCrash.sync(isShowingConcepts ? null : librarySeconds, libraryRoofBreakSeconds(window.innerWidth, window.innerHeight))
       heroReveal.sync(
         librarySeconds === null ? null : exitSeconds,
@@ -716,6 +719,7 @@ export const FilmCanvas = () => {
       footsteps.stop()
       kiraFootsteps.stop()
       engineRev.stop()
+      kiraWoof.stop()
       libraryCrash.stop()
       heroReveal.stop()
     }
