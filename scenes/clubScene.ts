@@ -348,7 +348,7 @@ const partyHands = (move: PartyMove, groove: number): PartyPose["hands"] => {
   if (move === "handsUp") return [[-19 - Math.sin(groove * 2) * 2, -62], [19 + Math.sin(groove * 2) * 2, -62]]
   if (move === "pump") return [[-12, -52 - Math.max(0, beat) * 12], [14, -30]]
   if (move === "sway") return [[-8 + beat * 7, -36], [8 + beat * 7, -36]]
-  if (move === "drink") return [[-20, -58 + Math.sin(groove * 2) * 4], [14, -40 - Math.max(0, beat) * 3]]
+  if (move === "drink") return [[-20, -58 + Math.sin(groove * 2) * 4], [18, -32 - Math.max(0, beat) * 3]]
   return [[-15, -30 + beat * 4], [15, -30 - beat * 4]]
 }
 

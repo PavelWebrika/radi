@@ -57,7 +57,8 @@ const pointAlong = ([fromX, fromY]: Point, [toX, toY]: Point, amount: number): P
 
 const jointBetween = ([fromX, fromY]: Point, [toX, toY]: Point, segment: number, side: number): Point => {
   const distance = Math.hypot(toX - fromX, toY - fromY) || 1
-  const reach = Math.sqrt(Math.max(0, segment ** 2 - (distance / 2) ** 2))
+  const fullReach = Math.sqrt(Math.max(0, segment ** 2 - (distance / 2) ** 2))
+  const reach = Math.min(fullReach, distance * 0.55)
   const outward = side * (fromY - toY) >= 0 ? 1 : -1
   return [(fromX + toX) / 2 + ((fromY - toY) / distance) * reach * outward, (fromY + toY) / 2 + ((toX - fromX) / distance) * reach * outward]
 }
@@ -567,11 +568,11 @@ export const drawPartyPerson = (context: Context, person: PartyPerson, feetX: nu
   drawBottom(context, person, build)
   drawTop(context, person, build)
   drawFolkWaist(context, person, build)
-  drawArms(context, person, build, pose.hands)
   withHeadTilt(() => {
     drawFace(context, person, pose.lookUp)
     drawHairFront(context, person)
     drawHeadwear(context, person)
   })
+  drawArms(context, person, build, pose.hands)
   context.restore()
 }
