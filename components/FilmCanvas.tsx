@@ -9,8 +9,11 @@ import {
   drawLibraryScene,
   libraryWalkSteps,
   LIBRARY_EXIT_END,
+  LIBRARY_FALL_START,
+  LIBRARY_HERO_REVEAL,
   LIBRARY_LANDING_SECONDS,
   libraryQuizChoiceLayouts,
+  libraryRoofBreakSeconds,
   QUIZ_ADVANCE_AFTER_WRONG,
   RIGHT_CHEER_SECONDS,
   CHEER_MOVE_SECONDS,
@@ -19,10 +22,13 @@ import {
   type JokeChoice,
   type LibraryQuizPhase,
 } from "@/scenes/libraryScene"
-import { drawNatureScene, HORO_DANCE_START, HORO_START, natureWalkSteps } from "@/scenes/natureScene"
-import { drawOpeningScene, greetingButtonLayout, KIRA_SCENE_END, openingWalkSteps, startButtonLayout, WAVE_START, type BubbleButtonLayout } from "@/scenes/openingScene"
+import { drawNatureScene, HORO_DANCE_START, HORO_START } from "@/scenes/natureScene"
+import { drawOpeningScene, greetingButtonLayout, kiraWalkSteps, KIRA_SCENE_END, openingWalkSteps, startButtonLayout, WAVE_START, type BubbleButtonLayout } from "@/scenes/openingScene"
 import { createBackgroundPlaylist } from "@/audio/backgroundPlaylist"
+import { createEngineRev } from "@/audio/engineRev"
 import { createFootsteps } from "@/audio/footsteps"
+import { createHeroReveal } from "@/audio/heroReveal"
+import { createLibraryCrash } from "@/audio/libraryCrash"
 import { useFilmStore } from "@/store/film"
 
 const resizeCanvas = (canvas: HTMLCanvasElement, context: CanvasRenderingContext2D) => {
@@ -167,6 +173,10 @@ export const FilmCanvas = () => {
     }
     const backgroundPlaylist = createBackgroundPlaylist()
     const footsteps = createFootsteps()
+    const kiraFootsteps = createFootsteps()
+    const engineRev = createEngineRev()
+    const libraryCrash = createLibraryCrash(LIBRARY_FALL_START, LIBRARY_LANDING_SECONDS)
+    const heroReveal = createHeroReveal(LIBRARY_HERO_REVEAL)
     let arrivalStartMilliseconds: number | null = null
     let kiraStartMilliseconds: number | null = null
     let clubStartMilliseconds: number | null = null
@@ -214,7 +224,10 @@ export const FilmCanvas = () => {
       const anywaySeconds = anywayStartMilliseconds === null ? null : Math.max(0, timeMilliseconds - anywayStartMilliseconds) / 1000
       latestAnywaySeconds = isShowingConcepts ? null : anywaySeconds
       if (anywaySeconds === null) {
-        if (driveProgress !== null) stopDriveSong()
+        if (driveProgress !== null) {
+          stopDriveSong()
+          engineRev.stop()
+        }
         driveProgress = null
         driveSpeed = 0
         driveBoost = 0
@@ -226,7 +239,10 @@ export const FilmCanvas = () => {
         driveProgress = Math.min(1, driveProgress + (driveSpeed * elapsedSeconds) / DRIVE_CRUISE_SECONDS)
         driveBoost *= Math.exp(-elapsedSeconds * 4)
         if (driveProgress >= KIRA_POP_PROGRESS) kiraStartMilliseconds ??= timeMilliseconds
-        if (driveProgress >= 1) arrivalStartMilliseconds ??= timeMilliseconds
+        if (driveProgress >= 1) {
+          arrivalStartMilliseconds ??= timeMilliseconds
+          engineRev.stop()
+        }
       }
       const secondsSince = (startMilliseconds: number | null) => (startMilliseconds === null ? null : Math.max(0, timeMilliseconds - startMilliseconds) / 1000)
       const drive = driveProgress === null
@@ -396,18 +412,22 @@ export const FilmCanvas = () => {
         const choice = quizChoices?.[index] ?? null
         placeQuizButton(button, quizLayouts?.[index] ?? null, choice !== null && chosenQuiz === choice)
       })
-      const walkSteps = isShowingConcepts
+      const walkSteps = isShowingConcepts || natureSeconds !== null
         ? null
-        : natureSeconds !== null
-          ? natureWalkSteps(natureSeconds)
-          : librarySeconds !== null
-            ? libraryWalkSteps(librarySeconds)
-            : playedClub !== null
-              ? clubWalkSteps(playedClub)
-              : citySeconds !== null
-                ? cityWalkSteps(drive?.arrivalSeconds ?? null)
-                : openingWalkSteps(shownProgress, meetingSeconds)
+        : librarySeconds !== null
+          ? libraryWalkSteps(librarySeconds)
+          : playedClub !== null
+            ? clubWalkSteps(playedClub)
+            : citySeconds !== null
+              ? cityWalkSteps(drive?.arrivalSeconds ?? null, anywaySeconds)
+              : openingWalkSteps(shownProgress, meetingSeconds)
       footsteps.sync(walkSteps)
+      kiraFootsteps.sync(isShowingConcepts ? null : kiraWalkSteps(meetingSeconds))
+      libraryCrash.sync(isShowingConcepts ? null : librarySeconds, libraryRoofBreakSeconds(window.innerWidth, window.innerHeight))
+      heroReveal.sync(
+        librarySeconds === null ? null : exitSeconds,
+        finalChoice === "batman" || finalChoice === "unicorn" ? finalChoice : null,
+      )
       animationFrameId = requestAnimationFrame(drawFrame)
     }
     const openScroll = () => {
@@ -455,6 +475,7 @@ export const FilmCanvas = () => {
         void driveSong.play().catch(() => {})
       }
       driveBoost = Math.min(DRIVE_MAX_BOOST, driveBoost + scrollPixels * DRIVE_BOOST_PER_PIXEL)
+      if (driveProgress < 1) engineRev.vroom(driveBoost)
     }
     const stepHoro = (scrollPixels: number) => {
       if (pinnedScrollY === null) return
@@ -611,6 +632,7 @@ export const FilmCanvas = () => {
       if (finalChoice !== null || wrongStartMilliseconds !== null) return
       finalChoice = choice
       exitStartMilliseconds = performance.now()
+      heroReveal.prime()
     }
     const chooseQuizA = () => {
       if (libraryQuizPhase === "captain") chooseCaptain("nemo")
@@ -690,6 +712,10 @@ export const FilmCanvas = () => {
       stopHoroDanceSong()
       backgroundPlaylist.stop()
       footsteps.stop()
+      kiraFootsteps.stop()
+      engineRev.stop()
+      libraryCrash.stop()
+      heroReveal.stop()
     }
   }, [])
 

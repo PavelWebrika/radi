@@ -1,6 +1,7 @@
 import { ellipsePath, paintFill, paintLine, paintShape, type BuildPath, type Context } from "@/characters/paint"
 import { drawPartyPerson, type PartyPerson } from "@/characters/partyPerson"
 import { drawRadi, drawStarSparkle, type Point } from "@/characters/radi"
+import { drawKiraSide } from "@/characters/kira"
 import { folkDanceRadiLook, gaidaRadiLook } from "@/characters/radiConcepts"
 import { easeInOut, mixHands, seededRandom } from "@/scenes/libraryScene"
 import { bounce, clampToUnit, drawCloud, drawSun, easeOut, easeOutBack, mix, paintComicBubble, paintIris, radiScale, stageProgress } from "@/scenes/openingScene"
@@ -93,8 +94,6 @@ const travelUnits = (sceneSeconds: number) => {
   const slowSeconds = clampToUnit((sceneSeconds - WALK_END) / STOP_SECONDS) * STOP_SECONDS
   return WALK_UNITS_PER_SECOND * (Math.min(sceneSeconds, WALK_END) + slowSeconds - slowSeconds ** 2 / (2 * STOP_SECONDS))
 }
-
-export const natureWalkSteps = (sceneSeconds: number) => (travelUnits(sceneSeconds) * HOPS_PER_SECOND) / WALK_UNITS_PER_SECOND
 
 const GAP_X = travelUnits(STOP_END)
 const FIELD_START = GAP_X - 300
@@ -459,9 +458,10 @@ const drawFrontGrass = (context: Context, width: number, height: number, camera:
   })
 }
 
-const drawButterflies = (context: Context, width: number, height: number, time: number, camera: number, scale: number) => {
+const drawButterflies = (context: Context, width: number, height: number, time: number, camera: number, scale: number, inFront: boolean) => {
   const span = width + 200
   BUTTERFLY_COLORS.forEach((color, index) => {
+    if ((index % 2 === 1) !== inFront) return
     const butterflyX = wrapAround((index * span) / 3 - camera * 0.85 + time * 25 + Math.sin(time * 0.9 + index * 2) * 40, span) - 100
     const butterflyY = height * (0.62 + index * 0.05) + Math.sin(time * 1.6 + index) * height * 0.04
     const flap = 0.25 + Math.abs(Math.sin(time * 12 + index)) * 0.75
@@ -522,6 +522,28 @@ const drawFolkDancers = (context: Context, width: number, rowFeetY: number, rowS
       lookUp: 0,
     })
   }
+}
+
+const drawBackgroundKira = (context: Context, width: number, height: number, sceneSeconds: number, scale: number) => {
+  const kiraScale = scale * 0.55
+  const kiraX = width * 0.08 + ((width * 0.84) / 6.2) * sceneSeconds
+  if (kiraX > width + 70 * kiraScale) return
+  const visible = easeOut(stageProgress(sceneSeconds, 0.2, 0.55))
+  if (visible <= 0) return
+  const feetY = height * 0.755
+  const phase = sceneSeconds * 6
+  const lift = Math.abs(Math.sin(phase)) * 4
+  context.save()
+  context.globalAlpha = visible
+  paintFill(context, "rgba(0, 0, 0, 0.15)", ellipsePath(kiraX, feetY, 28 * kiraScale, 2.2 * kiraScale))
+  context.translate(kiraX, feetY - lift * kiraScale)
+  drawKiraSide(context, 0, 0, kiraScale, {
+    legSwing: Math.sin(phase),
+    tailWag: Math.sin(sceneSeconds * 8) * 0.35,
+    tongueWind: 0.35,
+    tonguePhase: sceneSeconds * 6,
+  })
+  context.restore()
 }
 
 const drawNatureRadi = (context: Context, width: number, feetY: number, rowFeetY: number, scale: number, rowScale: number, time: number, sceneSeconds: number, travel: number, horo: HoroPose) => {
@@ -724,12 +746,14 @@ export const drawNatureScene = (context: Context, width: number, height: number,
   meadowGradient.addColorStop(0, "#86d861")
   meadowGradient.addColorStop(1, "#4fae45")
   paintShape(context, meadowGradient, wavyBandPath(width, camera, height * 0.745, height + 10, height * 0.006, width * 0.5))
+  drawButterflies(context, width, height, time, camera, scale, false)
+  drawBackgroundKira(context, width, height, sceneSeconds, scale)
   drawTrail(context, width, camera, trailTop, trailBottom, height * 0.008)
   drawPebbles(context, width, camera, trailTop, trailBottom, scale)
   drawMeadowDetails(context, width, height, camera, scale, trailTop, trailBottom)
   drawFolkDancers(context, width, rowFeetY, rowScale, time, sceneSeconds, travel, horo)
-  drawButterflies(context, width, height, time, camera, scale)
   const { emitX, emitY } = drawNatureRadi(context, width, feetY, rowFeetY, scale, rowScale, time, sceneSeconds, travel, horo)
+  drawButterflies(context, width, height, time, camera, scale, true)
   drawMusicNotes(context, emitX, emitY, scale, sceneSeconds)
   drawFolkSwirl(context, width, height, radiX, feetY, scale, sceneSeconds)
   drawFrontGrass(context, width, height, camera, scale)

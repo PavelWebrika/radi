@@ -102,12 +102,14 @@ const RADI_EXIT_END = 1.5
 const RADI_WALK_END = 3.1
 const RADI_ENTER_END = 3.9
 
-export const cityWalkSteps = (arrivalSeconds: number | null) => {
-  if (arrivalSeconds === null) return null
+export const cityWalkSteps = (arrivalSeconds: number | null, anywaySeconds: number | null) => {
+  if (anywaySeconds === null && arrivalSeconds === null) return null
+  const landing = anywaySeconds !== null && anywaySeconds >= JUMP_OFF_END ? 1 : 0
+  if (arrivalSeconds === null) return landing
   const walk = stageProgress(arrivalSeconds, RADI_EXIT_END, RADI_WALK_END)
-  if (walk <= 0) return null
+  if (walk <= 0) return landing
   const enter = stageProgress(arrivalSeconds, RADI_WALK_END, RADI_ENTER_END)
-  return (walk < 1 ? walk : 1 + enter) * 4
+  return landing + (walk < 1 ? walk : 1 + enter) * 4
 }
 
 const KIRA_JUMP_START = 1.7

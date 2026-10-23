@@ -111,6 +111,7 @@ const CEILING_BEAMS = [1.12, 1.3] as const
 
 const FALL_START = 0.4
 export const LIBRARY_LANDING_SECONDS = 1.85
+export const LIBRARY_FALL_START = FALL_START
 const FALL_END = LIBRARY_LANDING_SECONDS
 const SHAKE_SECONDS = 0.45
 const SHAKE_STRENGTH = 11
@@ -482,6 +483,11 @@ const breakStartSeconds = (floorY: number, scale: number, ceilingY: number) => {
     if (ceilingBreak(crashMotion(seconds, floorY, scale).lowestY, ceilingY).travel > 0) return seconds
   }
   return FALL_END
+}
+
+export const libraryRoofBreakSeconds = (width: number, height: number) => {
+  const { floorY, ceilingY, scale } = libraryLayout(width, height)
+  return breakStartSeconds(floorY, scale, ceilingY)
 }
 
 const traceHole = (path: Path2D, holeX: number, holeY: number, radiusX: number, radiusY: number) => {
@@ -1382,6 +1388,7 @@ const EXIT_BOOK_END = 1.45
 const EXIT_SMOKE_START = 1.1
 const EXIT_SMOKE_FULL = 1.6
 const EXIT_SUIT_AT = 1.9
+export const LIBRARY_HERO_REVEAL = EXIT_SUIT_AT
 const EXIT_SMOKE_CLEAR = 2.2
 const EXIT_SMOKE_END = 2.9
 const EXIT_ORBIT_START = 2

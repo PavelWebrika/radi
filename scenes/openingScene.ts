@@ -335,11 +335,23 @@ export const bounce = (phase: number) => {
 
 const isMoving = (stage: number) => stage > 0 && stage < 1
 
+const gallopSteps = (seconds: number, start: number, end: number, strides: number) => easeOut(stageProgress(seconds, start, end)) * strides * 2
+
 export const openingWalkSteps = (progress: number, meetingSeconds: number | null) => {
-  if (meetingSeconds !== null) return null
+  if (meetingSeconds !== null) {
+    const chase = stageProgress(meetingSeconds, CHASE_START, CHASE_END)
+    if (chase <= 0) return null
+    return chase * CHASE_HOP_COUNT
+  }
   const walk = easeOut(stageProgress(progress, 0, WALK_END))
   if (walk <= 0) return null
   return walk * HOP_COUNT
+}
+
+export const kiraWalkSteps = (meetingSeconds: number | null) => {
+  if (meetingSeconds === null || meetingSeconds <= KIRA_RUN_START) return null
+  const happyHops = meetingSeconds < HAPPY_HOPS_START ? 0 : Math.min(6, (meetingSeconds - HAPPY_HOPS_START) / KIRA_HOP_SECONDS)
+  return gallopSteps(meetingSeconds, KIRA_RUN_START, KIRA_RUN_END, KIRA_STRIDES) + happyHops + gallopSteps(meetingSeconds, RUN_RIGHT_START, RUN_RIGHT_END, RUN_RIGHT_STRIDES) + gallopSteps(meetingSeconds, ESCAPE_START, ESCAPE_END, ESCAPE_STRIDES)
 }
 
 const settle = (stage: number) => Math.min(1, stage * 6, (1 - stage) * 6)

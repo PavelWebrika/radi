@@ -1,5 +1,5 @@
 const CLIPS = ["/footsteps/softstep000.ogg", "/footsteps/softstep001.ogg", "/footsteps/softstep002.ogg", "/footsteps/softstep003.ogg"]
-const VOLUME = 0.85
+const VOLUME = 0.425
 
 export const createFootsteps = () => {
   const clips = CLIPS.map((src) => {
