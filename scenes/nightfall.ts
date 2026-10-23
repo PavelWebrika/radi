@@ -99,6 +99,11 @@ export const drawMoonAndStars = (context: Context, width: number, height: number
         }
       },
     })
+    for (const side of [-1, 1]) {
+      paintFill(context, OUTLINE, ellipsePath(moonX + side * radius * 0.32, moonY - radius * 0.1, radius * 0.07, radius * 0.11))
+      paintFill(context, "rgba(255, 110, 140, 0.45)", ellipsePath(moonX + side * radius * 0.55, moonY + radius * 0.2, radius * 0.14, radius * 0.08))
+    }
+    paintLine(context, OUTLINE, radius * 0.07, (path) => path.arc(moonX, moonY + radius * 0.1, radius * 0.25, Math.PI * 0.15, Math.PI * 0.85))
   }
   context.restore()
 }

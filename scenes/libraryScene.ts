@@ -180,6 +180,35 @@ const quakeWobble = (sinceImpact: number, seed: number) => {
   return (1 - sinceImpact / QUAKE_SECONDS) ** 2 * Math.sin(sinceImpact * 34 + seed)
 }
 
+const drawLyingBook = (context: Context, centerX: number, centerY: number, bookWidth: number, bookHeight: number, color: string, tilt: number) => {
+  context.save()
+  context.translate(centerX, centerY)
+  context.rotate(tilt)
+  context.lineWidth = 1.5
+  const spine = Math.max(2.5, bookHeight * 0.42)
+  const pageTop = -bookHeight / 2
+  const pageRight = bookWidth / 2 - spine
+  paintShape(context, "#f6f0e4", (path) => path.roundRect(-bookWidth / 2, pageTop, bookWidth - spine + 1, bookHeight, 1))
+  for (const line of [0.35, 0.65]) {
+    const lineY = pageTop + bookHeight * line
+    paintLine(context, "rgba(43, 29, 26, 0.35)", 1, linePath(-bookWidth / 2 + 2, lineY, pageRight - 1, lineY))
+  }
+  paintShape(context, color, (path) => path.roundRect(pageRight - 0.5, pageTop, spine + 0.5, bookHeight, 1))
+  context.restore()
+}
+
+const drawNarrowBook = (context: Context, centerX: number, centerY: number, bookWidth: number, bookHeight: number, color: string, tilt: number) => {
+  context.save()
+  context.translate(centerX, centerY)
+  context.rotate(tilt)
+  context.lineWidth = 1.5
+  const pages = Math.max(2, bookWidth * 0.34)
+  paintShape(context, color, (path) => path.roundRect(-bookWidth / 2, -bookHeight / 2, bookWidth, bookHeight, 1.5))
+  paintFill(context, "#f6f0e4", (path) => path.rect(bookWidth / 2 - pages, -bookHeight / 2 + 1.2, pages - 0.6, bookHeight - 2.4))
+  paintFill(context, "rgba(255, 255, 255, 0.8)", (path) => path.rect(-bookWidth / 2 + 1.2, -bookHeight * 0.22, Math.max(1.5, bookWidth - pages - 2.4), Math.max(1.6, bookHeight * 0.07)))
+  context.restore()
+}
+
 const drawBook = (context: Context, centerX: number, centerY: number, bookWidth: number, bookHeight: number, color: string, tilt: number, mark: SpineMark) => {
   context.save()
   context.translate(centerX, centerY)
@@ -260,9 +289,10 @@ const drawShelfBooks = (context: Context, startX: number, endX: number, cubbyTop
       bookX += 7
     } else if (roll < 0.16) {
       const flatWidth = Math.min(mix(18, 26, seededRandom(bookIndex, 13)), endX - bookX)
+      const flatHeight = 7
       const layers = 2 + Math.floor(seededRandom(bookIndex, 14) * 3)
       for (let layer = 0; layer < layers; layer += 1) {
-        drawBook(context, bookX + flatWidth / 2 + (layer % 2) * 1.5, shelfY - 3 - layer * 6 - bounce * (1 + layer * 0.4), flatWidth - layer * 2, 6, bookColor(bookIndex + layer, 18), jiggle * 0.05, "gold")
+        drawLyingBook(context, bookX + flatWidth / 2 + (layer % 2) * 1.5, shelfY - flatHeight / 2 - layer * (flatHeight + 1) - bounce * (1 + layer * 0.4), flatWidth - layer * 2, flatHeight, bookColor(bookIndex + layer, 18), jiggle * 0.05)
       }
       bookX += flatWidth + 3
     } else {
@@ -271,7 +301,12 @@ const drawShelfBooks = (context: Context, startX: number, endX: number, cubbyTop
       if (bookX + bookWidth > endX) break
       const leaning = roll > 0.92
       const mark = SPINE_MARKS[Math.floor(seededRandom(bookIndex, 17) * SPINE_MARKS.length)] ?? "plain"
-      drawBook(context, bookX + bookWidth / 2 + (leaning ? bookHeight * 0.12 : 0), shelfY - bookHeight / 2 - bounce, bookWidth, bookHeight, bookColor(bookIndex, 12), (leaning ? 0.25 : 0) + jiggle * 0.08, mark)
+      const bookCenterX = bookX + bookWidth / 2 + (leaning ? bookHeight * 0.12 : 0)
+      const bookCenterY = shelfY - bookHeight / 2 - bounce
+      const bookTilt = (leaning ? 0.25 : 0) + jiggle * 0.08
+      const bookColorHere = bookColor(bookIndex, 12)
+      if (bookWidth < 11) drawNarrowBook(context, bookCenterX, bookCenterY, bookWidth, bookHeight, bookColorHere, bookTilt)
+      else drawBook(context, bookCenterX, bookCenterY, bookWidth, bookHeight, bookColorHere, bookTilt, mark)
       bookX += bookWidth + (leaning ? bookHeight * 0.25 : 1.5)
     }
     bookIndex += 1
