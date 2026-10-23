@@ -154,7 +154,7 @@ const cleaningPose = (sceneSeconds: number) => {
   const across = sweepT < 0.7 ? sweepT / 0.7 : (1 - sweepT) / 0.3
   const brush = mixPoint(brushingLeft ? [-15, -38] : [15, -38], [0, -30], easeOut(Math.min(1, across)))
   return {
-    hands: (brushingLeft ? [brush, SIDE_HANDS[1]] : [SIDE_HANDS[0], brush]) as const,
+    hands: (brushingLeft ? [brush, SIDE_HANDS[1]] : [SIDE_HANDS[0], brush]) as readonly [Point, Point],
     brush,
     puff: Math.sin(Math.min(sweepT, 1) * Math.PI),
   }
@@ -280,6 +280,7 @@ const drawCubby = (context: Context, innerLeft: number, innerRight: number, cubb
 
 const drawShelfBooks = (context: Context, startX: number, endX: number, cubbyTop: number, shelfY: number, firstBook: number, sinceImpact: number) => {
   let bookX = startX
+  let packedUntil = startX
   let bookIndex = firstBook
   while (bookX < endX - 8) {
     const roll = seededRandom(bookIndex, 11)
@@ -288,13 +289,28 @@ const drawShelfBooks = (context: Context, startX: number, endX: number, cubbyTop
     if (roll < 0.06) {
       bookX += 7
     } else if (roll < 0.16) {
-      const flatWidth = Math.min(mix(18, 26, seededRandom(bookIndex, 13)), endX - bookX)
+      const naturalWidth = Math.min(mix(18, 26, seededRandom(bookIndex, 13)), endX - bookX)
+      let openIndex = bookIndex
+      let nextX = bookX
+      while (nextX < endX - 8 && seededRandom(openIndex + 1, 11) < 0.06) {
+        openIndex += 1
+        nextX += 7
+      }
+      const followingRoll = seededRandom(openIndex + 1, 11)
+      const followingWidth = followingRoll < 0.16 ? mix(18, 26, seededRandom(openIndex + 1, 13)) : mix(7, 15, seededRandom(openIndex + 1, 16) ** 1.5)
+      const followingFits = nextX < endX - 8 && nextX + followingWidth <= endX
+      const stackEnd = followingFits ? nextX - 3 : endX - 2
+      const openSpan = stackEnd - packedUntil
+      const flatWidth = openSpan >= 8 ? openSpan : naturalWidth
+      const stackStart = openSpan >= 8 ? packedUntil : bookX
       const flatHeight = 7
       const layers = 2 + Math.floor(seededRandom(bookIndex, 14) * 3)
       for (let layer = 0; layer < layers; layer += 1) {
-        drawLyingBook(context, bookX + flatWidth / 2 + (layer % 2) * 1.5, shelfY - flatHeight / 2 - layer * (flatHeight + 1) - bounce * (1 + layer * 0.4), flatWidth - layer * 2, flatHeight, bookColor(bookIndex + layer, 18), jiggle * 0.05)
+        drawLyingBook(context, stackStart + flatWidth / 2 + (layer % 2) * 1.5, shelfY - flatHeight / 2 - layer * (flatHeight + 1) - bounce * (1 + layer * 0.4), flatWidth - layer * 2, flatHeight, bookColor(bookIndex + layer, 18), jiggle * 0.05)
       }
-      bookX += flatWidth + 3
+      bookX = stackStart + flatWidth + 3
+      packedUntil = bookX
+      bookIndex = openIndex
     } else {
       const bookHeight = (shelfY - cubbyTop - 6) * mix(0.6, 0.95, seededRandom(bookIndex, 15))
       const bookWidth = mix(7, 15, seededRandom(bookIndex, 16) ** 1.5)
@@ -308,6 +324,7 @@ const drawShelfBooks = (context: Context, startX: number, endX: number, cubbyTop
       if (bookWidth < 11) drawNarrowBook(context, bookCenterX, bookCenterY, bookWidth, bookHeight, bookColorHere, bookTilt)
       else drawBook(context, bookCenterX, bookCenterY, bookWidth, bookHeight, bookColorHere, bookTilt, mark)
       bookX += bookWidth + (leaning ? bookHeight * 0.25 : 1.5)
+      packedUntil = bookX
     }
     bookIndex += 1
   }
@@ -988,7 +1005,7 @@ const climbPose = (progress: number, levels: readonly number[]) => {
   const leadsLeft = stepIndex % 2 === 0
   return {
     feetY: mix(levels[stepIndex] ?? 0, levels[stepIndex + 1] ?? 0, easeInOut(stepT)),
-    legLifts: (leadsLeft ? [lift * 9, lift * 1.5] : [lift * 1.5, lift * 9]) as const,
+    legLifts: (leadsLeft ? [lift * 9, lift * 1.5] : [lift * 1.5, lift * 9]) as readonly [number, number],
     hands: [
       [PEEK_HANDS[0][0], PEEK_HANDS[0][1] - (leadsLeft ? lift * 2 : 0)],
       [PEEK_HANDS[1][0], PEEK_HANDS[1][1] - (leadsLeft ? 0 : lift * 2)],

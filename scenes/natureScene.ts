@@ -461,7 +461,8 @@ const drawFrontGrass = (context: Context, width: number, height: number, camera:
 const drawButterflies = (context: Context, width: number, height: number, time: number, camera: number, scale: number, inFront: boolean) => {
   const span = width + 200
   BUTTERFLY_COLORS.forEach((color, index) => {
-    if ((index % 2 === 1) !== inFront) return
+    const fliesInFront = color === "#ff5d8f"
+    if (fliesInFront !== inFront) return
     const butterflyX = wrapAround((index * span) / 3 - camera * 0.85 + time * 25 + Math.sin(time * 0.9 + index * 2) * 40, span) - 100
     const butterflyY = height * (0.62 + index * 0.05) + Math.sin(time * 1.6 + index) * height * 0.04
     const flap = 0.25 + Math.abs(Math.sin(time * 12 + index)) * 0.75
