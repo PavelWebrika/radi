@@ -12,6 +12,13 @@ type RadiHands = readonly [Point, Point]
 
 const IRIS_IN_END = 1.2
 const WALK_IN_END = 1.15
+
+export const clubWalkSteps = (clubSeconds: number) => {
+  const walkIn = stageProgress(clubSeconds, 0, WALK_IN_END)
+  if (walkIn <= 0) return null
+  return walkIn * 4
+}
+
 const FUN_BUBBLE_START = 1.5
 const FUN_BUBBLE_END = 5.1
 const DANCE_START = 5.1

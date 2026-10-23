@@ -94,6 +94,8 @@ const travelUnits = (sceneSeconds: number) => {
   return WALK_UNITS_PER_SECOND * (Math.min(sceneSeconds, WALK_END) + slowSeconds - slowSeconds ** 2 / (2 * STOP_SECONDS))
 }
 
+export const natureWalkSteps = (sceneSeconds: number) => (travelUnits(sceneSeconds) * HOPS_PER_SECOND) / WALK_UNITS_PER_SECOND
+
 const GAP_X = travelUnits(STOP_END)
 const FIELD_START = GAP_X - 300
 

@@ -2,11 +2,12 @@
 
 import { useEffect, useRef } from "react"
 import { drawRadiConcepts } from "@/characters/radiConcepts"
-import { anywayButtonLayout, CITY_SCENE_END, drawCityScene, DRIVE_CRUISE_SECONDS, DRIVE_MAX_BOOST, DRIVE_READY_SECONDS, KIRA_POP_PROGRESS, RADI_EXIT_START } from "@/scenes/cityScene"
-import { CLUB_SCENE_END, drawClubScene, LAUNCH_START, letsDanceButtonLayout, playedClubSeconds } from "@/scenes/clubScene"
+import { anywayButtonLayout, cityWalkSteps, CITY_SCENE_END, drawCityScene, DRIVE_CRUISE_SECONDS, DRIVE_MAX_BOOST, DRIVE_READY_SECONDS, KIRA_POP_PROGRESS, RADI_EXIT_START } from "@/scenes/cityScene"
+import { CLUB_SCENE_END, clubWalkSteps, drawClubScene, LAUNCH_START, letsDanceButtonLayout, playedClubSeconds } from "@/scenes/clubScene"
 import { FILM_SCENES } from "@/scenes/filmScenes"
 import {
   drawLibraryScene,
+  libraryWalkSteps,
   LIBRARY_EXIT_END,
   LIBRARY_LANDING_SECONDS,
   libraryQuizChoiceLayouts,
@@ -18,9 +19,10 @@ import {
   type JokeChoice,
   type LibraryQuizPhase,
 } from "@/scenes/libraryScene"
-import { drawNatureScene, HORO_DANCE_START, HORO_START } from "@/scenes/natureScene"
-import { drawOpeningScene, greetingButtonLayout, KIRA_SCENE_END, startButtonLayout, WAVE_START, type BubbleButtonLayout } from "@/scenes/openingScene"
+import { drawNatureScene, HORO_DANCE_START, HORO_START, natureWalkSteps } from "@/scenes/natureScene"
+import { drawOpeningScene, greetingButtonLayout, KIRA_SCENE_END, openingWalkSteps, startButtonLayout, WAVE_START, type BubbleButtonLayout } from "@/scenes/openingScene"
 import { createBackgroundPlaylist } from "@/audio/backgroundPlaylist"
+import { createFootsteps } from "@/audio/footsteps"
 import { useFilmStore } from "@/store/film"
 
 const resizeCanvas = (canvas: HTMLCanvasElement, context: CanvasRenderingContext2D) => {
@@ -164,6 +166,7 @@ export const FilmCanvas = () => {
       if (fadeUnit >= 1) stopHoroDanceSong()
     }
     const backgroundPlaylist = createBackgroundPlaylist()
+    const footsteps = createFootsteps()
     let arrivalStartMilliseconds: number | null = null
     let kiraStartMilliseconds: number | null = null
     let clubStartMilliseconds: number | null = null
@@ -393,6 +396,18 @@ export const FilmCanvas = () => {
         const choice = quizChoices?.[index] ?? null
         placeQuizButton(button, quizLayouts?.[index] ?? null, choice !== null && chosenQuiz === choice)
       })
+      const walkSteps = isShowingConcepts
+        ? null
+        : natureSeconds !== null
+          ? natureWalkSteps(natureSeconds)
+          : librarySeconds !== null
+            ? libraryWalkSteps(librarySeconds)
+            : playedClub !== null
+              ? clubWalkSteps(playedClub)
+              : citySeconds !== null
+                ? cityWalkSteps(drive?.arrivalSeconds ?? null)
+                : openingWalkSteps(shownProgress, meetingSeconds)
+      footsteps.sync(walkSteps)
       animationFrameId = requestAnimationFrame(drawFrame)
     }
     const openScroll = () => {
@@ -674,6 +689,7 @@ export const FilmCanvas = () => {
       stopHoroSong()
       stopHoroDanceSong()
       backgroundPlaylist.stop()
+      footsteps.stop()
     }
   }, [])
 

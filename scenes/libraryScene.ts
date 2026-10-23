@@ -49,6 +49,19 @@ const QUIZ_POP_SECONDS = 0.45
 const PAGE_TURN_SECONDS = 3
 const PAGE_TURN_FLIP_SECONDS = 0.55
 const SKIP_HOPS = 6
+
+const skipSteps = (sceneSeconds: number, start: number, end: number) => {
+  const stride = easeOut(stageProgress(sceneSeconds, start, end))
+  if (stride <= 0) return null
+  return stride * SKIP_HOPS
+}
+
+export const libraryWalkSteps = (sceneSeconds: number) => {
+  if (sceneSeconds >= WALK_BACK_START) return skipSteps(sceneSeconds, WALK_BACK_START, WALK_BACK_END)
+  if (sceneSeconds >= WALK_TO_LADDER_START) return skipSteps(sceneSeconds, WALK_TO_LADDER_START, WALK_TO_LADDER_END)
+  return null
+}
+
 const TOP_RUNG = 2
 const READING_BOOK = "#7b5cff"
 const PAGE = "#fffaf0"

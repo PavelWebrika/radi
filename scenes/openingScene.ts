@@ -334,6 +334,14 @@ export const bounce = (phase: number) => {
 }
 
 const isMoving = (stage: number) => stage > 0 && stage < 1
+
+export const openingWalkSteps = (progress: number, meetingSeconds: number | null) => {
+  if (meetingSeconds !== null) return null
+  const walk = easeOut(stageProgress(progress, 0, WALK_END))
+  if (walk <= 0) return null
+  return walk * HOP_COUNT
+}
+
 const settle = (stage: number) => Math.min(1, stage * 6, (1 - stage) * 6)
 const settledStretch = (stretchY: number, stage: number) => 1 + (stretchY - 1) * settle(stage)
 
