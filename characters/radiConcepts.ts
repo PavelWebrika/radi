@@ -139,6 +139,7 @@ export const unicornRadiLook = unicornConcept.look
 const polishedGaidaConcept = polishConcept(gaidaConcept, { hair: "tucked", extras: ["pendant", "gaida", "kalpak"], shoes: "tsarvuli" })
 
 export const gaidaRadiLook = polishedGaidaConcept.look
+export const sunnyRadiLook = polishConcept(sunnyConcept).look
 
 const folkDanceConcept = polishConcept({
   name: "Folk Dance Radi",

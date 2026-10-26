@@ -22,7 +22,8 @@ import {
   type JokeChoice,
   type LibraryQuizPhase,
 } from "@/scenes/libraryScene"
-import { drawNatureScene, HORO_DANCE_START, HORO_START } from "@/scenes/natureScene"
+import { cosmodromeWalkSteps, drawCosmodromeScene } from "@/scenes/cosmodromeScene"
+import { drawNatureScene, HORO_DANCE_START, HORO_START, NATURE_SCENE_END } from "@/scenes/natureScene"
 import { drawOpeningScene, greetingButtonLayout, kiraWalkSteps, KIRA_SCENE_END, openingWalkSteps, startButtonLayout, WAVE_START, type BubbleButtonLayout } from "@/scenes/openingScene"
 import { createBackgroundPlaylist } from "@/audio/backgroundPlaylist"
 import { createEngineRev } from "@/audio/engineRev"
@@ -199,6 +200,7 @@ export const FilmCanvas = () => {
     let exitStartMilliseconds: number | null = null
     let boringShakeStartMilliseconds: number | null = null
     let natureStartMilliseconds: number | null = null
+    let cosmodromeStartMilliseconds: number | null = null
     let horoTargetSteps = 0
     let horoSteps = 0
     let horoIdleSteps = 0
@@ -219,6 +221,7 @@ export const FilmCanvas = () => {
         clubStartMilliseconds = null
         libraryStartMilliseconds = null
         natureStartMilliseconds = null
+        cosmodromeStartMilliseconds = null
       }
       const meetingSeconds = meetingStartMilliseconds === null ? null : Math.max(0, timeMilliseconds - meetingStartMilliseconds) / 1000
       const citySeconds = meetingSeconds !== null && meetingSeconds >= KIRA_SCENE_END ? meetingSeconds - KIRA_SCENE_END : null
@@ -272,6 +275,8 @@ export const FilmCanvas = () => {
       const exitSeconds = secondsSince(exitStartMilliseconds)
       if (librarySeconds !== null && exitSeconds !== null && exitSeconds >= LIBRARY_EXIT_END) natureStartMilliseconds ??= timeMilliseconds
       const natureSeconds = secondsSince(natureStartMilliseconds)
+      if (natureSeconds !== null && natureSeconds >= NATURE_SCENE_END) cosmodromeStartMilliseconds ??= timeMilliseconds
+      const cosmodromeSeconds = secondsSince(cosmodromeStartMilliseconds)
       if (natureSeconds === null) {
         horoSongStarted = false
         horoDanceStarted = false
@@ -305,9 +310,9 @@ export const FilmCanvas = () => {
       const hasLeftTheCar = drive?.arrivalSeconds != null && drive.arrivalSeconds >= RADI_EXIT_START
       const hasLandedInLibrary = librarySeconds !== null && librarySeconds >= LIBRARY_LANDING_SECONDS
       const hasExitedAsHero = exitStartMilliseconds !== null && (finalChoice === "batman" || finalChoice === "unicorn")
-      const holdBackground = natureSeconds !== null || hasExitedAsHero || (!hasLandedInLibrary && (hasLeftTheCar || clubSeconds !== null || librarySeconds !== null))
+      const holdBackground = (natureSeconds !== null && cosmodromeSeconds === null) || hasExitedAsHero || (!hasLandedInLibrary && (hasLeftTheCar || clubSeconds !== null || librarySeconds !== null))
       backgroundPlaylist.update(timeMilliseconds, songFadeDirection !== null || danceFadeDirection !== null || holdBackground)
-      pinnedScrollY = !isShowingConcepts && natureSeconds !== null && natureSeconds >= HORO_START ? (pinnedScrollY ?? window.scrollY) : null
+      pinnedScrollY = !isShowingConcepts && cosmodromeSeconds === null && natureSeconds !== null && natureSeconds >= HORO_START ? (pinnedScrollY ?? window.scrollY) : null
       horoSteps += (horoTargetSteps - horoSteps) * (1 - Math.exp(-elapsedSeconds * 5))
       if (pinnedScrollY !== null) horoIdleSteps += elapsedSeconds * HORO_IDLE_STEPS_PER_SECOND * Math.max(0, 1 - Math.abs(horoTargetSteps - horoSteps) * 4)
       const shakingBoring = libraryQuizPhase === "final" && boringShakeStartMilliseconds !== null && timeMilliseconds - boringShakeStartMilliseconds < 1000 && finalChoice === null
@@ -315,6 +320,8 @@ export const FilmCanvas = () => {
         context.fillStyle = "#000000"
         context.fillRect(0, 0, window.innerWidth, window.innerHeight)
         drawRadiConcepts(context, window.innerWidth, window.innerHeight)
+      } else if (cosmodromeSeconds !== null) {
+        drawCosmodromeScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, cosmodromeSeconds)
       } else if (natureSeconds !== null) {
         drawNatureScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, natureSeconds, horoSteps, horoSteps + horoIdleSteps, !hasScrolledHoro)
       } else if (librarySeconds !== null) {
@@ -372,11 +379,11 @@ export const FilmCanvas = () => {
       } else {
         drawOpeningScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, shownProgress, meetingSeconds, scrollOpen)
       }
-      const onOpening = !isShowingConcepts && meetingSeconds === null && citySeconds === null && clubSeconds === null && librarySeconds === null && natureSeconds === null
+      const onOpening = !isShowingConcepts && meetingSeconds === null && citySeconds === null && clubSeconds === null && librarySeconds === null && natureSeconds === null && cosmodromeSeconds === null
       const startLayout = scrollOpen || !onOpening ? null : startButtonLayout(window.innerWidth, window.innerHeight, timeMilliseconds / 1000)
       if (startButtonRef.current) placeBubbleButton(startButtonRef.current, startLayout)
       const moreLayout = isShowingConcepts || meetingSeconds !== null ? null : greetingLayout
-      const anywayLayout = isShowingConcepts || citySeconds === null || clubSeconds !== null || librarySeconds !== null || natureSeconds !== null ? null : anywayButtonLayout(window.innerWidth, window.innerHeight, citySeconds, anywaySeconds)
+      const anywayLayout = isShowingConcepts || citySeconds === null || clubSeconds !== null || librarySeconds !== null || natureSeconds !== null || cosmodromeSeconds !== null ? null : anywayButtonLayout(window.innerWidth, window.innerHeight, citySeconds, anywaySeconds)
       if (moreButtonRef.current) placeBubbleButton(moreButtonRef.current, moreLayout)
       if (anywayButtonRef.current) placeBubbleButton(anywayButtonRef.current, anywayLayout)
       const letsDanceLayout = isShowingConcepts || clubSeconds === null ? null : letsDanceButtonLayout(window.innerWidth, window.innerHeight, clubSeconds, letsDanceSeconds)
@@ -414,15 +421,19 @@ export const FilmCanvas = () => {
         const choice = quizChoices?.[index] ?? null
         placeQuizButton(button, quizLayouts?.[index] ?? null, choice !== null && chosenQuiz === choice)
       })
-      const walkSteps = isShowingConcepts || natureSeconds !== null
+      const walkSteps = isShowingConcepts
         ? null
-        : librarySeconds !== null
-          ? libraryWalkSteps(librarySeconds)
-          : playedClub !== null
-            ? clubWalkSteps(playedClub)
-            : citySeconds !== null
-              ? cityWalkSteps(drive?.arrivalSeconds ?? null, anywaySeconds)
-              : openingWalkSteps(shownProgress, meetingSeconds)
+        : cosmodromeSeconds !== null
+          ? cosmodromeWalkSteps(cosmodromeSeconds)
+          : natureSeconds !== null
+            ? null
+            : librarySeconds !== null
+              ? libraryWalkSteps(librarySeconds)
+              : playedClub !== null
+                ? clubWalkSteps(playedClub)
+                : citySeconds !== null
+                  ? cityWalkSteps(drive?.arrivalSeconds ?? null, anywaySeconds)
+                  : openingWalkSteps(shownProgress, meetingSeconds)
       footsteps.sync(walkSteps)
       kiraFootsteps.sync(isShowingConcepts ? null : kiraWalkSteps(meetingSeconds))
       engineRev.syncEntrance(citySeconds === null ? null : anywaySeconds, CAR_ENTRANCE_SOUND)
@@ -525,6 +536,7 @@ export const FilmCanvas = () => {
       clubStartMilliseconds = sceneSelection.sceneId === "nightClub" ? performance.now() : null
       libraryStartMilliseconds = sceneSelection.sceneId === "library" ? performance.now() : null
       natureStartMilliseconds = sceneSelection.sceneId === "nature" ? performance.now() : null
+      cosmodromeStartMilliseconds = sceneSelection.sceneId === "cosmodrome" ? performance.now() : null
       horoTargetSteps = 0
       horoSteps = 0
       horoIdleSteps = 0
