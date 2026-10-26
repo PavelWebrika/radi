@@ -501,7 +501,7 @@ const drawTossedTreat = (context: Context, width: number, radiX: number, feetY: 
 
 export const mixPoint = (from: Point, to: Point, amount: number): Point => [mix(from[0], to[0], amount), mix(from[1], to[1], amount)]
 
-const heartPath = (size: number): BuildPath => (path) => {
+export const heartPath = (size: number): BuildPath => (path) => {
   path.moveTo(0, size * 0.4)
   path.bezierCurveTo(-size * 0.6, 0, -size * 0.55, -size * 0.45, -size * 0.25, -size * 0.45)
   path.bezierCurveTo(-size * 0.08, -size * 0.45, 0, -size * 0.33, 0, -size * 0.22)

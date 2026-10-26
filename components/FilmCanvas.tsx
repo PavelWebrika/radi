@@ -22,7 +22,7 @@ import {
   type JokeChoice,
   type LibraryQuizPhase,
 } from "@/scenes/libraryScene"
-import { cosmodromeWalkSteps, drawCosmodromeScene } from "@/scenes/cosmodromeScene"
+import { cosmodromeWalkSteps, drawCosmodromeScene, wishButtonLayout } from "@/scenes/cosmodromeScene"
 import { drawNatureScene, HORO_DANCE_START, HORO_START, NATURE_SCENE_END } from "@/scenes/natureScene"
 import { drawOpeningScene, greetingButtonLayout, kiraWalkSteps, KIRA_SCENE_END, openingWalkSteps, startButtonLayout, WAVE_START, type BubbleButtonLayout } from "@/scenes/openingScene"
 import { createBackgroundPlaylist } from "@/audio/backgroundPlaylist"
@@ -82,6 +82,7 @@ export const FilmCanvas = () => {
   const moreButtonRef = useRef<HTMLButtonElement>(null)
   const anywayButtonRef = useRef<HTMLButtonElement>(null)
   const letsDanceButtonRef = useRef<HTMLButtonElement>(null)
+  const wishButtonRef = useRef<HTMLButtonElement>(null)
   const nemoButtonRef = useRef<HTMLButtonElement>(null)
   const americaButtonRef = useRef<HTMLButtonElement>(null)
   const janewayButtonRef = useRef<HTMLButtonElement>(null)
@@ -201,6 +202,7 @@ export const FilmCanvas = () => {
     let boringShakeStartMilliseconds: number | null = null
     let natureStartMilliseconds: number | null = null
     let cosmodromeStartMilliseconds: number | null = null
+    let wishStartMilliseconds: number | null = null
     let horoTargetSteps = 0
     let horoSteps = 0
     let horoIdleSteps = 0
@@ -277,6 +279,8 @@ export const FilmCanvas = () => {
       const natureSeconds = secondsSince(natureStartMilliseconds)
       if (natureSeconds !== null && natureSeconds >= NATURE_SCENE_END) cosmodromeStartMilliseconds ??= timeMilliseconds
       const cosmodromeSeconds = secondsSince(cosmodromeStartMilliseconds)
+      if (cosmodromeSeconds === null) wishStartMilliseconds = null
+      const wishSeconds = secondsSince(wishStartMilliseconds)
       if (natureSeconds === null) {
         horoSongStarted = false
         horoDanceStarted = false
@@ -321,7 +325,7 @@ export const FilmCanvas = () => {
         context.fillRect(0, 0, window.innerWidth, window.innerHeight)
         drawRadiConcepts(context, window.innerWidth, window.innerHeight)
       } else if (cosmodromeSeconds !== null) {
-        drawCosmodromeScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, cosmodromeSeconds)
+        drawCosmodromeScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, cosmodromeSeconds, wishSeconds)
       } else if (natureSeconds !== null) {
         drawNatureScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, natureSeconds, horoSteps, horoSteps + horoIdleSteps, !hasScrolledHoro)
       } else if (librarySeconds !== null) {
@@ -388,6 +392,8 @@ export const FilmCanvas = () => {
       if (anywayButtonRef.current) placeBubbleButton(anywayButtonRef.current, anywayLayout)
       const letsDanceLayout = isShowingConcepts || clubSeconds === null ? null : letsDanceButtonLayout(window.innerWidth, window.innerHeight, clubSeconds, letsDanceSeconds)
       if (letsDanceButtonRef.current) placeBubbleButton(letsDanceButtonRef.current, letsDanceLayout)
+      const wishLayout = isShowingConcepts || cosmodromeSeconds === null ? null : wishButtonLayout(window.innerWidth, window.innerHeight, cosmodromeSeconds, wishSeconds)
+      if (wishButtonRef.current) placeBubbleButton(wishButtonRef.current, wishLayout)
       if (librarySeconds === null) {
         libraryQuizPhase = "captain"
         captainChoice = null
@@ -469,6 +475,9 @@ export const FilmCanvas = () => {
         driveSong.muted = false
       })
     }
+    const makeWish = () => {
+      wishStartMilliseconds ??= performance.now()
+    }
     const startDancing = () => {
       if (letsDanceStartMilliseconds !== null) return
       letsDanceStartMilliseconds = performance.now()
@@ -537,6 +546,7 @@ export const FilmCanvas = () => {
       libraryStartMilliseconds = sceneSelection.sceneId === "library" ? performance.now() : null
       natureStartMilliseconds = sceneSelection.sceneId === "nature" ? performance.now() : null
       cosmodromeStartMilliseconds = sceneSelection.sceneId === "cosmodrome" ? performance.now() : null
+      wishStartMilliseconds = null
       horoTargetSteps = 0
       horoSteps = 0
       horoIdleSteps = 0
@@ -607,6 +617,8 @@ export const FilmCanvas = () => {
     anywayButton?.addEventListener("click", startCoolRadi)
     const letsDanceButton = letsDanceButtonRef.current
     letsDanceButton?.addEventListener("click", startDancing)
+    const wishButton = wishButtonRef.current
+    wishButton?.addEventListener("click", makeWish)
     const startJokeQuiz = (librarySeconds: number) => {
       libraryQuizPhase = "joke"
       jokeQuizStartSeconds = librarySeconds
@@ -713,6 +725,7 @@ export const FilmCanvas = () => {
       moreButton?.removeEventListener("click", startMeetingKira)
       anywayButton?.removeEventListener("click", startCoolRadi)
       letsDanceButton?.removeEventListener("click", startDancing)
+      wishButton?.removeEventListener("click", makeWish)
       nemoButton?.removeEventListener("click", chooseQuizA)
       americaButton?.removeEventListener("click", chooseQuizB)
       janewayButton?.removeEventListener("click", chooseQuizC)
@@ -751,6 +764,9 @@ export const FilmCanvas = () => {
       </button>
       <button ref={letsDanceButtonRef} type="button" className="more-button" data-visible="false" tabIndex={-1}>
         {"Let's dance!"}
+      </button>
+      <button ref={wishButtonRef} type="button" className="more-button" data-visible="false" tabIndex={-1}>
+        Make a wish
       </button>
       <button ref={nemoButtonRef} type="button" className="quiz-answer" data-visible="false" tabIndex={-1} aria-label="Answer A" />
       <button ref={americaButtonRef} type="button" className="quiz-answer" data-visible="false" tabIndex={-1} aria-label="Answer B" />

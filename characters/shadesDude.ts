@@ -32,7 +32,8 @@ export const shadesDude: PartyPerson = {
   extras: [],
 }
 
-const STANDING: PartyPose = { hands: [[-23, -29], [23, -29]], bounce: 0, sway: 0, headTilt: 0, footLifts: [0, 0], lookUp: 0 }
+const NECK_Y = -46
+const STANDING: PartyPose ={ hands: [[-23, -29], [23, -29]], bounce: 0, sway: 0, headTilt: 0, footLifts: [0, 0], lookUp: 0 }
 
 const drawInUnits = (context: Context, feetX: number, feetY: number, scale: number, draw: () => void) => {
   context.save()
@@ -46,9 +47,12 @@ const drawInUnits = (context: Context, feetX: number, feetY: number, scale: numb
   context.restore()
 }
 
-export const drawShadesDudeFront = (context: Context, feetX: number, feetY: number, scale: number) => {
-  drawPartyPerson(context, shadesDude, feetX, feetY, scale, STANDING)
+export const drawShadesDudeFront = (context: Context, feetX: number, feetY: number, scale: number, pose: PartyPose = STANDING) => {
+  drawPartyPerson(context, shadesDude, feetX, feetY, scale, pose)
   drawInUnits(context, feetX, feetY, scale, () => {
+    context.translate(pose.sway, pose.bounce + NECK_Y)
+    context.rotate(pose.headTilt)
+    context.translate(0, -NECK_Y)
     paintFill(context, BUZZ, frontBuzzPath)
     for (const side of SIDES) {
       paintLine(context, SKIN, 2.4, linePath(side * 5, -71, side * 12, -73.5))

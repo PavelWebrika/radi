@@ -1,8 +1,10 @@
 import { ellipsePath, linePath, paintFill, paintLine, paintShape, type Context } from "@/characters/paint"
-import { drawRadi, type Point } from "@/characters/radi"
+import { type PartyPose } from "@/characters/partyPerson"
+import { drawRadi, type Point, type RadiExpression } from "@/characters/radi"
 import { sunnyRadiLook } from "@/characters/radiConcepts"
-import { seededRandom } from "@/scenes/libraryScene"
-import { bounce, clampToUnit, easeOut, easeOutBack, mix, mixPoint, paintComicBubble, paintIris, radiScale, stageProgress } from "@/scenes/openingScene"
+import { drawShadesDudeFront } from "@/characters/shadesDude"
+import { easeInOut, seededRandom } from "@/scenes/libraryScene"
+import { bounce, clampToUnit, easeOut, easeOutBack, heartPath, mix, mixPoint, paintComicBubble, paintIris, radiScale, stageProgress, type BubbleButtonLayout } from "@/scenes/openingScene"
 
 type Dish = { x: number; size: number; tilt: number; phase: number }
 type Block = readonly [number, number, number]
@@ -24,6 +26,29 @@ const RESTING_BOUNCE = { lift: 0, stretchY: 1 }
 const RESTING_HANDS: readonly [Point, Point] = [[-14, -33], [14, -33]]
 const THINKING_HANDS: readonly [Point, Point] = [[14, -37], [11, -48]]
 const THINKING_ELBOWS: readonly [number, number] = [0.3, -2.5]
+const CLASPED_HANDS: readonly [Point, Point] = [[-4, -38], [4, -38]]
+const RADI_BUBBLE_HIDE_START = 7.4
+const RADI_BUBBLE_HIDE_END = 7.7
+const DUDE_WALK_START = 7.2
+const DUDE_WALK_END = 13.6
+const DUDE_STEPS_PER_SECOND = 1.5
+const DUDE_SIZE = 1.25
+const DUDE_STOP_UNITS = 50
+const CAKE_HANDS: readonly [Point, Point] = [[-16, -23], [16, -23]]
+const NOTICE_START = 8.4
+const NOTICE_END = 8.9
+const KISS_START = 14
+const KISS_CONTACT = 14.4
+const KISS_LEAVE = 15
+const KISS_END = 15.4
+const HEART_SECONDS = 1.6
+const KISS_HEARTS = [[-14, 30, 0.8], [0, 45, 1], [14, 34, 0.85], [-6, 55, 0.6], [9, 60, 0.65]] as const
+const WISH_START = 15.6
+const WISH_POP_END = WISH_START + 0.35
+const WISH_LINES = ["Happy birthday,", "Radi!"] as const
+const WISH_CLOSE_SECONDS = 0.3
+const KISS_LEAN = 0.14
+const RADI_FEET = 0.88
 const FAR_BLOCKS: readonly Block[] = [
   [0, 0.05, 0.05], [0.04, 0.03, 0.08], [0.11, 0.06, 0.04], [0.19, 0.04, 0.07], [0.3, 0.05, 0.05], [0.37, 0.03, 0.09],
   [0.46, 0.07, 0.04], [0.52, 0.03, 0.07], [0.62, 0.06, 0.06], [0.69, 0.04, 0.1], [0.78, 0.05, 0.05], [0.86, 0.04, 0.08], [0.93, 0.07, 0.05],
@@ -37,7 +62,8 @@ const DISHES: Dish[] = [
 const isMoving = (stage: number) => stage > 0 && stage < 1
 const settle = (stage: number) => Math.min(1, stage * 6, (1 - stage) * 6)
 const settledStretch = (stretchY: number, stage: number) => 1 + (stretchY - 1) * settle(stage)
-const skipProgress = (sceneSeconds: number) => easeOut(stageProgress(sceneSeconds, IRIS_IN_END * 0.5, SKIP_END))
+const easeOutSoft = (amount: number) => mix(amount, easeOut(amount), amount)
+const skipProgress =(sceneSeconds: number) => easeOut(stageProgress(sceneSeconds, IRIS_IN_END * 0.5, SKIP_END))
 
 export const cosmodromeWalkSteps = (sceneSeconds: number) => {
   const skip = skipProgress(sceneSeconds)
@@ -236,19 +262,8 @@ const drawCosmodrome = (context: Context, width: number, height: number, horizon
   for (const dish of DISHES) drawDish(context, dish.x * width, horizonY + 2, unit * dish.size, dish.tilt, time, dish.phase)
 }
 
-const bubbleGeometry = (width: number, radiX: number, feetY: number, scale: number) => {
-  const bubbleWidth = Math.min(width * 0.4, 360)
-  return {
-    bubbleWidth,
-    bubbleHeight: bubbleWidth * 0.6,
-    centerX: Math.min(width - bubbleWidth / 2 - 12, radiX + 44 * scale + bubbleWidth / 2),
-    centerY: feetY - 118 * scale,
-  }
-}
-
-const drawBubble = (context: Context, width: number, radiX: number, feetY: number, scale: number, popScale: number) => {
+const drawBubble = (context: Context, centerX: number, centerY: number, bubbleWidth: number, bubbleHeight: number, popScale: number, lines: readonly [string, string], textY = 0) => {
   if (popScale <= 0) return
-  const { bubbleWidth, bubbleHeight, centerX, centerY } = bubbleGeometry(width, radiX, feetY, scale)
   context.save()
   context.translate(centerX, centerY)
   context.scale(popScale, popScale)
@@ -260,11 +275,150 @@ const drawBubble = (context: Context, width: number, radiX: number, feetY: numbe
       path.lineTo(-bubbleWidth * 0.15, bubbleHeight * 0.38)
       path.closePath()
     },
-  ], Math.max(3, bubbleWidth * 0.012), BUBBLE_LINES, 0, 0, bubbleWidth * 0.095)
+  ], Math.max(3, bubbleWidth * 0.012), lines, 0, textY, bubbleWidth * 0.095)
   context.restore()
 }
 
-const drawSkippingRadi = (context: Context, width: number, feetY: number, scale: number, time: number, sceneSeconds: number) => {
+const bubbleWidthFor = (width: number) => Math.min(width * 0.4, 360)
+
+const drawRadiBubble = (context: Context, width: number, radiX: number, feetY: number, scale: number, sceneSeconds: number) => {
+  const bubbleWidth = bubbleWidthFor(width)
+  const pop = easeOutBack(stageProgress(sceneSeconds, TURN_END, BUBBLE_POP_END)) * (1 - easeOut(stageProgress(sceneSeconds, RADI_BUBBLE_HIDE_START, RADI_BUBBLE_HIDE_END)))
+  drawBubble(context, Math.min(width - bubbleWidth / 2 - 12, radiX + 44 * scale + bubbleWidth / 2), feetY - 118 * scale, bubbleWidth, bubbleWidth * 0.6, pop, BUBBLE_LINES)
+}
+
+const wishBubbleGeometry = (width: number, height: number) => {
+  const scale = radiScale(width, height)
+  const feetY = height * RADI_FEET
+  const radiX = width / 2
+  const bubbleWidth = bubbleWidthFor(width)
+  const bubbleHeight = bubbleWidth * 0.75
+  return {
+    bubbleWidth,
+    bubbleHeight,
+    centerX: Math.min(width - bubbleWidth / 2 - 12, radiX + DUDE_STOP_UNITS * scale + 20 * scale + bubbleWidth * 0.4),
+    centerY: Math.max(bubbleHeight / 2 + 12, feetY - 150 * scale - bubbleHeight * 0.2),
+  }
+}
+
+export const wishButtonLayout = (width: number, height: number, sceneSeconds: number, wishSeconds: number | null): BubbleButtonLayout => {
+  if (sceneSeconds < WISH_POP_END || wishSeconds !== null) return null
+  const { bubbleWidth, bubbleHeight, centerX, centerY } = wishBubbleGeometry(width, height)
+  return { centerX, centerY: centerY + bubbleHeight * 0.24, width: bubbleWidth * 0.7, fontSize: Math.max(14, bubbleWidth * 0.1) }
+}
+
+const drawWishBubble = (context: Context, width: number, height: number, sceneSeconds: number, wishSeconds: number | null) => {
+  const { bubbleWidth, bubbleHeight, centerX, centerY } = wishBubbleGeometry(width, height)
+  const pop = easeOutBack(stageProgress(sceneSeconds, WISH_START, WISH_POP_END)) * (1 - easeOut(clampToUnit((wishSeconds ?? 0) / WISH_CLOSE_SECONDS)))
+  drawBubble(context, centerX, centerY, bubbleWidth, bubbleHeight, pop, WISH_LINES, -bubbleHeight * 0.14)
+}
+
+const drawCake = (context: Context, time: number) => {
+  context.lineWidth = 1.4
+  paintShape(context, "#e9edf5", ellipsePath(0, -24, 16, 3))
+  paintShape(context, "#ff8fab", (path) => path.roundRect(-11, -35, 22, 11, 2.5), {
+    decorateInside: (cakeContext) => {
+      paintFill(cakeContext, "#ffd6e0", (path) => path.rect(-12, -30.5, 24, 2))
+      for (const [sprinkleX, sprinkleY, sprinkleColor] of [[-7, -27, "#4cc9f0"], [-2, -26, "#ffd23f"], [4, -27.5, "#3ddc97"], [8, -26, "#9b5de5"]] as const) {
+        paintFill(cakeContext, sprinkleColor, ellipsePath(sprinkleX, sprinkleY, 0.9, 0.6))
+      }
+    },
+  })
+  paintShape(context, WHITE, (path) => {
+    path.moveTo(-11.5, -33)
+    path.lineTo(-11.5, -35.5)
+    path.quadraticCurveTo(0, -38, 11.5, -35.5)
+    path.lineTo(11.5, -33)
+    for (let drip = 0; drip < 5; drip += 1) {
+      const dripX = 11.5 - drip * 4.6
+      path.quadraticCurveTo(dripX - 1.2, drip % 2 === 0 ? -30 : -31.5, dripX - 2.3, -33)
+      path.lineTo(dripX - 4.6, -33)
+    }
+    path.closePath()
+  })
+  ;[-5, 0, 5].forEach((candleX, index) => {
+    paintShape(context, ["#4cc9f0", "#ffd23f", "#ff5d8f"][index], (path) => path.rect(candleX - 0.9, -42, 1.8, 6))
+    const flicker = 1 + Math.sin(time * 18 + index * 2) * 0.15
+    paintFill(context, "rgba(255, 200, 80, 0.35)", ellipsePath(candleX, -44, 2.6, 3))
+    paintFill(context, "#ff9f1c", ellipsePath(candleX, -44, 1.2 * flicker, 2 * flicker))
+    paintFill(context, "#fff3b0", ellipsePath(candleX, -43.6, 0.5, 0.9))
+  })
+}
+
+const dudeKiss = (sceneSeconds: number) => easeInOut(stageProgress(sceneSeconds, KISS_START, KISS_CONTACT)) * (1 - easeInOut(stageProgress(sceneSeconds, KISS_LEAVE, KISS_END)))
+
+const dudeX = (width: number, radiX: number, scale: number, sceneSeconds: number) =>
+  mix(width + 50 * scale, radiX + DUDE_STOP_UNITS * scale, easeOutSoft(stageProgress(sceneSeconds, DUDE_WALK_START, DUDE_WALK_END)))
+
+const drawShadesDude = (context: Context, width: number, radiX: number, feetY: number, scale: number, time: number, sceneSeconds: number) => {
+  if (sceneSeconds < DUDE_WALK_START) return
+  const walk = stageProgress(sceneSeconds, DUDE_WALK_START, DUDE_WALK_END)
+  const walking = isMoving(walk) ? settle(walk) : 0
+  const stepPhase = (sceneSeconds - DUDE_WALK_START) * DUDE_STEPS_PER_SECOND * Math.PI
+  const step = Math.sin(stepPhase) * walking
+  const kiss = dudeKiss(sceneSeconds)
+  const x = dudeX(width, radiX, scale, sceneSeconds)
+  const dudeScale = scale * DUDE_SIZE
+  const pose: PartyPose = {
+    hands: CAKE_HANDS,
+    bounce: -Math.abs(step) * 1.6,
+    sway: step * 3.5,
+    headTilt: step * 0.07 - kiss * 0.15,
+    footLifts: [Math.max(0, step) * 3, Math.max(0, -step) * 3],
+    lookUp: 0,
+  }
+  paintFill(context, "rgba(0, 0, 0, 0.18)", ellipsePath(x, feetY, 30 * dudeScale, 3.5 * dudeScale))
+  context.save()
+  context.translate(x, feetY)
+  context.rotate(-kiss * KISS_LEAN)
+  drawShadesDudeFront(context, 0, 0, dudeScale, pose)
+  context.scale(dudeScale, dudeScale)
+  context.translate(pose.sway, pose.bounce)
+  context.lineJoin = "round"
+  context.lineCap = "round"
+  context.strokeStyle = OUTLINE
+  drawCake(context, time)
+  context.restore()
+}
+
+const drawKissSmack = (context: Context, radiX: number, feetY: number, scale: number, sceneSeconds: number) => {
+  const smack = stageProgress(sceneSeconds, KISS_CONTACT, KISS_CONTACT + 0.7)
+  if (smack <= 0 || smack >= 1) return
+  const size = 10 * scale * easeOutBack(clampToUnit(smack * 4)) * (1 - easeOut(stageProgress(smack, 0.6, 1)))
+  context.save()
+  context.translate(radiX + 20 * scale, feetY - (62 + smack * 8) * scale)
+  context.rotate(0.3)
+  context.lineWidth = 1.4 * scale
+  paintShape(context, "#ff4d8d", heartPath(size))
+  context.restore()
+}
+
+const drawKissHearts = (context: Context, radiX: number, feetY: number, scale: number, time: number, sceneSeconds: number) => {
+  const sinceKiss = sceneSeconds - KISS_CONTACT
+  if (sinceKiss < 0 || sinceKiss > HEART_SECONDS + 0.5) return
+  const middleX = radiX + DUDE_STOP_UNITS * 0.45 * scale
+  KISS_HEARTS.forEach(([offsetX, rise, sizeRatio], index) => {
+    const life = clampToUnit((sinceKiss - index * 0.12) / HEART_SECONDS)
+    if (life <= 0 || life >= 1) return
+    const pop = easeOutBack(clampToUnit(life * 5)) * (1 - easeOut(stageProgress(life, 0.75, 1)))
+    const size = 15 * sizeRatio * scale * pop
+    context.save()
+    context.translate(middleX + (offsetX + Math.sin(time * 4 + index) * 3) * scale, feetY - (115 + rise * life) * scale)
+    context.rotate(Math.sin(time * 3 + index) * 0.25)
+    context.lineWidth = 1.6 * scale
+    paintShape(context, index % 2 === 0 ? "#ff4d6d" : "#ff8fab", heartPath(size))
+    paintFill(context, "rgba(255, 255, 255, 0.7)", ellipsePath(-size * 0.25, -size * 0.25, size * 0.09, size * 0.06))
+    context.restore()
+  })
+}
+
+const radiExpression = (thinking: number, sceneSeconds: number): RadiExpression => {
+  if (sceneSeconds >= NOTICE_START && sceneSeconds < NOTICE_START + 1.2) return "surprised"
+  if (thinking > 0.5 && sceneSeconds < NOTICE_START) return "thinking"
+  return sunnyRadiLook.expression
+}
+
+const drawSkippingRadi = (context: Context, width: number, feetY: number, scale: number, time: number, sceneSeconds: number, onlyFaceAndBody = false) => {
   const skip = skipProgress(sceneSeconds)
   const turn = stageProgress(sceneSeconds, SKIP_END, TURN_END)
   const radiX = mix(-45 * scale, width / 2, skip)
@@ -278,7 +432,8 @@ const drawSkippingRadi = (context: Context, width: number, feetY: number, scale:
   const knee = isMoving(skip) ? Math.sin(hopPhase * Math.PI) * 9 : 0
   const tuck = turnBounce.lift * 6
   const armPump = isMoving(skip) ? Math.sin(hopPhase * Math.PI) * leadSide : 0
-  const thinking = easeOut(stageProgress(sceneSeconds, TURN_END, BUBBLE_POP_END))
+  const notice = easeOut(stageProgress(sceneSeconds, NOTICE_START, NOTICE_END))
+  const thinking = easeOut(stageProgress(sceneSeconds, TURN_END, BUBBLE_POP_END)) * (1 - notice)
   const chinTap = Math.max(0, Math.sin(time * 2.2)) * 1.2 * thinking
   const lean = isMoving(skip) ? (0.12 + Math.sin(hopPhase * Math.PI * 2) * 0.05) * settle(skip) : Math.sin(time * 1.2) * 0.03 * thinking
   const skippingHands: readonly [Point, Point] = [
@@ -286,36 +441,50 @@ const drawSkippingRadi = (context: Context, width: number, feetY: number, scale:
     [RESTING_HANDS[1][0] + Math.abs(armPump) * 3, RESTING_HANDS[1][1] + armPump * 10],
   ]
   const hands: readonly [Point, Point] = [
-    mixPoint(skippingHands[0], THINKING_HANDS[0], thinking),
-    mixPoint(skippingHands[1], [THINKING_HANDS[1][0], THINKING_HANDS[1][1] + chinTap], thinking),
+    mixPoint(mixPoint(skippingHands[0], THINKING_HANDS[0], thinking), CLASPED_HANDS[0], notice),
+    mixPoint(mixPoint(skippingHands[1], [THINKING_HANDS[1][0], THINKING_HANDS[1][1] + chinTap], thinking), CLASPED_HANDS[1], notice),
   ]
 
-  paintFill(context, "rgba(0, 0, 0, 0.18)", ellipsePath(radiX, feetY, 22 * scale * (1 - lift / 60), 3 * scale))
+  if (!onlyFaceAndBody) paintFill(context, "rgba(0, 0, 0, 0.18)", ellipsePath(radiX, feetY, 22 * scale * (1 - lift / 60), 3 * scale))
   context.save()
   context.translate(radiX, feetY - lift * scale)
   context.rotate(lean)
   context.scale(1 / stretchY, stretchY)
-  drawRadi(context, thinking > 0.5 ? { ...sunnyRadiLook, expression: "thinking" } : sunnyRadiLook, 0, 0, scale, {
-    faceTurn: 1 - easeOut(turn) + Math.sin(time * 0.9) * 0.15 * thinking,
-    headTilt: 0.12 * thinking,
+  if (onlyFaceAndBody) {
+    const faceAndBody = new Path2D()
+    faceAndBody.ellipse(0, -70 * scale, 25 * scale, 27 * scale, 0, 0, Math.PI * 2)
+    faceAndBody.rect(-18 * scale, -46 * scale, 36 * scale, 50 * scale)
+    context.clip(faceAndBody)
+  }
+  drawRadi(context, { ...sunnyRadiLook, expression: radiExpression(thinking, sceneSeconds) }, 0, 0, scale, {
+    faceTurn: 1 - easeOut(turn) + Math.sin(time * 0.9) * 0.15 * thinking + notice * 0.55,
+    headTilt: 0.12 * thinking + 0.14 * dudeKiss(sceneSeconds),
     legLifts: leadSide === 1 ? [knee + tuck, knee * 0.2 + tuck] : [knee * 0.2 + tuck, knee + tuck],
     kneeBends: leadSide === 1 ? [knee * 0.5 + tuck * 0.8, knee * 0.1 + tuck * 0.8] : [knee * 0.1 + tuck * 0.8, knee * 0.5 + tuck * 0.8],
     elbowBends: [THINKING_ELBOWS[0] * thinking, THINKING_ELBOWS[1] * thinking],
     hands,
   })
   context.restore()
-  drawBubble(context, width, radiX, feetY, scale, easeOutBack(stageProgress(sceneSeconds, TURN_END, BUBBLE_POP_END)))
 }
 
-export const drawCosmodromeScene = (context: Context, width: number, height: number, time: number, sceneSeconds: number) => {
+export const drawCosmodromeScene = (context: Context, width: number, height: number, time: number, sceneSeconds: number, wishSeconds: number | null) => {
   const horizonY = height * 0.62
-  const feetY = height * 0.88
+  const feetY = height * RADI_FEET
   const scale = radiScale(width, height)
   context.lineJoin = "round"
   context.lineCap = "round"
   context.strokeStyle = OUTLINE
   drawSky(context, width, height, horizonY, time)
   drawCosmodrome(context, width, height, horizonY, time)
+  const radiX = mix(-45 * scale, width / 2, skipProgress(sceneSeconds))
   drawSkippingRadi(context, width, feetY, scale, time, sceneSeconds)
+  if (sceneSeconds >= DUDE_WALK_START) {
+    drawShadesDude(context, width, radiX, feetY, scale, time, sceneSeconds)
+    drawSkippingRadi(context, width, feetY, scale, time, sceneSeconds, true)
+  }
+  drawKissSmack(context, radiX, feetY, scale, sceneSeconds)
+  drawKissHearts(context, radiX, feetY, scale, time, sceneSeconds)
+  drawRadiBubble(context, width, radiX, feetY, scale, sceneSeconds)
+  drawWishBubble(context, width, height, sceneSeconds, wishSeconds)
   if (sceneSeconds < IRIS_IN_END) paintIris(context, width, height, width / 2, feetY - 60 * scale, Math.hypot(width, height) * clampToUnit(sceneSeconds / IRIS_IN_END) ** 2)
 }
