@@ -3,12 +3,12 @@
 import { FILM_SCENES } from "@/scenes/filmScenes"
 import { useFilmStore } from "@/store/film"
 
-export const SceneSelect = () => {
+export const SceneSelect = ({ className = "scene-select" }: { className?: string }) => {
   const selectScene = useFilmStore((state) => state.selectScene)
 
   return (
     <select
-      className="scene-select"
+      className={className}
       value=""
       aria-label="Choose a scene"
       onChange={(event) => {

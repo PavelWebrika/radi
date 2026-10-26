@@ -547,33 +547,6 @@ const drawRadiBubble = (context: Context, width: number, radiX: number, feetY: n
   context.restore()
 }
 
-const formatClubClock = (seconds: number) => seconds.toFixed(2)
-
-const drawClubTimer = (context: Context, playedSeconds: number, sceneSeconds: number, letsDanceSeconds: number | null) => {
-  const mainLine = `${formatClubClock(playedSeconds)} / ${formatClubClock(CLUB_SCENE_END)} s`
-  const detailLine = letsDanceSeconds === null
-    ? `paused · scene ${formatClubClock(sceneSeconds)}`
-    : `scene ${formatClubClock(sceneSeconds)} · dance +${formatClubClock(letsDanceSeconds)}`
-  const left = 12
-  const top = 12
-  const paddingX = 10
-  const lineHeight = 18
-  context.save()
-  context.font = '15px "Comic Sans MS", "Comic Sans", cursive'
-  const boxWidth = Math.max(context.measureText(mainLine).width, context.measureText(detailLine).width) + paddingX * 2
-  const boxHeight = lineHeight * 2 + 14
-  paintFill(context, "rgba(0, 0, 0, 0.72)", (path) => path.roundRect(left, top, boxWidth, boxHeight, 8))
-  paintLine(context, "#ffd23f", 2, (path) => path.roundRect(left, top, boxWidth, boxHeight, 8))
-  context.fillStyle = "#ffe066"
-  context.textAlign = "left"
-  context.textBaseline = "top"
-  context.fillText(mainLine, left + paddingX, top + 8)
-  context.fillStyle = "rgba(255, 255, 255, 0.85)"
-  context.font = '13px "Comic Sans MS", "Comic Sans", cursive'
-  context.fillText(detailLine, left + paddingX, top + 8 + lineHeight)
-  context.restore()
-}
-
 export const drawClubScene = (context: Context, width: number, height: number, time: number, sceneSeconds: number, letsDanceSeconds: number | null) => {
   const clubSeconds = playedClubSeconds(sceneSeconds, letsDanceSeconds)
   const { scale, radiX, feetY } = clubRadiPosition(width, height, clubSeconds)
@@ -608,5 +581,4 @@ export const drawClubScene = (context: Context, width: number, height: number, t
   const irisCenterY = home.feetY - 60 * scale
   if (clubSeconds < IRIS_IN_END) paintIris(context, width, height, home.radiX, irisCenterY, mix(0, fullRadius, stageProgress(clubSeconds, 0, IRIS_IN_END) ** 2))
   if (clubSeconds > IRIS_OUT_START) paintIris(context, width, height, home.radiX, irisCenterY, mix(fullRadius, 0, stageProgress(clubSeconds, IRIS_OUT_START, IRIS_OUT_END) ** 2))
-  drawClubTimer(context, clubSeconds, sceneSeconds, letsDanceSeconds)
 }

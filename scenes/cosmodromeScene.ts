@@ -151,6 +151,7 @@ const ENDING_LETTER_GAP = 0.09
 const ENDING_FLIGHT = 0.6
 const ENDING_DIM_COLOR = "#3d3a5c"
 const ENDING_UNICORN_AT = ENDING_ASSEMBLE_START + (ENDING_TEXT.length - 1) * ENDING_LETTER_GAP + ENDING_FLIGHT + 0.2
+export const ENDING_MENU_AT = LIFTOFF + END_IRIS_START + END_IRIS_FOCUS + END_IRIS_HOLD + END_IRIS_CLOSE + ENDING_UNICORN_AT
 const ENDING_DANCE_BEATS_PER_SECOND = 2.2
 const ENDING_SPARKLES = Array.from({ length: 7 }, (_, index) => [(index / 7) * Math.PI * 2, mix(48, 70, seededRandom(index, 191))] as const)
 const CAMERA_LOCK = 0.05
@@ -166,6 +167,15 @@ const SPACE_TO = 12
 const EARTH_FROM = 10.5
 const EARTH_RISE = 4
 const SPACE_STARS = 90
+const SUN_X = 0.12
+const SUN_RAYS = 14
+const LENS_FLARES = [
+  [0.3, 0.45, "255, 200, 120", 0.16],
+  [0.5, 0.22, "120, 200, 255", 0.2],
+  [0.7, 0.9, "200, 140, 255", 0.08],
+  [0.85, 0.35, "120, 255, 200", 0.14],
+  [1.15, 0.6, "255, 150, 200", 0.1],
+] as const
 const SKY_STAGES: readonly (readonly [number, readonly string[]])[] = [
   [0, ["#23245e", "#563691", "#ae6890", "#ff9e7a"]],
   [1.5, ["#2b2d78", "#6b3d9e", "#d0609a", "#ffb36b"]],
@@ -385,12 +395,68 @@ const drawAurora = (context: Context, width: number, height: number, altitude: n
   })
 }
 
-const drawEarth = (context: Context, width: number, height: number, altitude: number) => {
+const drawSunBehindEarth = (context: Context, sunX: number, sunY: number, sunRadius: number, width: number, time: number, rise: number) => {
+  const glow = context.createRadialGradient(sunX, sunY, sunRadius * 0.5, sunX, sunY, sunRadius * 7)
+  glow.addColorStop(0, `rgba(255, 244, 214, ${0.85 * rise})`)
+  glow.addColorStop(0.25, `rgba(255, 190, 110, ${0.35 * rise})`)
+  glow.addColorStop(1, "rgba(255, 160, 90, 0)")
+  paintFill(context, glow, ellipsePath(sunX, sunY, sunRadius * 7, sunRadius * 7))
+  for (let ray = 0; ray < SUN_RAYS; ray += 1) {
+    const angle = (ray / SUN_RAYS) * Math.PI * 2 + time * 0.05
+    const length = sunRadius * (3.5 + 1.8 * Math.sin(time * 1.3 + ray * 2.1))
+    const spread = 0.05
+    paintFill(context, `rgba(255, 240, 200, ${0.16 * rise})`, (path) => {
+      path.moveTo(sunX + Math.cos(angle - spread) * sunRadius, sunY + Math.sin(angle - spread) * sunRadius)
+      path.lineTo(sunX + Math.cos(angle) * length, sunY + Math.sin(angle) * length)
+      path.lineTo(sunX + Math.cos(angle + spread) * sunRadius, sunY + Math.sin(angle + spread) * sunRadius)
+      path.closePath()
+    })
+  }
+  const streak = context.createLinearGradient(sunX - width * 0.4, 0, sunX + width * 0.4, 0)
+  streak.addColorStop(0, "rgba(255, 255, 255, 0)")
+  streak.addColorStop(0.5, `rgba(255, 255, 255, ${0.6 * rise})`)
+  streak.addColorStop(1, "rgba(255, 255, 255, 0)")
+  paintFill(context, streak, ellipsePath(sunX, sunY, width * 0.4, sunRadius * 0.12))
+  const disk = context.createRadialGradient(sunX, sunY, 0, sunX, sunY, sunRadius)
+  disk.addColorStop(0, `rgba(255, 255, 255, ${rise})`)
+  disk.addColorStop(0.6, `rgba(255, 246, 200, ${rise})`)
+  disk.addColorStop(1, `rgba(255, 210, 63, ${rise})`)
+  paintFill(context, disk, ellipsePath(sunX, sunY, sunRadius, sunRadius))
+}
+
+const drawSunlitRim = (context: Context, centerX: number, centerY: number, radius: number, sunX: number, sunY: number, width: number, height: number, rise: number) => {
+  const light = context.createRadialGradient(sunX, sunY, 0, sunX, sunY, width * 0.55)
+  light.addColorStop(0, `rgba(255, 246, 220, ${rise})`)
+  light.addColorStop(0.4, `rgba(255, 200, 120, ${0.55 * rise})`)
+  light.addColorStop(1, "rgba(255, 200, 120, 0)")
+  context.save()
+  context.strokeStyle = light
+  context.lineWidth = height * 0.014
+  context.beginPath()
+  context.arc(centerX, centerY, radius + height * 0.004, 0, Math.PI * 2)
+  context.stroke()
+  context.restore()
+}
+
+const drawLensFlare = (context: Context, sunX: number, sunY: number, sunRadius: number, width: number, height: number, time: number, rise: number) => {
+  for (const [along, size, color, strength] of LENS_FLARES) {
+    const flareX = mix(sunX, width / 2, along)
+    const flareY = mix(sunY, height / 2, along)
+    const flicker = 0.85 + 0.15 * Math.sin(time * 2 + along * 7)
+    paintFill(context, `rgba(${color}, ${strength * rise * flicker})`, ellipsePath(flareX, flareY, sunRadius * size, sunRadius * size))
+  }
+}
+
+const drawEarth = (context: Context, width: number, height: number, altitude: number, time: number) => {
   const rise = easeOut(clampToUnit((altitude - EARTH_FROM) / EARTH_RISE))
   if (rise <= 0) return
   const radius = width * 1.1
   const centerX = width / 2
   const centerY = height + radius - height * 0.3 * rise
+  const sunRadius = Math.min(width, height) * 0.07
+  const sunX = width * SUN_X
+  const sunY = centerY - Math.sqrt(radius ** 2 - (sunX - centerX) ** 2) + sunRadius * 0.1
+  drawSunBehindEarth(context, sunX, sunY, sunRadius, width, time, rise)
   paintLine(context, "rgba(120, 190, 255, 0.35)", height * 0.05, ellipsePath(centerX, centerY, radius + height * 0.02, radius + height * 0.02))
   context.lineWidth = 4
   paintShape(context, "#2f7fd8", ellipsePath(centerX, centerY, radius, radius), {
@@ -405,6 +471,8 @@ const drawEarth = (context: Context, width: number, height: number, altitude: nu
       paintFill(earthContext, "rgba(255, 255, 255, 0.18)", ellipsePath(centerX, top + height * 0.01, radius * 0.9, height * 0.02))
     },
   })
+  drawSunlitRim(context, centerX, centerY, radius, sunX, sunY, width, height, rise)
+  drawLensFlare(context, sunX, sunY, sunRadius, width, height, time, rise)
 }
 
 const drawPlane = (context: Context, time: number) => {
@@ -1447,7 +1515,7 @@ export const drawCosmodromeScene = (context: Context, width: number, height: num
   drawShootingStars(context, width, height, space, time)
   drawSunrise(context, width, height, launch.altitude, time)
   drawAurora(context, width, height, launch.altitude, time)
-  drawEarth(context, width, height, launch.altitude)
+  drawEarth(context, width, height, launch.altitude, time)
   drawCloudBanks(context, width, height, horizonY, launch.camY, false)
   drawFlybys(context, width, height, launch.altitude, time)
   context.save()

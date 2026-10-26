@@ -55,10 +55,6 @@ canvas {
   background: #ffe066;
 }
 
-.scene-select {
-  top: 64px;
-}
-
 .more-button {
   position: fixed;
   z-index: 1;
@@ -111,4 +107,39 @@ canvas {
 
 .film-scroll {
   height: 400vh;
+}
+.ending-menu {
+  position: fixed;
+  z-index: 2;
+  top: 18%;
+  left: 50%;
+  display: flex;
+  gap: 16px;
+  transform: translateX(-50%);
+  transition: opacity 0.6s;
+}
+
+.ending-menu[data-visible="false"] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ending-button {
+  padding: 8px 16px;
+  border: 3px solid #2b1d1a;
+  border-radius: 999px;
+  background: #ffd23f;
+  color: #2b1d1a;
+  font-family: "Comic Sans MS", "Comic Sans", cursive;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.ending-button:hover,
+.ending-button:focus-visible {
+  background: #ffe066;
+}
+
+.ending-scene-select {
+  position: static;
 }

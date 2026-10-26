@@ -22,7 +22,7 @@ import {
   type JokeChoice,
   type LibraryQuizPhase,
 } from "@/scenes/libraryScene"
-import { cosmodromeKiraSteps, cosmodromeWalkSteps, DEFAULT_FLIGHT_SECONDS, drawCosmodromeScene, dudeWalkSteps, ENGINE_FADE_END, ENGINE_FADE_START, IGNITION_START, KIRA_COSMO_WOOF, LIFTOFF, SMOKE_START, SUIT_AT, wishButtonLayout } from "@/scenes/cosmodromeScene"
+import { cosmodromeKiraSteps, cosmodromeWalkSteps, DEFAULT_FLIGHT_SECONDS, drawCosmodromeScene, dudeWalkSteps, ENDING_MENU_AT, ENGINE_FADE_END, ENGINE_FADE_START, IGNITION_START, KIRA_COSMO_WOOF, LIFTOFF, SMOKE_START, SUIT_AT, wishButtonLayout } from "@/scenes/cosmodromeScene"
 import { drawNatureScene, HORO_DANCE_START, HORO_START, NATURE_SCENE_END } from "@/scenes/natureScene"
 import { drawOpeningScene, greetingButtonLayout, kiraWalkSteps, KIRA_SCENE_END, openingWalkSteps, startButtonLayout, WAVE_START, type BubbleButtonLayout } from "@/scenes/openingScene"
 import { createBackgroundPlaylist } from "@/audio/backgroundPlaylist"
@@ -33,6 +33,7 @@ import { createHeroReveal } from "@/audio/heroReveal"
 import { createLibraryCrash } from "@/audio/libraryCrash"
 import { createRocketLaunch } from "@/audio/rocketLaunch"
 import { createSpaceReveal } from "@/audio/spaceReveal"
+import { SceneSelect } from "@/components/SceneSelect"
 import { useFilmStore } from "@/store/film"
 
 const resizeCanvas = (canvas: HTMLCanvasElement, context: CanvasRenderingContext2D) => {
@@ -57,6 +58,12 @@ const HORO_STEPS_PER_PIXEL = 0.006
 const HORO_IDLE_STEPS_PER_SECOND = 1.6
 const WHEEL_LINE_PIXELS = 16
 const OUTRO_CROSSFADE_SECONDS = 3
+
+const startOver = () => {
+  window.history.scrollRestoration = "manual"
+  window.scrollTo(0, 0)
+  window.location.reload()
+}
 
 const placeQuizButton = (button: HTMLButtonElement, layout: { centerX: number; centerY: number; width: number; height: number } | null, chosen: boolean) => {
   button.dataset.visible = String(layout !== null)
@@ -86,6 +93,7 @@ export const FilmCanvas = () => {
   const anywayButtonRef = useRef<HTMLButtonElement>(null)
   const letsDanceButtonRef = useRef<HTMLButtonElement>(null)
   const wishButtonRef = useRef<HTMLButtonElement>(null)
+  const endingMenuRef = useRef<HTMLDivElement>(null)
   const nemoButtonRef = useRef<HTMLButtonElement>(null)
   const americaButtonRef = useRef<HTMLButtonElement>(null)
   const janewayButtonRef = useRef<HTMLButtonElement>(null)
@@ -199,10 +207,7 @@ export const FilmCanvas = () => {
       })
     }
     const resetToStart = () => {
-      if (!endSongStarted) return
-      window.history.scrollRestoration = "manual"
-      window.scrollTo(0, 0)
-      window.location.reload()
+      if (endSongStarted) startOver()
     }
     const lastOutroSong = outroChain[outroChain.length - 1]
     lastOutroSong.addEventListener("ended", resetToStart)
@@ -454,6 +459,8 @@ export const FilmCanvas = () => {
       if (letsDanceButtonRef.current) placeBubbleButton(letsDanceButtonRef.current, letsDanceLayout)
       const wishLayout = isShowingConcepts || cosmodromeSeconds === null ? null : wishButtonLayout(window.innerWidth, window.innerHeight, cosmodromeSeconds, wishSeconds)
       if (wishButtonRef.current) placeBubbleButton(wishButtonRef.current, wishLayout)
+      const showEndingMenu = !isShowingConcepts && cosmodromeSeconds !== null && wishSeconds !== null && wishSeconds >= ENDING_MENU_AT
+      if (endingMenuRef.current) endingMenuRef.current.dataset.visible = String(showEndingMenu)
       if (librarySeconds === null) {
         libraryQuizPhase = "captain"
         captainChoice = null
@@ -839,6 +846,12 @@ export const FilmCanvas = () => {
       <button ref={wishButtonRef} type="button" className="more-button" data-visible="false" tabIndex={-1}>
         Make a wish
       </button>
+      <div ref={endingMenuRef} className="ending-menu" data-visible="false">
+        <button type="button" className="ending-button" onClick={startOver}>
+          Start over
+        </button>
+        <SceneSelect className="scene-select ending-scene-select" />
+      </div>
       <button ref={nemoButtonRef} type="button" className="quiz-answer" data-visible="false" tabIndex={-1} aria-label="Answer A" />
       <button ref={americaButtonRef} type="button" className="quiz-answer" data-visible="false" tabIndex={-1} aria-label="Answer B" />
       <button ref={janewayButtonRef} type="button" className="quiz-answer" data-visible="false" tabIndex={-1} aria-label="Answer C" />
