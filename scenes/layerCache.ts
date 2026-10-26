@@ -27,6 +27,12 @@ const hasPlainCompositing = (context: Context) =>
 
 const isLayerLost = (layer: Context) => (layer as Context & { isContextLost?: () => boolean }).isContextLost?.() === true
 
+const releaseHooks = new Map<string, () => void>()
+
+export const onLayersReleased = (scene: string, release: () => void) => {
+  releaseHooks.set(scene, release)
+}
+
 export const releaseLayersExcept = (scene: string | null) => {
   for (const [name, { canvas }] of cachedLayers) {
     if (name.startsWith(`${scene}:`)) continue
@@ -34,14 +40,23 @@ export const releaseLayersExcept = (scene: string | null) => {
     canvas.height = 0
     cachedLayers.delete(name)
   }
+  for (const [hookScene, release] of releaseHooks) {
+    if (hookScene !== scene) release()
+  }
 }
 
-export const paintCachedLayer = (context: Context, name: string, sceneKey: string, drawLayer: (layer: Context) => void) => {
+const roundShift = (value: number) => Math.round(value * 1e6) / 1e6
+
+export const paintCachedLayer = (context: Context, name: string, sceneKey: string, drawLayer: (layer: Context) => void, offsetX = 0, offsetY = 0) => {
   if (!hasPlainCompositing(context)) {
     drawLayer(context)
     return
   }
-  const { a, b, c, d, e, f } = context.getTransform()
+  const transform = context.getTransform()
+  const { a, b, c, d } = transform
+  const isOffset = offsetX !== 0 || offsetY !== 0
+  const e = isOffset ? roundShift(transform.e - (a * offsetX + c * offsetY)) : transform.e
+  const f = isOffset ? roundShift(transform.f - (b * offsetX + d * offsetY)) : transform.f
   const { width: pixelWidth, height: pixelHeight } = context.canvas
   const key = [sceneKey, pixelWidth, pixelHeight, a, b, c, d, e, f].join(" ")
   let cached = cachedLayers.get(name)
@@ -63,7 +78,7 @@ export const paintCachedLayer = (context: Context, name: string, sceneKey: strin
   }
   context.save()
   context.setTransform(1, 0, 0, 1, 0, 0)
-  context.drawImage(cached.canvas, 0, 0)
+  context.drawImage(cached.canvas, transform.e - e, transform.f - f)
   context.restore()
   Object.assign(context, cached.leftoverStyle)
 }

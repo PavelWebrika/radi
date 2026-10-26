@@ -4,7 +4,7 @@ import { drawRadiBack, type BackArms } from "@/characters/radiBack"
 import { drawBatMark, drawRadi, drawStarSparkle, OUTLINE_WIDTH, paintTube, RAINBOW, SKIN, WHITE, type Point, type RadiLook } from "@/characters/radi"
 import { batmanRadiLook, bookwormRadiLook, unicornRadiLook } from "@/characters/radiConcepts"
 import { drawRadiSide } from "@/characters/radiSide"
-import { paintCachedLayer } from "@/scenes/layerCache"
+import { onLayersReleased, paintCachedLayer } from "@/scenes/layerCache"
 import { easeOut, easeOutBack, mix, mixPoint, paintComicBubble, paintIris, radiScale, stageProgress } from "@/scenes/openingScene"
 
 const OUTLINE = "#2b1d1a"
@@ -181,11 +181,102 @@ const quakeWobble = (sinceImpact: number, seed: number) => {
   return (1 - sinceImpact / QUAKE_SECONDS) ** 2 * Math.sin(sinceImpact * 34 + seed)
 }
 
-const drawLyingBook = (context: Context, centerX: number, centerY: number, bookWidth: number, bookHeight: number, color: string, tilt: number) => {
+type BookDraw = { key: string; restX: number; restY: number; lift: number; tilt: number; halfWidth: number; halfHeight: number; lineWidth: number; body: (context: Context) => void }
+type PaintBook = (context: Context, book: BookDraw) => void
+type ShelfPiece = { key: string; left: number; top: number; right: number; bottom: number; draw: (context: Context) => void }
+type ShelfPainter = { book: PaintBook; piece: (context: Context, piece: ShelfPiece) => void }
+
+const paintBookVector: PaintBook = (context, { restX, restY, lift, tilt, lineWidth, body }) => {
   context.save()
-  context.translate(centerX, centerY)
+  context.translate(restX, restY - lift)
   context.rotate(tilt)
-  context.lineWidth = 1.5
+  context.lineWidth = lineWidth
+  body(context)
+  context.restore()
+}
+
+const SPRITE_PAD = 4
+type ShelfSprite = { canvas: HTMLCanvasElement; originX: number; originY: number; scale: number }
+const shelfSprites = new Map<string, ShelfSprite>()
+let spriteLayout = ""
+let warmedSteps = 0
+const WARM_MILLISECONDS_PER_FRAME = 4
+let warmDeadline = Infinity
+let isWarmStepUnfinished = false
+let spriteScratch: Context | null = null
+onLayersReleased("library", () => {
+  shelfSprites.clear()
+  spriteLayout = ""
+})
+
+const spriteKey = (context: Context, key: string) => `${key} ${context.strokeStyle} ${context.lineWidth} ${context.lineJoin} ${context.lineCap}`
+
+const buildShelfSprite = (context: Context, key: string, anchorX: number, anchorY: number, minX: number, minY: number, maxX: number, maxY: number, draw: (layer: Context) => void) => {
+  if (shelfSprites.has(key)) return
+  if (performance.now() > warmDeadline) {
+    isWarmStepUnfinished = true
+    return
+  }
+  const { a, b, c, d, e, f } = context.getTransform()
+  const scale = Math.hypot(a, b)
+  const deviceX = a * anchorX + c * anchorY + e
+  const deviceY = b * anchorX + d * anchorY + f
+  const originX = Math.ceil((SPRITE_PAD - minX) * scale) + deviceX - Math.floor(deviceX)
+  const originY = Math.ceil((SPRITE_PAD - minY) * scale) + deviceY - Math.floor(deviceY)
+  const canvas = document.createElement("canvas")
+  canvas.width = Math.ceil(originX + (maxX + SPRITE_PAD) * scale)
+  canvas.height = Math.ceil(originY + (maxY + SPRITE_PAD) * scale)
+  const layer = canvas.getContext("2d")
+  if (!layer) return
+  layer.setTransform(scale, 0, 0, scale, originX - scale * anchorX, originY - scale * anchorY)
+  layer.strokeStyle = context.strokeStyle
+  layer.lineWidth = context.lineWidth
+  layer.lineJoin = context.lineJoin
+  layer.lineCap = context.lineCap
+  draw(layer)
+  shelfSprites.set(key, { canvas, originX, originY, scale })
+}
+
+const drawShelfSprite = (context: Context, { canvas, originX, originY, scale }: ShelfSprite, anchorX: number, anchorY: number) =>
+  context.drawImage(canvas, anchorX - originX / scale, anchorY - originY / scale, canvas.width / scale, canvas.height / scale)
+
+const vectorShelves: ShelfPainter = {
+  book: paintBookVector,
+  piece: (context, piece) => piece.draw(context),
+}
+
+const buildShelves: ShelfPainter = {
+  book: (context, book) =>
+    buildShelfSprite(context, spriteKey(context, book.key), book.restX, book.restY, -book.halfWidth, -book.halfHeight, book.halfWidth, book.halfHeight, (layer) => {
+      layer.translate(book.restX, book.restY)
+      layer.lineWidth = book.lineWidth
+      book.body(layer)
+    }),
+  piece: (context, piece) =>
+    buildShelfSprite(context, spriteKey(context, piece.key), piece.left, piece.top, 0, 0, piece.right - piece.left, piece.bottom - piece.top, piece.draw),
+}
+
+const spriteShelves: ShelfPainter = {
+  book: (context, book) => {
+    const sprite = shelfSprites.get(spriteKey(context, book.key))
+    if (!sprite) {
+      paintBookVector(context, book)
+      return
+    }
+    context.save()
+    context.translate(book.restX, book.restY - book.lift)
+    context.rotate(book.tilt)
+    drawShelfSprite(context, sprite, 0, 0)
+    context.restore()
+  },
+  piece: (context, piece) => {
+    const sprite = shelfSprites.get(spriteKey(context, piece.key))
+    if (sprite) drawShelfSprite(context, sprite, piece.left, piece.top)
+    else piece.draw(context)
+  },
+}
+
+const lyingBookBody = (bookWidth: number, bookHeight: number, color: string) => (context: Context) => {
   const spine = Math.max(2.5, bookHeight * 0.42)
   const pageTop = -bookHeight / 2
   const pageRight = bookWidth / 2 - spine
@@ -195,26 +286,16 @@ const drawLyingBook = (context: Context, centerX: number, centerY: number, bookW
     paintLine(context, "rgba(43, 29, 26, 0.35)", 1, linePath(-bookWidth / 2 + 2, lineY, pageRight - 1, lineY))
   }
   paintShape(context, color, (path) => path.roundRect(pageRight - 0.5, pageTop, spine + 0.5, bookHeight, 1))
-  context.restore()
 }
 
-const drawNarrowBook = (context: Context, centerX: number, centerY: number, bookWidth: number, bookHeight: number, color: string, tilt: number) => {
-  context.save()
-  context.translate(centerX, centerY)
-  context.rotate(tilt)
-  context.lineWidth = 1.5
+const narrowBookBody = (bookWidth: number, bookHeight: number, color: string) => (context: Context) => {
   const pages = Math.max(2, bookWidth * 0.34)
   paintShape(context, color, (path) => path.roundRect(-bookWidth / 2, -bookHeight / 2, bookWidth, bookHeight, 1.5))
   paintFill(context, "#f6f0e4", (path) => path.rect(bookWidth / 2 - pages, -bookHeight / 2 + 1.2, pages - 0.6, bookHeight - 2.4))
   paintFill(context, "rgba(255, 255, 255, 0.8)", (path) => path.rect(-bookWidth / 2 + 1.2, -bookHeight * 0.22, Math.max(1.5, bookWidth - pages - 2.4), Math.max(1.6, bookHeight * 0.07)))
-  context.restore()
 }
 
-const drawBook = (context: Context, centerX: number, centerY: number, bookWidth: number, bookHeight: number, color: string, tilt: number, mark: SpineMark) => {
-  context.save()
-  context.translate(centerX, centerY)
-  context.rotate(tilt)
-  context.lineWidth = 2
+const bookBody = (bookWidth: number, bookHeight: number, color: string, mark: SpineMark) => (context: Context) => {
   paintShape(context, color, (path) => path.roundRect(-bookWidth / 2, -bookHeight / 2, bookWidth, bookHeight, 2), { shade: "rgba(0, 0, 0, 0.22)" })
   paintLine(context, "rgba(255, 255, 255, 0.8)", Math.max(1.2, bookWidth * 0.1), linePath(-bookWidth * 0.28, -bookHeight / 2, -bookWidth * 0.28, bookHeight / 2))
   if (mark === "stripe") paintLine(context, "rgba(255, 255, 255, 0.85)", Math.max(1.4, bookWidth * 0.14), linePath(bookWidth * 0.08, -bookHeight * 0.34, bookWidth * 0.08, bookHeight * 0.34))
@@ -227,8 +308,10 @@ const drawBook = (context: Context, centerX: number, centerY: number, bookWidth:
     context.lineWidth = 1.2
     paintShape(context, "#fff4dc", (path) => path.roundRect(-bookWidth * 0.32, -bookHeight * 0.22, bookWidth * 0.64, bookHeight * 0.26, 1.5))
   }
-  context.restore()
 }
+
+const drawBook = (context: Context, centerX: number, centerY: number, bookWidth: number, bookHeight: number, color: string, tilt: number, mark: SpineMark) =>
+  paintBookVector(context, { key: "", restX: centerX, restY: centerY, lift: 0, tilt, halfWidth: bookWidth / 2, halfHeight: bookHeight / 2, lineWidth: 2, body: bookBody(bookWidth, bookHeight, color, mark) })
 
 const drawPlant = (context: Context, centerX: number, shelfY: number) => {
   paintShape(context, "#e07a3d", (path) => {
@@ -279,7 +362,7 @@ const drawCubby = (context: Context, innerLeft: number, innerRight: number, cubb
   paintFill(context, shadow, (path) => path.rect(innerLeft, cubbyTop, innerRight - innerLeft, 14))
 }
 
-const drawShelfBooks = (context: Context, startX: number, endX: number, cubbyTop: number, shelfY: number, firstBook: number, sinceImpact: number) => {
+const drawShelfBooks = (context: Context, startX: number, endX: number, cubbyTop: number, shelfY: number, firstBook: number, sinceImpact: number, paintBook: PaintBook) => {
   let bookX = startX
   let packedUntil = startX
   let bookIndex = firstBook
@@ -307,7 +390,21 @@ const drawShelfBooks = (context: Context, startX: number, endX: number, cubbyTop
       const flatHeight = 7
       const layers = 2 + Math.floor(seededRandom(bookIndex, 14) * 3)
       for (let layer = 0; layer < layers; layer += 1) {
-        drawLyingBook(context, stackStart + flatWidth / 2 + (layer % 2) * 1.5, shelfY - flatHeight / 2 - layer * (flatHeight + 1) - bounce * (1 + layer * 0.4), flatWidth - layer * 2, flatHeight, bookColor(bookIndex + layer, 18), jiggle * 0.05)
+        const restX = stackStart + flatWidth / 2 + (layer % 2) * 1.5
+        const restY = shelfY - flatHeight / 2 - layer * (flatHeight + 1)
+        const layerWidth = flatWidth - layer * 2
+        const color = bookColor(bookIndex + layer, 18)
+        paintBook(context, {
+          key: `lying ${restX} ${restY} ${layerWidth} ${color}`,
+          restX,
+          restY,
+          lift: bounce * (1 + layer * 0.4),
+          tilt: jiggle * 0.05,
+          halfWidth: layerWidth / 2,
+          halfHeight: flatHeight / 2,
+          lineWidth: 1.5,
+          body: lyingBookBody(layerWidth, flatHeight, color),
+        })
       }
       bookX = stackStart + flatWidth + 3
       packedUntil = bookX
@@ -319,11 +416,21 @@ const drawShelfBooks = (context: Context, startX: number, endX: number, cubbyTop
       const leaning = roll > 0.92
       const mark = SPINE_MARKS[Math.floor(seededRandom(bookIndex, 17) * SPINE_MARKS.length)] ?? "plain"
       const bookCenterX = bookX + bookWidth / 2 + (leaning ? bookHeight * 0.12 : 0)
-      const bookCenterY = shelfY - bookHeight / 2 - bounce
+      const bookRestY = shelfY - bookHeight / 2
       const bookTilt = (leaning ? 0.25 : 0) + jiggle * 0.08
       const bookColorHere = bookColor(bookIndex, 12)
-      if (bookWidth < 11) drawNarrowBook(context, bookCenterX, bookCenterY, bookWidth, bookHeight, bookColorHere, bookTilt)
-      else drawBook(context, bookCenterX, bookCenterY, bookWidth, bookHeight, bookColorHere, bookTilt, mark)
+      const isNarrow = bookWidth < 11
+      paintBook(context, {
+        key: `${isNarrow ? "narrow" : mark} ${bookCenterX} ${bookRestY} ${bookWidth} ${bookHeight} ${bookColorHere}`,
+        restX: bookCenterX,
+        restY: bookRestY,
+        lift: bounce,
+        tilt: bookTilt,
+        halfWidth: bookWidth / 2,
+        halfHeight: bookHeight / 2,
+        lineWidth: isNarrow ? 1.5 : 2,
+        body: isNarrow ? narrowBookBody(bookWidth, bookHeight, bookColorHere) : bookBody(bookWidth, bookHeight, bookColorHere, mark),
+      })
       bookX += bookWidth + (leaning ? bookHeight * 0.25 : 1.5)
       packedUntil = bookX
     }
@@ -331,14 +438,61 @@ const drawShelfBooks = (context: Context, startX: number, endX: number, cubbyTop
   }
 }
 
-const drawBookcase = (context: Context, left: number, top: number, right: number, bottom: number, sinceImpact: number, ornament: ShelfOrnament = "none") => {
+type Bookcase = { left: number; top: number; right: number; bottom: number; ornament: ShelfOrnament }
+
+const roomBookcases = (width: number, height: number, floorY: number): Bookcase[] => [
+  { left: width * 0.2, top: height * 0.34, right: width * 0.38, bottom: floorY, ornament: "plant" },
+  { left: width * 0.66, top: height * 0.34, right: width * 0.84, bottom: floorY, ornament: "clock" },
+]
+
+const sideBookcases = (width: number, ceilingY: number, floorY: number): Bookcase[] => [
+  { left: 12, top: ceilingY - 6, right: width * 0.2, bottom: floorY + 8, ornament: "none" },
+  { left: width * 0.8, top: ceilingY - 6, right: width - 12, bottom: floorY + 8, ornament: "none" },
+]
+
+const warmShelfSprites = (context: Context, width: number, height: number, floorY: number, ceilingY: number, sinceImpact: number) => {
+  const { a, b, c, d, e, f } = context.getTransform()
+  const layout = [width, height, a, b, c, d, e, f].join(" ")
+  if (layout !== spriteLayout) {
+    shelfSprites.clear()
+    spriteLayout = layout
+    warmedSteps = 0
+  }
+  const ladder = ladderPlacement(width, height, floorY)
+  const warmSteps: ((scratch: Context) => void)[] = [
+    ...[...roomBookcases(width, height, floorY), ...sideBookcases(width, ceilingY, floorY)].map((bookcase) => (scratch: Context) => drawBookcase(scratch, bookcase, sinceImpact, buildShelves)),
+    (scratch) => drawLadder(scratch, ladder.left, floorY, ladder.top, sinceImpact, buildShelves),
+    (scratch) => drawPainting(scratch, paintingPlacement(width, height), sinceImpact, buildShelves),
+  ]
+  const warmStep = warmSteps[warmedSteps]
+  if (!warmStep) return
+  if (!spriteScratch) {
+    const scratch = document.createElement("canvas")
+    scratch.width = 1
+    scratch.height = 1
+    spriteScratch = scratch.getContext("2d")
+  }
+  if (!spriteScratch) return
+  spriteScratch.setTransform(a, b, c, d, e, f)
+  spriteScratch.strokeStyle = context.strokeStyle
+  spriteScratch.lineWidth = context.lineWidth
+  spriteScratch.lineJoin = context.lineJoin
+  spriteScratch.lineCap = context.lineCap
+  warmDeadline = performance.now() + WARM_MILLISECONDS_PER_FRAME
+  isWarmStepUnfinished = false
+  warmStep(spriteScratch)
+  warmDeadline = Infinity
+  if (!isWarmStepUnfinished) warmedSteps += 1
+}
+
+const drawBookcase = (context: Context, { left, top, right, bottom, ornament }: Bookcase, sinceImpact: number, shelves: ShelfPainter) => {
   const sway = quakeWobble(sinceImpact, left * 0.013)
   const centerX = (left + right) / 2
   context.save()
   context.translate(centerX + sway * 3, bottom)
   context.rotate(sway * 0.02)
   context.translate(-centerX, -bottom)
-  drawCaseFrame(context, left, top, right, bottom)
+  shelves.piece(context, { key: `frame ${left} ${top} ${right} ${bottom}`, left: left - 9, top: top - 16, right: right + 9, bottom, draw: (layer) => drawCaseFrame(layer, left, top, right, bottom) })
   const innerLeft = left + 10
   const innerRight = right - 10
   const innerTop = top + 8
@@ -349,12 +503,21 @@ const drawBookcase = (context: Context, left: number, top: number, right: number
     const shelfY = mix(innerTop, innerBottom, (row + 1) / SHELF_ROWS) - SHELF_THICKNESS
     const ornamentHere = ornament === "plant" && row === 0 ? "plant" : ornament === "clock" && row === 1 ? "clock" : "none"
     const ornamentLift = Math.abs(quakeWobble(sinceImpact, row * 2.3)) * 3
-    drawCubby(context, innerLeft, innerRight, cubbyTop, shelfY)
-    drawShelfBooks(context, innerLeft + 3, ornamentHere === "none" ? innerRight : innerRight - 24, cubbyTop, shelfY, caseSeed + row * 13, sinceImpact)
+    shelves.piece(context, { key: `cubby ${innerLeft} ${cubbyTop} ${innerRight} ${shelfY}`, left: innerLeft, top: cubbyTop, right: innerRight, bottom: shelfY, draw: (layer) => drawCubby(layer, innerLeft, innerRight, cubbyTop, shelfY) })
+    drawShelfBooks(context, innerLeft + 3, ornamentHere === "none" ? innerRight : innerRight - 24, cubbyTop, shelfY, caseSeed + row * 13, sinceImpact, shelves.book)
     if (ornamentHere === "plant") drawPlant(context, innerRight - 12, shelfY - ornamentLift)
     if (ornamentHere === "clock") drawClock(context, innerRight - 12, shelfY - 12 - ornamentLift)
-    paintShape(context, WOOD, (path) => path.rect(innerLeft - 3, shelfY, innerRight - innerLeft + 6, SHELF_THICKNESS))
-    paintLine(context, WOOD_LIGHT, 1.6, linePath(innerLeft - 1, shelfY + 2, innerRight + 1, shelfY + 2))
+    shelves.piece(context, {
+      key: `plank ${innerLeft} ${innerRight} ${shelfY}`,
+      left: innerLeft - 3,
+      top: shelfY,
+      right: innerRight + 3,
+      bottom: shelfY + SHELF_THICKNESS,
+      draw: (layer) => {
+        paintShape(layer, WOOD, (path) => path.rect(innerLeft - 3, shelfY, innerRight - innerLeft + 6, SHELF_THICKNESS))
+        paintLine(layer, WOOD_LIGHT, 1.6, linePath(innerLeft - 1, shelfY + 2, innerRight + 1, shelfY + 2))
+      },
+    })
   }
   context.restore()
 }
@@ -367,7 +530,7 @@ const ladderRungY = (top: number, footY: number, rung: number) => mix(top + 14, 
 
 const ladderCenterX = ({ left, top, footY }: LadderPlacement, y: number) => mix(left + 15, left + 3, (y - top) / (footY - top))
 
-const drawLadder = (context: Context, left: number, floorY: number, top: number, sinceImpact: number) => {
+const drawLadder = (context: Context, left: number, floorY: number, top: number, sinceImpact: number, shelves: ShelfPainter) => {
   const railY = top - 8
   const footY = floorY - 8
   const topRails = [left, left + 30] as const
@@ -380,36 +543,45 @@ const drawLadder = (context: Context, left: number, floorY: number, top: number,
   context.translate(left + 15, railY)
   context.rotate(quakeWobble(sinceImpact, 2.9) * 0.025)
   context.translate(-(left + 15), -railY)
-  context.lineWidth = 2.5
-  for (let rung = 0; rung < LADDER_RUNGS; rung += 1) {
-    const rungY = ladderRungY(top, footY, rung)
-    const rungLeft = railXAt(0, rungY)
-    const rungRight = railXAt(1, rungY)
-    paintShape(context, WOOD, (path) => path.roundRect(rungLeft, rungY - 3, rungRight - rungLeft, 6, 2))
-    paintLine(context, "rgba(90, 42, 16, 0.6)", 1.5, linePath(rungLeft + 2, rungY + 1.5, rungRight - 2, rungY + 1.5))
-    if (rung === 3) drawBook(context, (rungLeft + rungRight) / 2, rungY - 6, 20, 6, BOOK_COLORS[3], 0, "gold")
-  }
-  for (const side of [0, 1] as const) {
-    const topX = topRails[side]
-    const footX = footRails[side]
-    paintShape(context, WOOD_DARK, (path) => {
-      path.moveTo(topX - 3.5, top)
-      path.lineTo(topX + 3.5, top)
-      path.lineTo(footX + 4, footY)
-      path.lineTo(footX - 4, footY)
-      path.closePath()
-    })
-    paintLine(context, WOOD_LIGHT, 1.5, linePath(topX - 1, top + 4, footX - 1.5, footY - 4))
-    const hookPath = (path: Path2D) => {
-      path.moveTo(topX, top + 2)
-      path.lineTo(topX, railY - 2)
-      path.arc(topX + 5, railY - 2, 5, Math.PI, 0)
-    }
-    paintLine(context, OUTLINE, 5, hookPath)
-    paintLine(context, BRASS, 2.5, hookPath)
-    paintShape(context, BRASS, ellipsePath(footX, floorY - 5, 5, 5))
-    paintFill(context, OUTLINE, ellipsePath(footX, floorY - 5, 1.6, 1.6))
-  }
+  shelves.piece(context, {
+    key: `ladder ${left} ${top} ${floorY}`,
+    left: left - 23,
+    top: top - 15,
+    right: left + 40,
+    bottom: floorY,
+    draw: (layer) => {
+      layer.lineWidth = 2.5
+      for (let rung = 0; rung < LADDER_RUNGS; rung += 1) {
+        const rungY = ladderRungY(top, footY, rung)
+        const rungLeft = railXAt(0, rungY)
+        const rungRight = railXAt(1, rungY)
+        paintShape(layer, WOOD, (path) => path.roundRect(rungLeft, rungY - 3, rungRight - rungLeft, 6, 2))
+        paintLine(layer, "rgba(90, 42, 16, 0.6)", 1.5, linePath(rungLeft + 2, rungY + 1.5, rungRight - 2, rungY + 1.5))
+        if (rung === 3) drawBook(layer, (rungLeft + rungRight) / 2, rungY - 6, 20, 6, BOOK_COLORS[3], 0, "gold")
+      }
+      for (const side of [0, 1] as const) {
+        const topX = topRails[side]
+        const footX = footRails[side]
+        paintShape(layer, WOOD_DARK, (path) => {
+          path.moveTo(topX - 3.5, top)
+          path.lineTo(topX + 3.5, top)
+          path.lineTo(footX + 4, footY)
+          path.lineTo(footX - 4, footY)
+          path.closePath()
+        })
+        paintLine(layer, WOOD_LIGHT, 1.5, linePath(topX - 1, top + 4, footX - 1.5, footY - 4))
+        const hookPath = (path: Path2D) => {
+          path.moveTo(topX, top + 2)
+          path.lineTo(topX, railY - 2)
+          path.arc(topX + 5, railY - 2, 5, Math.PI, 0)
+        }
+        paintLine(layer, OUTLINE, 5, hookPath)
+        paintLine(layer, BRASS, 2.5, hookPath)
+        paintShape(layer, BRASS, ellipsePath(footX, floorY - 5, 5, 5))
+        paintFill(layer, OUTLINE, ellipsePath(footX, floorY - 5, 1.6, 1.6))
+      }
+    },
+  })
   context.restore()
 }
 
@@ -434,7 +606,9 @@ const drawPaintingScene = (context: Context, left: number, top: number, sceneWid
   context.restore()
 }
 
-const drawPainting = (context: Context, centerX: number, centerY: number, paintingWidth: number, sinceImpact: number) => {
+const paintingPlacement = (width: number, height: number) => ({ centerX: width * 0.52, centerY: height * 0.31, paintingWidth: Math.min(width * 0.16, height * 0.26) })
+
+const drawPainting = (context: Context, { centerX, centerY, paintingWidth }: ReturnType<typeof paintingPlacement>, sinceImpact: number, shelves: ShelfPainter) => {
   const paintingHeight = paintingWidth * 0.72
   const left = centerX - paintingWidth / 2
   const top = centerY - paintingHeight / 2
@@ -446,28 +620,37 @@ const drawPainting = (context: Context, centerX: number, centerY: number, painti
   context.translate(centerX, nailY)
   context.rotate(quakeWobble(sinceImpact, 0.7) * 0.07)
   context.translate(-centerX, -nailY)
-  context.lineWidth = 2
-  paintLine(context, OUTLINE, 1.5, (path) => {
-    path.moveTo(centerX - paintingWidth * 0.3, top + frame * 0.5)
-    path.lineTo(centerX, nailY)
-    path.lineTo(centerX + paintingWidth * 0.3, top + frame * 0.5)
+  shelves.piece(context, {
+    key: `painting ${centerX} ${centerY} ${paintingWidth}`,
+    left: left - frame * 0.4,
+    top: nailY - 3,
+    right: left + paintingWidth + frame * 0.4 + 6,
+    bottom: top + paintingHeight + 8,
+    draw: (layer) => {
+      layer.lineWidth = 2
+      paintLine(layer, OUTLINE, 1.5, (path) => {
+        path.moveTo(centerX - paintingWidth * 0.3, top + frame * 0.5)
+        path.lineTo(centerX, nailY)
+        path.lineTo(centerX + paintingWidth * 0.3, top + frame * 0.5)
+      })
+      paintFill(layer, "rgba(60, 30, 10, 0.18)", (path) => path.roundRect(left + 6, top + 8, paintingWidth, paintingHeight, 6))
+      paintShape(layer, PAINTING_GOLD, (path) => path.roundRect(left, top, paintingWidth, paintingHeight, 6))
+      paintLine(layer, GOLD, 2, (path) => path.roundRect(left + 4, top + 4, paintingWidth - 8, paintingHeight - 8, 4))
+      layer.save()
+      layer.clip(canvasPath)
+      drawPaintingScene(layer, left + frame, top + frame, paintingWidth - frame * 2, paintingHeight - frame * 2)
+      layer.restore()
+      paintLine(layer, OUTLINE, 2, (path) => path.addPath(canvasPath))
+      for (const [cornerX, cornerY] of [[left, top], [left + paintingWidth, top], [left, top + paintingHeight], [left + paintingWidth, top + paintingHeight]] as const) {
+        paintShape(layer, GOLD, ellipsePath(cornerX, cornerY, frame * 0.4, frame * 0.4))
+      }
+      paintShape(layer, "#a8a8a8", ellipsePath(centerX, nailY, 3, 3))
+    },
   })
-  paintFill(context, "rgba(60, 30, 10, 0.18)", (path) => path.roundRect(left + 6, top + 8, paintingWidth, paintingHeight, 6))
-  paintShape(context, PAINTING_GOLD, (path) => path.roundRect(left, top, paintingWidth, paintingHeight, 6))
-  paintLine(context, GOLD, 2, (path) => path.roundRect(left + 4, top + 4, paintingWidth - 8, paintingHeight - 8, 4))
-  context.save()
-  context.clip(canvasPath)
-  drawPaintingScene(context, left + frame, top + frame, paintingWidth - frame * 2, paintingHeight - frame * 2)
-  context.restore()
-  paintLine(context, OUTLINE, 2, (path) => path.addPath(canvasPath))
-  for (const [cornerX, cornerY] of [[left, top], [left + paintingWidth, top], [left, top + paintingHeight], [left + paintingWidth, top + paintingHeight]] as const) {
-    paintShape(context, GOLD, ellipsePath(cornerX, cornerY, frame * 0.4, frame * 0.4))
-  }
-  paintShape(context, "#a8a8a8", ellipsePath(centerX, nailY, 3, 3))
   context.restore()
 }
 
-const drawRoom = (context: Context, width: number, height: number, floorY: number, ceilingY: number, sinceImpact: number) => {
+const drawRoom = (context: Context, width: number, height: number, floorY: number, ceilingY: number, sinceImpact: number, shelves: ShelfPainter) => {
   context.fillStyle = WALL
   context.fillRect(0, 0, width, height)
   const ceilingShadow = context.createLinearGradient(0, ceilingY, 0, ceilingY + 26)
@@ -481,9 +664,8 @@ const drawRoom = (context: Context, width: number, height: number, floorY: numbe
     paintLine(context, "rgba(120, 64, 28, 0.35)", 2, linePath(plankX, floorY, plankX + 30, height))
   }
   paintShape(context, RUG, ellipsePath(width * 0.52, floorY + 4, width * 0.14, height * 0.035))
-  drawBookcase(context, width * 0.2, height * 0.34, width * 0.38, floorY, sinceImpact, "plant")
-  drawBookcase(context, width * 0.66, height * 0.34, width * 0.84, floorY, sinceImpact, "clock")
-  drawPainting(context, width * 0.52, height * 0.31, Math.min(width * 0.16, height * 0.26), sinceImpact)
+  for (const bookcase of roomBookcases(width, height, floorY)) drawBookcase(context, bookcase, sinceImpact, shelves)
+  drawPainting(context, paintingPlacement(width, height), sinceImpact, shelves)
 }
 
 const HOLE_EDGE = [1, 0.74, 1.12, 0.9, 0.62, 1.08, 0.82, 1.18, 0.7, 0.96, 1.1, 0.66, 1.04, 0.86, 1.16, 0.72, 0.98, 0.8, 1.14, 0.68, 1.06, 0.88, 0.76, 1.12] as const
@@ -2071,44 +2253,53 @@ export const drawLibraryScene = (
   context.lineWidth = 3
   context.strokeStyle = OUTLINE
   context.save()
-  context.translate(Math.sin(time * 80) * shake, Math.cos(time * 66) * shake * 0.6)
+  const shakeX = Math.sin(time * 80) * shake
+  const shakeY = Math.cos(time * 66) * shake * 0.6
+  context.translate(shakeX, shakeY)
   const isRoomStill = shake === 0 && (sinceImpact < 0 || sinceImpact > QUAKE_SECONDS)
   const ladder = ladderPlacement(width, height, floorY)
+  const shelves = isRoomStill ? vectorShelves : spriteShelves
   if (isRoomStill) {
     paintCachedLayer(context, "library:room", `${width} ${height}`, (layer) => {
-      drawRoom(layer, width, height, floorY, ceilingY, sinceImpact)
-      drawLadder(layer, ladder.left, floorY, ladder.top, sinceImpact)
+      drawRoom(layer, width, height, floorY, ceilingY, sinceImpact, shelves)
+      drawLadder(layer, ladder.left, floorY, ladder.top, sinceImpact, shelves)
     })
+    warmShelfSprites(context, width, height, floorY, ceilingY, sinceImpact)
     drawNightHole(context, width, ceilingY, breaking.holeOpen, time)
   } else {
-    drawRoom(context, width, height, floorY, ceilingY, sinceImpact)
+    drawRoom(context, width, height, floorY, ceilingY, sinceImpact, shelves)
     drawNightHole(context, width, ceilingY, breaking.holeOpen, time)
-    drawLadder(context, ladder.left, floorY, ladder.top, sinceImpact)
+    drawLadder(context, ladder.left, floorY, ladder.top, sinceImpact, shelves)
   }
   drawLibraryRadi(context, width, height, floorY, landingX, scale, time, sceneSeconds, quizPhase, jokeQuizStartSeconds, wrongSeconds, cheerSeconds, exitSeconds, exitHero, boringShakeSeconds)
-  const drawRubble = (layer: Context) => {
+  const drawCeiling = (layer: Context) => {
     drawCeilingBoards(layer, width, ceilingY, breaking.holeOpen)
     drawCeilingCracks(layer, width, ceilingY, breaking.holeOpen < 0.55 ? breaking.cracks : 0)
     drawHoleRim(layer, width, ceilingY, breaking.holeOpen)
+  }
+  const drawFallingRubble = (layer: Context) => {
     drawHangingPlanks(layer, width, height, ceilingY, floorY, breaking.holeOpen, sinceBreak)
     drawBreakBurst(layer, width, ceilingY, sinceBreak)
     drawBreakDust(layer, width, ceilingY, sinceBreak)
     drawBreakDebris(layer, width, height, ceilingY, floorY, sinceBreak)
   }
+  const drawRubble = (layer: Context) => {
+    drawCeiling(layer)
+    drawFallingRubble(layer)
+  }
   const drawSideBookcases = (layer: Context) => {
-    drawBookcase(layer, 12, ceilingY - 6, width * 0.2, floorY + 8, sinceImpact)
-    drawBookcase(layer, width * 0.8, ceilingY - 6, width - 12, floorY + 8, sinceImpact)
+    for (const bookcase of sideBookcases(width, ceilingY, floorY)) drawBookcase(layer, bookcase, sinceImpact, shelves)
   }
+  const ceilingKey = `${width} ${height} ${breaking.holeOpen} ${breaking.cracks}`
   if (isRoomStill && isRubbleSettled(width, height, ceilingY, floorY, breaking.holeOpen, sinceBreak)) {
-    paintCachedLayer(context, "library:front", `rubble ${width} ${height} ${breaking.holeOpen} ${breaking.cracks}`, (layer) => {
-      drawRubble(layer)
-      drawSideBookcases(layer)
-    })
+    paintCachedLayer(context, "library:rubble", `settled ${ceilingKey}`, drawRubble)
   } else {
-    drawRubble(context)
-    if (isRoomStill) paintCachedLayer(context, "library:front", `bookcases ${width} ${height}`, drawSideBookcases)
-    else drawSideBookcases(context)
+    if (sceneSeconds >= FALL_END) paintCachedLayer(context, "library:rubble", `ceiling ${ceilingKey}`, drawCeiling, shakeX, shakeY)
+    else drawCeiling(context)
+    drawFallingRubble(context)
   }
+  if (isRoomStill) paintCachedLayer(context, "library:sidecases", `${width} ${height}`, drawSideBookcases)
+  else drawSideBookcases(context)
   if (exitSeconds !== null && exitHero !== null && sceneSeconds >= WALK_BACK_END) drawHeroExit(context, width, height, floorY, landingX, scale, exitSeconds, exitHero)
   drawDust(context, landingX, floorY, sceneSeconds)
   drawSpeechBubble(context, width, landingX, floorY, scale, easeOutBack(stageProgress(sceneSeconds, SAY_START, SAY_START + BUBBLE_POP_SECONDS)) * (1 - stageProgress(sceneSeconds, SAY_END - BUBBLE_HIDE_SECONDS, SAY_END)))
