@@ -659,9 +659,20 @@ const drawSpeedLines = (context: Context, width: number, height: number, camY: n
   }
 }
 
+const CULL_PAD = 8
+
+const isSpanOnScreen = (context: Context, left: number, right: number) => {
+  const { a, b, c, e } = context.getTransform()
+  if (b !== 0 || c !== 0) return true
+  const screenLeft = Math.min(a * (left - CULL_PAD), a * (right + CULL_PAD)) + e
+  const screenRight = Math.max(a * (left - CULL_PAD), a * (right + CULL_PAD)) + e
+  return screenRight >= 0 && screenLeft <= context.canvas.width
+}
+
 const drawFarSkyline = (context: Context, width: number, height: number, horizonY: number) => {
   context.lineWidth = 2
   for (const [x, blockWidth, blockHeight] of FAR_BLOCKS) {
+    if (!isSpanOnScreen(context, x * width, (x + blockWidth) * width)) continue
     paintShape(context, "#b08ac0", (path) => path.rect(x * width, horizonY - blockHeight * height, blockWidth * width, blockHeight * height + 4))
   }
 }
@@ -796,6 +807,8 @@ const drawWaterTower = (context: Context, width: number, height: number, horizon
   })
 }
 
+const DISH_REACH = 28
+
 const drawDish = (context: Context, baseX: number, baseY: number, unit: number, tilt: number, time: number, phase: number) => {
   context.save()
   context.translate(baseX, baseY)
@@ -837,14 +850,20 @@ const drawCosmodrome = (context: Context, width: number, height: number, horizon
   const unit = Math.min(width, height) * 0.0042
   drawTiled(context, width, camX * 0.3, () => drawFarSkyline(context, width, height, horizonY))
   drawGround(context, width, height, horizonY, camX)
+  const tankRadius = Math.min(width, height) * 0.035
+  const lightGlow = Math.max(2.5, height * 0.006) * 2.6
+  const roofDishReach = Math.min(width, height) * 0.0022 * DISH_REACH
   drawTiled(context, width, camX * 0.6, () => {
-    drawControlBuilding(context, width, height, horizonY, time)
-    drawHangar(context, width, height, horizonY)
-    drawTowerBlock(context, width, height, horizonY, time)
-    drawFuelTanks(context, width, height, horizonY)
-    drawLongBuilding(context, width, height, horizonY, time)
-    drawWaterTower(context, width, height, horizonY)
-    for (const dish of DISHES) drawDish(context, dish.x * width, horizonY + 2, unit * dish.size, dish.tilt, time, dish.phase)
+    if (isSpanOnScreen(context, width * 0.07, width * 0.15)) drawControlBuilding(context, width, height, horizonY, time)
+    if (isSpanOnScreen(context, width * 0.215, width * 0.31)) drawHangar(context, width, height, horizonY)
+    if (isSpanOnScreen(context, Math.min(width * 0.41, width * 0.4275 - lightGlow), Math.max(width * 0.445, width * 0.4275 + lightGlow))) drawTowerBlock(context, width, height, horizonY, time)
+    if (isSpanOnScreen(context, width * 0.565 - tankRadius, width * 0.565 + tankRadius * 3.4)) drawFuelTanks(context, width, height, horizonY)
+    if (isSpanOnScreen(context, width * 0.72, Math.max(width * 0.85, width * 0.8175 + roofDishReach))) drawLongBuilding(context, width, height, horizonY, time)
+    if (isSpanOnScreen(context, width * 0.8685, width * 0.9015)) drawWaterTower(context, width, height, horizonY)
+    for (const dish of DISHES) {
+      const reach = unit * dish.size * DISH_REACH
+      if (isSpanOnScreen(context, dish.x * width - reach, dish.x * width + reach)) drawDish(context, dish.x * width, horizonY + 2, unit * dish.size, dish.tilt, time, dish.phase)
+    }
   })
 }
 

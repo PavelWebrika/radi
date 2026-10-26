@@ -4,6 +4,7 @@ import { drawRadiBack, type BackArms } from "@/characters/radiBack"
 import { drawBatMark, drawRadi, drawStarSparkle, OUTLINE_WIDTH, paintTube, RAINBOW, SKIN, WHITE, type Point, type RadiLook } from "@/characters/radi"
 import { batmanRadiLook, bookwormRadiLook, unicornRadiLook } from "@/characters/radiConcepts"
 import { drawRadiSide } from "@/characters/radiSide"
+import { paintCachedLayer } from "@/scenes/layerCache"
 import { easeOut, easeOutBack, mix, mixPoint, paintComicBubble, paintIris, radiScale, stageProgress } from "@/scenes/openingScene"
 
 const OUTLINE = "#2b1d1a"
@@ -530,11 +531,20 @@ const ceilingBreak = (headY: number, ceilingY: number) => ({
   travel: Math.max(0, headY - (ceilingY - 50)),
 })
 
-const breakStartSeconds = (floorY: number, scale: number, ceilingY: number) => {
+const findBreakStartSeconds = (floorY: number, scale: number, ceilingY: number) => {
   for (let seconds = FALL_START; seconds < FALL_END; seconds += 0.01) {
     if (ceilingBreak(crashMotion(seconds, floorY, scale).lowestY, ceilingY).travel > 0) return seconds
   }
   return FALL_END
+}
+
+let foundBreakStart = { floorY: NaN, scale: NaN, ceilingY: NaN, seconds: FALL_END }
+
+const breakStartSeconds = (floorY: number, scale: number, ceilingY: number) => {
+  if (foundBreakStart.floorY !== floorY || foundBreakStart.scale !== scale || foundBreakStart.ceilingY !== ceilingY) {
+    foundBreakStart = { floorY, scale, ceilingY, seconds: findBreakStartSeconds(floorY, scale, ceilingY) }
+  }
+  return foundBreakStart.seconds
 }
 
 export const libraryRoofBreakSeconds = (width: number, height: number) => {
@@ -729,8 +739,7 @@ const drawHangingPlanks = (context: Context, width: number, height: number, ceil
   for (const plank of HANGING_PLANKS) {
     const hangX = holeX + Math.cos(plank.angle) * radiusX * 0.92
     const hangY = holeY + Math.sin(plank.angle) * radiusY * 0.92
-    const restY = mix(floorY + 6, height - 10, plank.rest) - plank.width / 2
-    const landing = Math.sqrt((2 * (restY - hangY)) / DEBRIS_GRAVITY)
+    const landing = plankLanding(plank, hangY, height, floorY)
     const fallTime = Math.min(Math.max(0, sinceBreak - plank.drop), landing)
     const tilt = mix(mix(plank.from, plank.tilt, hang), Math.sign(plank.tilt) * Math.PI / 2, fallTime / landing)
     const anchorY = hangY + 0.5 * DEBRIS_GRAVITY * fallTime ** 2
@@ -754,6 +763,11 @@ const HANGING_PLANKS = [
   { angle: -0.35, width: 9, length: 0.32, from: 1.3, tilt: -0.65, color: WOOD, drop: 0.85, drift: 70, rest: 0.5 },
   { angle: 3.55, width: 10, length: 0.36, from: -1.4, tilt: 0.75, color: WOOD_DARK, drop: 1.25, drift: -50, rest: 0.25 },
 ] as const
+
+const plankLanding = (plank: (typeof HANGING_PLANKS)[number], hangY: number, height: number, floorY: number) => {
+  const restY = mix(floorY + 6, height - 10, plank.rest) - plank.width / 2
+  return Math.sqrt((2 * (restY - hangY)) / DEBRIS_GRAVITY)
+}
 
 const drawHangingPlank = (context: Context, anchorX: number, anchorY: number, plankWidth: number, plankLength: number, tilt: number, color: string) => {
   context.save()
@@ -829,6 +843,12 @@ const drawDebrisPiece = (context: Context, piece: DebrisPiece, pieceX: number, p
   context.restore()
 }
 
+const debrisLanding = (piece: DebrisPiece, holeY: number, height: number, floorY: number) => {
+  const velocityY = Math.sin(piece.direction) * piece.speed
+  const restY = mix(floorY + 2, height - 8, piece.restDepth * 0.7)
+  return (-velocityY + Math.sqrt(velocityY ** 2 + 2 * DEBRIS_GRAVITY * (restY - holeY))) / DEBRIS_GRAVITY
+}
+
 const drawBreakDebris = (context: Context, width: number, height: number, ceilingY: number, floorY: number, sinceBreak: number) => {
   if (sinceBreak <= 0) return
   const { holeX, holeY, radiusX } = holePlacement(width, ceilingY, 1)
@@ -837,8 +857,7 @@ const drawBreakDebris = (context: Context, width: number, height: number, ceilin
     if (flight <= 0) continue
     const velocityX = Math.cos(piece.direction) * piece.speed
     const velocityY = Math.sin(piece.direction) * piece.speed
-    const restY = mix(floorY + 2, height - 8, piece.restDepth * 0.7)
-    const landing = (-velocityY + Math.sqrt(velocityY ** 2 + 2 * DEBRIS_GRAVITY * (restY - holeY))) / DEBRIS_GRAVITY
+    const landing = debrisLanding(piece, holeY, height, floorY)
     const airTime = Math.min(flight, landing)
     const spun = piece.spin * airTime
     const rotation = flight >= landing && piece.kind === "splinter" ? Math.round(spun / Math.PI) * Math.PI : spun
@@ -858,8 +877,10 @@ const BREAK_PUFFS = [
   { offset: 0.45, drift: 100, size: 0.85 },
 ] as const
 
+const BREAK_DUST_SECONDS = 1.6
+
 const drawBreakDust = (context: Context, width: number, ceilingY: number, sinceBreak: number) => {
-  const billow = stageProgress(sinceBreak, 0, 1.6)
+  const billow = stageProgress(sinceBreak, 0, BREAK_DUST_SECONDS)
   if (billow <= 0 || billow >= 1) return
   const { holeX, holeY, radiusX, radiusY } = holePlacement(width, ceilingY, 1)
   const grow = easeOut(billow)
@@ -869,6 +890,15 @@ const drawBreakDust = (context: Context, width: number, ceilingY: number, sinceB
     const puffY = holeY + radiusY * 0.6 + puff.drift * grow * 1.6
     paintFill(context, `rgba(243, 222, 182, ${0.6 * (1 - billow)})`, ellipsePath(puffX, puffY, puffRadius * 1.3, puffRadius))
   }
+}
+
+const isRubbleSettled = (width: number, height: number, ceilingY: number, floorY: number, holeOpen: number, sinceBreak: number) => {
+  if (!(sinceBreak >= BREAK_DUST_SECONDS)) return false
+  const brokenHole = holePlacement(width, ceilingY, 1)
+  if (!BREAK_DEBRIS.every((piece) => sinceBreak - piece.delay >= debrisLanding(piece, brokenHole.holeY, height, floorY))) return false
+  if (holeOpen <= 0.04) return true
+  const { holeY, radiusY } = holePlacement(width, ceilingY, holeOpen)
+  return HANGING_PLANKS.every((plank) => sinceBreak - plank.drop >= plankLanding(plank, holeY + Math.sin(plank.angle) * radiusY * 0.92, height, floorY))
 }
 
 const BURST_RAYS = 12
@@ -2042,20 +2072,43 @@ export const drawLibraryScene = (
   context.strokeStyle = OUTLINE
   context.save()
   context.translate(Math.sin(time * 80) * shake, Math.cos(time * 66) * shake * 0.6)
-  drawRoom(context, width, height, floorY, ceilingY, sinceImpact)
-  drawNightHole(context, width, ceilingY, breaking.holeOpen, time)
+  const isRoomStill = shake === 0 && (sinceImpact < 0 || sinceImpact > QUAKE_SECONDS)
   const ladder = ladderPlacement(width, height, floorY)
-  drawLadder(context, ladder.left, floorY, ladder.top, sinceImpact)
+  if (isRoomStill) {
+    paintCachedLayer(context, "library:room", `${width} ${height}`, (layer) => {
+      drawRoom(layer, width, height, floorY, ceilingY, sinceImpact)
+      drawLadder(layer, ladder.left, floorY, ladder.top, sinceImpact)
+    })
+    drawNightHole(context, width, ceilingY, breaking.holeOpen, time)
+  } else {
+    drawRoom(context, width, height, floorY, ceilingY, sinceImpact)
+    drawNightHole(context, width, ceilingY, breaking.holeOpen, time)
+    drawLadder(context, ladder.left, floorY, ladder.top, sinceImpact)
+  }
   drawLibraryRadi(context, width, height, floorY, landingX, scale, time, sceneSeconds, quizPhase, jokeQuizStartSeconds, wrongSeconds, cheerSeconds, exitSeconds, exitHero, boringShakeSeconds)
-  drawCeilingBoards(context, width, ceilingY, breaking.holeOpen)
-  drawCeilingCracks(context, width, ceilingY, breaking.holeOpen < 0.55 ? breaking.cracks : 0)
-  drawHoleRim(context, width, ceilingY, breaking.holeOpen)
-  drawHangingPlanks(context, width, height, ceilingY, floorY, breaking.holeOpen, sinceBreak)
-  drawBreakBurst(context, width, ceilingY, sinceBreak)
-  drawBreakDust(context, width, ceilingY, sinceBreak)
-  drawBreakDebris(context, width, height, ceilingY, floorY, sinceBreak)
-  drawBookcase(context, 12, ceilingY - 6, width * 0.2, floorY + 8, sinceImpact)
-  drawBookcase(context, width * 0.8, ceilingY - 6, width - 12, floorY + 8, sinceImpact)
+  const drawRubble = (layer: Context) => {
+    drawCeilingBoards(layer, width, ceilingY, breaking.holeOpen)
+    drawCeilingCracks(layer, width, ceilingY, breaking.holeOpen < 0.55 ? breaking.cracks : 0)
+    drawHoleRim(layer, width, ceilingY, breaking.holeOpen)
+    drawHangingPlanks(layer, width, height, ceilingY, floorY, breaking.holeOpen, sinceBreak)
+    drawBreakBurst(layer, width, ceilingY, sinceBreak)
+    drawBreakDust(layer, width, ceilingY, sinceBreak)
+    drawBreakDebris(layer, width, height, ceilingY, floorY, sinceBreak)
+  }
+  const drawSideBookcases = (layer: Context) => {
+    drawBookcase(layer, 12, ceilingY - 6, width * 0.2, floorY + 8, sinceImpact)
+    drawBookcase(layer, width * 0.8, ceilingY - 6, width - 12, floorY + 8, sinceImpact)
+  }
+  if (isRoomStill && isRubbleSettled(width, height, ceilingY, floorY, breaking.holeOpen, sinceBreak)) {
+    paintCachedLayer(context, "library:front", `rubble ${width} ${height} ${breaking.holeOpen} ${breaking.cracks}`, (layer) => {
+      drawRubble(layer)
+      drawSideBookcases(layer)
+    })
+  } else {
+    drawRubble(context)
+    if (isRoomStill) paintCachedLayer(context, "library:front", `bookcases ${width} ${height}`, drawSideBookcases)
+    else drawSideBookcases(context)
+  }
   if (exitSeconds !== null && exitHero !== null && sceneSeconds >= WALK_BACK_END) drawHeroExit(context, width, height, floorY, landingX, scale, exitSeconds, exitHero)
   drawDust(context, landingX, floorY, sceneSeconds)
   drawSpeechBubble(context, width, landingX, floorY, scale, easeOutBack(stageProgress(sceneSeconds, SAY_START, SAY_START + BUBBLE_POP_SECONDS)) * (1 - stageProgress(sceneSeconds, SAY_END - BUBBLE_HIDE_SECONDS, SAY_END)))

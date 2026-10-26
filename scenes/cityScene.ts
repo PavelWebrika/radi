@@ -4,6 +4,7 @@ import { popArtRadiLook } from "@/characters/radiConcepts"
 import { drawKiraSide } from "@/characters/kira"
 import { drawRadiSide } from "@/characters/radiSide"
 import { clipToClubDoor, clubDoorCenterY, clubDoorWidth, clubDoorX, clubLeftX, clubPlacement, drawClubBuilding, drawClubLights, partyColor, type ClubPlacement } from "@/scenes/nightClub"
+import { paintCachedLayer } from "@/scenes/layerCache"
 import { drawEveningSky, drawMoonAndStars, drawNightShade, drawSettingSun, eveningLight } from "@/scenes/nightfall"
 import { drawSceneryBack, drawSceneryFront, drawScenerySky } from "@/scenes/roadTrip"
 import {
@@ -755,25 +756,40 @@ export const drawCityScene = (
   context.globalAlpha = 1 - light.night * 0.6
   drawClouds(context, width, height, time)
   context.globalAlpha = 1
-  drawSceneryBack(context, width, height, height * BUILDINGS_BASE, height * BACK_WALK_BOTTOM, camera)
   const arrivalSeconds = drive?.arrivalSeconds ?? null
   const kiraSeconds = drive?.kiraSeconds ?? null
   const club = drive
     ? clubPlacement(height, driveView(width, height, { progress: 1, speed: 0, kiraSeconds: null, arrivalSeconds: null }).camera - camera + width * CLUB_CENTER_X, height * CLUB_BASE, time)
     : null
   const isClubVisible = club !== null && clubLeftX(club) < width + 8
-  if (isCityVisible) {
-    drawWithCamera(() => {
-      drawBuildings(context, width, height)
-      drawSidewalk(context, width, height * BUILDINGS_BASE, height * BACK_WALK_BOTTOM, width * 0.06)
-      drawWalkers(context, width, height, time)
-      drawTrees(context, width, height)
-    })
+  const withCamera = (layer: Context, draw: () => void) => {
+    layer.save()
+    layer.translate(-camera, 0)
+    draw()
+    layer.restore()
   }
-  drawRoad(context, width, height, camera)
-  if (club && isClubVisible) drawRoadEnd(context, width, height, clubLeftX(club) - 10 * club.unit)
-  drawSceneryFront(context, width, height, height * ROAD_BOTTOM, camera)
-  if (isCityVisible) drawWithCamera(() => drawSidewalk(context, width, height * ROAD_BOTTOM, height + 4, width * 0.1))
+  const drawStreetBack = (layer: Context) => {
+    drawSceneryBack(layer, width, height, height * BUILDINGS_BASE, height * BACK_WALK_BOTTOM, camera)
+    if (isCityVisible) {
+      withCamera(layer, () => {
+        drawBuildings(layer, width, height)
+        drawSidewalk(layer, width, height * BUILDINGS_BASE, height * BACK_WALK_BOTTOM, width * 0.06)
+      })
+    }
+  }
+  const drawStreetFront = (layer: Context) => {
+    if (isCityVisible) withCamera(layer, () => drawTrees(layer, width, height))
+    drawRoad(layer, width, height, camera)
+    if (club && isClubVisible) drawRoadEnd(layer, width, height, clubLeftX(club) - 10 * club.unit)
+    drawSceneryFront(layer, width, height, height * ROAD_BOTTOM, camera)
+    if (isCityVisible) withCamera(layer, () => drawSidewalk(layer, width, height * ROAD_BOTTOM, height + 4, width * 0.1))
+  }
+  const isCameraStill = drive === null || drive.progress >= 1
+  if (isCameraStill) paintCachedLayer(context, "city:back", `${width} ${height} ${camera}`, drawStreetBack)
+  else drawStreetBack(context)
+  if (isCityVisible) withCamera(context, () => drawWalkers(context, width, height, time))
+  if (isCameraStill && !isClubVisible) paintCachedLayer(context, "city:front", `${width} ${height} ${camera}`, drawStreetFront)
+  else drawStreetFront(context)
   if (club && isClubVisible) drawClubBuilding(context, club, time)
   drawNightShade(context, width, height, light)
   drawMoonAndStars(context, width, height, height * BUILDINGS_BASE, time, light)

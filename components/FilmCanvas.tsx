@@ -23,6 +23,7 @@ import {
   type LibraryQuizPhase,
 } from "@/scenes/libraryScene"
 import { cosmodromeKiraSteps, cosmodromeWalkSteps, DEFAULT_FLIGHT_SECONDS, drawCosmodromeScene, dudeWalkSteps, ENDING_MENU_AT, ENGINE_FADE_END, ENGINE_FADE_START, IGNITION_START, KIRA_COSMO_WOOF, LIFTOFF, SMOKE_START, SUIT_AT, wishButtonLayout } from "@/scenes/cosmodromeScene"
+import { releaseLayersExcept } from "@/scenes/layerCache"
 import { drawNatureScene, HORO_DANCE_START, HORO_START, NATURE_SCENE_END } from "@/scenes/natureScene"
 import { drawOpeningScene, greetingButtonLayout, kiraWalkSteps, KIRA_SCENE_END, openingWalkSteps, startButtonLayout, WAVE_START, type BubbleButtonLayout } from "@/scenes/openingScene"
 import { createBackgroundPlaylist } from "@/audio/backgroundPlaylist"
@@ -65,7 +66,16 @@ const startOver = () => {
   window.location.reload()
 }
 
+const placedButtons = new WeakMap<HTMLElement, string>()
+
+const isPlacedAlready = (element: HTMLElement, placement: string) => {
+  if (placedButtons.get(element) === placement) return true
+  placedButtons.set(element, placement)
+  return false
+}
+
 const placeQuizButton = (button: HTMLButtonElement, layout: { centerX: number; centerY: number; width: number; height: number } | null, chosen: boolean) => {
+  if (isPlacedAlready(button, layout ? `${layout.centerX} ${layout.centerY} ${layout.width} ${layout.height} ${chosen}` : `hidden ${chosen}`)) return
   button.dataset.visible = String(layout !== null)
   button.dataset.chosen = String(chosen)
   button.tabIndex = layout ? 0 : -1
@@ -77,6 +87,8 @@ const placeQuizButton = (button: HTMLButtonElement, layout: { centerX: number; c
 }
 
 const placeBubbleButton = (button: HTMLButtonElement, layout: BubbleButtonLayout) => {
+  const placement = layout ? `${layout.centerX} ${layout.centerY} ${layout.width} ${layout.fontSize}` : "hidden"
+  if (isPlacedAlready(button, placement) && button.dataset.visible === String(layout !== null)) return
   button.dataset.visible = String(layout !== null)
   button.tabIndex = layout ? 0 : -1
   if (!layout) return
@@ -448,6 +460,7 @@ export const FilmCanvas = () => {
       } else {
         drawOpeningScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, shownProgress, meetingSeconds, scrollOpen)
       }
+      releaseLayersExcept(isShowingConcepts ? null : cosmodromeSeconds !== null ? "cosmodrome" : natureSeconds !== null ? "nature" : librarySeconds !== null ? "library" : clubSeconds !== null ? "club" : citySeconds !== null ? "city" : "opening")
       const onOpening = !isShowingConcepts && meetingSeconds === null && citySeconds === null && clubSeconds === null && librarySeconds === null && natureSeconds === null && cosmodromeSeconds === null
       const startLayout = scrollOpen || !onOpening ? null : startButtonLayout(window.innerWidth, window.innerHeight, timeMilliseconds / 1000)
       if (startButtonRef.current) placeBubbleButton(startButtonRef.current, startLayout)
@@ -460,7 +473,7 @@ export const FilmCanvas = () => {
       const wishLayout = isShowingConcepts || cosmodromeSeconds === null ? null : wishButtonLayout(window.innerWidth, window.innerHeight, cosmodromeSeconds, wishSeconds)
       if (wishButtonRef.current) placeBubbleButton(wishButtonRef.current, wishLayout)
       const showEndingMenu = !isShowingConcepts && cosmodromeSeconds !== null && wishSeconds !== null && wishSeconds >= ENDING_MENU_AT
-      if (endingMenuRef.current) endingMenuRef.current.dataset.visible = String(showEndingMenu)
+      if (endingMenuRef.current && endingMenuRef.current.dataset.visible !== String(showEndingMenu)) endingMenuRef.current.dataset.visible = String(showEndingMenu)
       if (librarySeconds === null) {
         libraryQuizPhase = "captain"
         captainChoice = null

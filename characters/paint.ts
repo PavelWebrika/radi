@@ -17,6 +17,10 @@ export const linePath = (fromX: number, fromY: number, toX: number, toY: number)
 export const paintShade = (context: Context, shade: string, buildPath: BuildPath) => {
   const path = new Path2D()
   buildPath(path)
+  shadePath(context, shade, path)
+}
+
+const shadePath = (context: Context, shade: string, path: Path2D) => {
   const outsideShiftedShape = new Path2D()
   outsideShiftedShape.rect(-1000, -1000, 2000, 2000)
   outsideShiftedShape.addPath(path)
@@ -39,7 +43,7 @@ export const paintShape = (context: Context, fill: Fill, buildPath: BuildPath, {
     decorateInside(context)
     context.restore()
   }
-  if (shade) paintShade(context, shade, buildPath)
+  if (shade) shadePath(context, shade, path)
   context.stroke(path)
 }
 
