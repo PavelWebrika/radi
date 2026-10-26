@@ -1,7 +1,7 @@
 import { ellipsePath, linePath, paintFill, paintLine, paintShape, type BuildPath, type Context } from "@/characters/paint"
-import { drawKiraSide } from "@/characters/kira"
+import { drawKiraFront, drawKiraSide } from "@/characters/kira"
 import { type PartyPose } from "@/characters/partyPerson"
-import { drawRadi, drawStarSparkle, type Point, type RadiExpression } from "@/characters/radi"
+import { drawRadi, drawStarSparkle, RAINBOW, type Point, type RadiExpression } from "@/characters/radi"
 import { astronautRadiLook, sunnyRadiLook } from "@/characters/radiConcepts"
 import { drawShadesDudeFront } from "@/characters/shadesDude"
 import { easeInOut, seededRandom } from "@/scenes/libraryScene"
@@ -31,20 +31,20 @@ const CLASPED_HANDS: readonly [Point, Point] = [[-4, -38], [4, -38]]
 const RADI_BUBBLE_HIDE_START = 7.4
 const RADI_BUBBLE_HIDE_END = 7.7
 const DUDE_WALK_START = 7.2
-const DUDE_WALK_END = 13.6
-const DUDE_STEPS_PER_SECOND = 1.5
+const DUDE_WALK_END = 11
+const DUDE_STEPS_PER_SECOND = 2.3
 const DUDE_SIZE = 1.25
 const DUDE_STOP_UNITS = 50
 const CAKE_HANDS: readonly [Point, Point] = [[-16, -23], [16, -23]]
 const NOTICE_START = 8.4
 const NOTICE_END = 8.9
-const KISS_START = 14
-const KISS_CONTACT = 14.4
-const KISS_LEAVE = 15
-const KISS_END = 15.4
+const KISS_START = 11.4
+const KISS_CONTACT = 11.8
+const KISS_LEAVE = 12.4
+const KISS_END = 12.8
 const HEART_SECONDS = 1.6
 const KISS_HEARTS = [[-14, 30, 0.8], [0, 45, 1], [14, 34, 0.85], [-6, 55, 0.6], [9, 60, 0.65]] as const
-const WISH_START = 15.6
+const WISH_START = 13
 const WISH_POP_END = WISH_START + 0.35
 const WISH_LINES = ["Happy birthday,", "Radi!"] as const
 const WISH_CLOSE_SECONDS = 0.3
@@ -135,6 +135,18 @@ const ACCEL_SECONDS = 4
 const DECEL_SHARE = 0.25
 const FLIGHT_HEIGHTS = 16
 export const DEFAULT_FLIGHT_SECONDS = 60
+const END_IRIS_START = 47
+const WINDOW_Y = -74
+const WINDOW_RADIUS = 10
+const WINDOW_KIRA_SIZE = 0.3
+const END_IRIS_FOCUS = 2.5
+const END_IRIS_CLOSE = 0.7
+const ENDING_TEXT = "TO BE CONTINUED..."
+const ENDING_FADE_IN = 0.4
+const ENDING_ASSEMBLE_START = 2
+const ENDING_LETTER_GAP = 0.09
+const ENDING_FLIGHT = 0.6
+const ENDING_DIM_COLOR = "#3d3a5c"
 const CAMERA_LOCK = 0.05
 const ZOOM_START = 1.5
 const ZOOM_END = 4
@@ -148,8 +160,34 @@ const SPACE_TO = 12
 const EARTH_FROM = 10.5
 const EARTH_RISE = 4
 const SPACE_STARS = 90
+const SKY_STAGES: readonly (readonly [number, readonly string[]])[] = [
+  [0, ["#23245e", "#563691", "#ae6890", "#ff9e7a"]],
+  [1.5, ["#2b2d78", "#6b3d9e", "#d0609a", "#ffb36b"]],
+  [3.5, ["#3a4fa8", "#9a5cc4", "#ff7eb6", "#ffd27a"]],
+  [5.5, ["#1f5fae", "#3f8fd0", "#7fd1e8", "#ffe0a8"]],
+  [7.5, ["#14306f", "#1f63a0", "#2fa4b8", "#7fe0c8"]],
+  [9.5, ["#0e1140", "#2a1d6b", "#53308f", "#8e4fb0"]],
+  [12, ["#03020c", "#090620", "#140c38", "#24124d"]],
+]
+const NEBULA_CLOUDS = [
+  [0.18, 0.25, 0.32, "155, 93, 229"],
+  [0.78, 0.18, 0.28, "255, 93, 143"],
+  [0.62, 0.6, 0.34, "76, 201, 240"],
+  [0.3, 0.7, 0.24, "255, 159, 28"],
+] as const
+const SUNRISE_GLOWS = [
+  [0.12, 0.8, 0.7, 0.28, "255, 210, 120", 0.55, 0],
+  [0.34, 0.86, 0.9, 0.22, "255, 150, 120", 0.4, 1.4],
+  [0.05, 0.68, 0.45, 0.3, "255, 120, 170", 0.3, 2.6],
+  [0.58, 0.9, 0.8, 0.18, "255, 190, 150", 0.3, 3.9],
+  [0.22, 0.62, 0.55, 0.16, "255, 230, 170", 0.25, 5.1],
+] as const
+const AURORA_RIBBONS = [
+  [0.22, 0.035, "61, 220, 151", 0],
+  [0.3, 0.04, "76, 201, 240", 1.7],
+  [0.16, 0.03, "155, 93, 229", 3.1],
+] as const
 const SPEED_LINES = 14
-const TRAIL_PUFFS = 22
 const FIRE_TINT = { shadow: "200, 90, 40", body: "255, 160, 80", light: "255, 232, 160" }
 const CLOUD_BANKS = Array.from({ length: CLOUD_BANK_COUNT }, (_, index) => ({
   x: seededRandom(index, 111),
@@ -214,17 +252,32 @@ const mixColor = (from: string, to: string, amount: number) => {
   return `rgb(${mixed.join(", ")})`
 }
 
-const drawSky = (context: Context, width: number, height: number, horizonY: number, time: number, space: number, camY: number) => {
-  const gradient = context.createLinearGradient(0, 0, 0, Math.max(horizonY, horizonY + camY))
-  gradient.addColorStop(0, mixColor("#23245e", "#03020c", space))
-  gradient.addColorStop(0.55, mixColor("#6a3f9c", "#0a0722", space))
-  gradient.addColorStop(1, mixColor("#ff9e7a", "#1b1446", space))
+const skyColorsAt = (altitude: number) => {
+  const nextIndex = SKY_STAGES.findIndex(([stageAltitude]) => stageAltitude > altitude)
+  if (nextIndex === -1) return SKY_STAGES[SKY_STAGES.length - 1][1]
+  if (nextIndex === 0) return SKY_STAGES[0][1]
+  const [fromAltitude, fromColors] = SKY_STAGES[nextIndex - 1]
+  const [toAltitude, toColors] = SKY_STAGES[nextIndex]
+  const blend = easeInOut((altitude - fromAltitude) / (toAltitude - fromAltitude))
+  return fromColors.map((color, index) => mixColor(color, toColors[index], blend))
+}
+
+const daylightAt = (altitude: number) => easeInOut(clampToUnit((altitude - 2.5) / 2)) * (1 - easeInOut(clampToUnit((altitude - 7) / 2.5)))
+
+const drawSky = (context: Context, width: number, height: number, horizonY: number, time: number, altitude: number, space: number, camY: number) => {
+  const [top, middle, low, horizon] = skyColorsAt(altitude)
+  const gradient = context.createLinearGradient(0, 0, 0, Math.max(horizonY, Math.min(height, horizonY + camY)))
+  gradient.addColorStop(0, top)
+  gradient.addColorStop(0.4, middle)
+  gradient.addColorStop(0.75, low)
+  gradient.addColorStop(1, horizon)
   context.fillStyle = gradient
   context.fillRect(0, 0, width, height)
+  const nightness = 1 - daylightAt(altitude)
   const starSize = Math.min(width, height) * 0.004
   for (let star = 0; star < STAR_COUNT; star += 1) {
     const twinkle = 0.5 + 0.5 * Math.sin(time * (1.5 + seededRandom(star, 3) * 2) + star)
-    context.globalAlpha = 0.35 + twinkle * 0.65
+    context.globalAlpha = (0.35 + twinkle * 0.65) * nightness
     const starX = seededRandom(star, 1) * width
     const starY = seededRandom(star, 2) ** 1.6 * horizonY * 0.7
     paintFill(context, WHITE, ellipsePath(starX, starY, starSize * (0.6 + twinkle * 0.5), starSize * (0.6 + twinkle * 0.5)))
@@ -238,6 +291,80 @@ const drawSky = (context: Context, width: number, height: number, horizonY: numb
     paintFill(context, star % 7 === 0 ? "#ffe9a8" : WHITE, ellipsePath(starX, starY, size, size))
   }
   context.globalAlpha = 1
+}
+
+const drawNebula = (context: Context, width: number, height: number, space: number, time: number) => {
+  if (space <= 0) return
+  for (const [x, y, size, color] of NEBULA_CLOUDS) {
+    const centerX = (x + Math.sin(time * 0.05 + x * 9) * 0.02) * width
+    const centerY = y * height
+    const radius = size * Math.max(width, height)
+    const glow = context.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius)
+    glow.addColorStop(0, `rgba(${color}, ${0.32 * space})`)
+    glow.addColorStop(0.5, `rgba(${color}, ${0.12 * space})`)
+    glow.addColorStop(1, `rgba(${color}, 0)`)
+    paintFill(context, glow, ellipsePath(centerX, centerY, radius, radius * 0.7))
+  }
+}
+
+const drawShootingStars = (context: Context, width: number, height: number, space: number, time: number) => {
+  if (space < 0.6) return
+  for (let streak = 0; streak < 3; streak += 1) {
+    const cycle = time / 4.5 + streak / 3
+    const life = cycle % 1
+    if (life > 0.18) continue
+    const seed = Math.floor(cycle)
+    const run = life / 0.18
+    const startX = seededRandom(seed, 141 + streak) * width
+    const startY = seededRandom(seed, 151 + streak) * height * 0.5
+    const headX = startX + run * width * 0.25
+    const headY = startY + run * height * 0.12
+    const fade = Math.sin(run * Math.PI) * space
+    paintLine(context, `rgba(255, 255, 255, ${0.8 * fade})`, 2, linePath(headX - width * 0.06, headY - height * 0.03, headX, headY))
+    paintFill(context, `rgba(255, 255, 255, ${fade})`, ellipsePath(headX, headY, 2.5, 2.5))
+  }
+}
+
+const drawSunrise = (context: Context, width: number, height: number, altitude: number, time: number) => {
+  const daylight = daylightAt(altitude)
+  if (daylight <= 0) return
+  const lift = easeOut(clampToUnit((altitude - 2.5) / 6))
+  const band = context.createLinearGradient(0, height, 0, height * 0.35)
+  band.addColorStop(0, `rgba(255, 196, 120, ${0.45 * daylight})`)
+  band.addColorStop(0.5, `rgba(255, 140, 150, ${0.2 * daylight})`)
+  band.addColorStop(1, "rgba(255, 140, 150, 0)")
+  context.fillStyle = band
+  context.fillRect(0, 0, width, height)
+  for (const [x, y, stretchX, stretchY, color, strength, drift] of SUNRISE_GLOWS) {
+    const centerX = (x + Math.sin(time * 0.07 + drift) * 0.03) * width
+    const centerY = height * (y + (1 - lift) * 0.25)
+    const radius = Math.min(width, height) * stretchY
+    context.save()
+    context.translate(centerX, centerY)
+    context.scale(stretchX / stretchY, 1)
+    context.rotate(Math.sin(time * 0.05 + drift) * 0.15)
+    const glow = context.createRadialGradient(0, 0, 0, 0, 0, radius)
+    glow.addColorStop(0, `rgba(${color}, ${strength * daylight})`)
+    glow.addColorStop(0.55, `rgba(${color}, ${strength * 0.35 * daylight})`)
+    glow.addColorStop(1, `rgba(${color}, 0)`)
+    paintFill(context, glow, ellipsePath(0, 0, radius, radius))
+    context.restore()
+  }
+}
+
+const drawAurora = (context: Context, width: number, height: number, altitude: number, time: number) => {
+  const strength = easeInOut(clampToUnit((altitude - 6) / 1.5)) * (1 - easeInOut(clampToUnit((altitude - 10.5) / 2)))
+  if (strength <= 0) return
+  AURORA_RIBBONS.forEach(([baseY, amplitude, color, phase], index) => {
+    paintLine(context, `rgba(${color}, ${0.3 * strength})`, height * 0.05, (path) => {
+      for (let step = 0; step <= 24; step += 1) {
+        const x = (step / 24) * width
+        const y = height * (baseY + Math.sin(step * 0.55 + time * 0.6 + phase) * amplitude + Math.sin(step * 0.2 + time * 0.25 + index) * amplitude * 0.6)
+        if (step === 0) path.moveTo(x, y)
+        else path.lineTo(x, y)
+      }
+    })
+  })
 }
 
 const drawEarth = (context: Context, width: number, height: number, altitude: number) => {
@@ -712,7 +839,7 @@ const drawDoor = (context: Context, open: number) => {
   paintLine(context, DARK_METAL, 1.6, doorPath)
 }
 
-const drawRocketShip = (context: Context, time: number, door: number) => {
+const drawRocketShip = (context: Context, time: number, door: number, showKira: boolean) => {
   const glow = 0.6 + 0.4 * Math.sin(time * 23) * Math.sin(time * 7)
   paintFill(context, `rgba(255, 170, 60, ${0.45 * glow})`, ellipsePath(0, 12, 16, 5))
   paintShape(context, DARK_METAL, (path) => {
@@ -741,11 +868,16 @@ const drawRocketShip = (context: Context, time: number, door: number) => {
   })
   paintShape(context, "#e63946", (path) => path.roundRect(-2.6, -10, 5.2, 18, 2.6))
   drawDoor(context, door)
-  paintShape(context, METAL, ellipsePath(0, -74, 10, 10))
-  paintShape(context, "#4cc9f0", ellipsePath(0, -74, 7.2, 7.2), {
-    decorateInside: (glassContext) => paintFill(glassContext, "#2b8cc4", ellipsePath(2.5, -71.5, 6, 6)),
+  paintShape(context, METAL, ellipsePath(0, WINDOW_Y, WINDOW_RADIUS, WINDOW_RADIUS))
+  paintShape(context, "#4cc9f0", ellipsePath(0, WINDOW_Y, 7.2, 7.2), {
+    decorateInside: (glassContext) => {
+      paintFill(glassContext, "#2b8cc4", ellipsePath(2.5, WINDOW_Y + 2.5, 6, 6))
+      if (!showKira) return
+      drawKiraFront(glassContext, 0, WINDOW_Y + 52 * WINDOW_KIRA_SIZE + 1, WINDOW_KIRA_SIZE)
+      paintFill(glassContext, "rgba(76, 201, 240, 0.22)", ellipsePath(0, WINDOW_Y, 7.2, 7.2))
+    },
   })
-  paintFill(context, "rgba(255, 255, 255, 0.8)", ellipsePath(-2.6, -77, 2.4, 1.6))
+  paintFill(context, "rgba(255, 255, 255, 0.8)", ellipsePath(-2.6, WINDOW_Y - 3, 2.4, 1.6))
 }
 
 const rocketLayout = (width: number, height: number, camX: number) => {
@@ -807,7 +939,7 @@ const paintLaunchPuffs = (context: Context, time: number, isBehind: boolean) => 
   }
 }
 
-type LaunchState = { riseY: number; camY: number; altitude: number; speed: number; flame: number; shake: number; trail: number; zoom: number }
+type LaunchState = { riseY: number; camY: number; altitude: number; speed: number; flame: number; shake: number; zoom: number }
 
 const flightProfile = (flightSeconds: number, flightDuration: number) => {
   const decelSeconds = flightDuration * DECEL_SHARE
@@ -839,7 +971,6 @@ const launchState = (height: number, wishSeconds: number | null, flightDuration:
     speed: speedShare,
     flame: ignite * (1 + 0.35 * clampToUnit(flightSeconds / 0.5)),
     shake: easeOut(stageProgress(wish, IGNITION_START, IGNITION_START + 0.6)) * (1 - stageProgress(wish, LIFTOFF + 1.5, LIFTOFF + 3.5)),
-    trail: clampToUnit(flightSeconds / 0.3) * (1 - clampToUnit((altitude - 6) / 5)),
     zoom: mix(1, FLIGHT_ZOOM, easeInOut(clampToUnit((flightSeconds - ZOOM_START) / (ZOOM_END - ZOOM_START)))),
   }
 }
@@ -865,19 +996,6 @@ const paintTintedPuff = (context: Context, tint: { shadow: string; body: string;
   paintFill(context, `rgba(${tint.shadow}, ${alpha})`, ellipsePath(x + radius * 0.12, y + radius * 0.15, radius, radius * 0.82))
   paintFill(context, `rgba(${tint.body}, ${alpha})`, ellipsePath(x, y, radius, radius * 0.82))
   paintFill(context, `rgba(${tint.light}, ${alpha * 0.75})`, ellipsePath(x - radius * 0.3, y - radius * 0.3, radius * 0.4, radius * 0.3))
-}
-
-const drawExhaustTrail = (context: Context, time: number, rocketY: number, flame: number, trail: number, viewBottom: number) => {
-  if (trail <= 0) return
-  const top = rocketY + 9 + 30 * flame
-  const bottom = Math.min(viewBottom, top + 600)
-  for (let puff = TRAIL_PUFFS - 1; puff >= 0; puff -= 1) {
-    const along = puff / (TRAIL_PUFFS - 1)
-    const y = mix(top, bottom, along)
-    const x = Math.sin(time * 3 + puff * 1.7) * 4 * along
-    const radius = 10 + along * 34
-    paintTintedPuff(context, along < 0.2 ? FIRE_TINT : SMOKE_TINTS[0], x, y, radius, 0.9 * trail * (1 - along * 0.45))
-  }
 }
 
 const drawLaunchExplosion = (context: Context, time: number, wishSeconds: number | null) => {
@@ -908,15 +1026,12 @@ const drawLaunchRocket = (context: Context, width: number, height: number, time:
   context.strokeStyle = OUTLINE
   drawLaunchTower(context, time)
   paintLaunchPuffs(context, time, true)
-  const focusY = baseY - ROCKET_MIDDLE * unit - launch.riseY
-  const viewBottomY = focusY + (height - focusY - launch.camY) / launch.zoom
-  drawExhaustTrail(context, time, rocketY, launch.flame, launch.trail, (viewBottomY - baseY) / unit)
   context.save()
   const tremble = 1 + launch.flame * 1.5
   context.translate((Math.sin(time * 47) * 0.9 + Math.sin(time * 31) * 0.6) * tremble, rocketY + Math.sin(time * 53) * 0.5 * tremble)
   drawRocketFlame(context, time, launch.flame)
   context.lineWidth = 3 / unit
-  drawRocketShip(context, time, doorOpenAmount(wishSeconds))
+  drawRocketShip(context, time, doorOpenAmount(wishSeconds), (wishSeconds ?? -1) >= KIRA_ENTER_END)
   context.restore()
   paintShape(context, "#9ea4b0", (path) => path.rect(-52, 12, 110, (height - baseY) / unit), {
     decorateInside: (platformContext) => {
@@ -1130,7 +1245,11 @@ export const drawCosmodromeScene = (context: Context, width: number, height: num
   context.strokeStyle = OUTLINE
   context.save()
   context.translate(Math.sin(time * 61) * 7 * launch.shake, Math.cos(time * 57) * 5 * launch.shake)
-  drawSky(context, width, height, horizonY, time, space, launch.camY)
+  drawSky(context, width, height, horizonY, time, launch.altitude, space, launch.camY)
+  drawNebula(context, width, height, space, time)
+  drawShootingStars(context, width, height, space, time)
+  drawSunrise(context, width, height, launch.altitude, time)
+  drawAurora(context, width, height, launch.altitude, time)
   drawEarth(context, width, height, launch.altitude)
   drawCloudBanks(context, width, height, horizonY, launch.camY, false)
   context.save()
@@ -1146,7 +1265,7 @@ export const drawCosmodromeScene = (context: Context, width: number, height: num
   drawLaunchRocket(context, width, height, time, camX, wishSeconds, launch)
   const radiX = radiWorldX(width, scale, sceneSeconds, wishSeconds) - camX
   const standingX = width / 2
-  const isNearDude = sceneSeconds >= DUDE_WALK_START && skipRightProgress(wishSeconds) < 0.3
+  const isNearDude = sceneSeconds >= DUDE_WALK_START && (wishSeconds === null || wishSeconds < SUIT_AT)
   if (isNearDude) drawSkippingRadi(context, width, height, scale, time, sceneSeconds, wishSeconds, camX)
   drawShadesDude(context, width, standingX, feetY, scale, time, sceneSeconds, wishSeconds, camX)
   drawSkippingRadi(context, width, height, scale, time, sceneSeconds, wishSeconds, camX, isNearDude)
@@ -1171,4 +1290,67 @@ export const drawCosmodromeScene = (context: Context, width: number, height: num
   }
   context.restore()
   if (sceneSeconds < IRIS_IN_END) paintIris(context, width, height, width / 2, feetY - 60 * scale, Math.hypot(width, height) * clampToUnit(sceneSeconds / IRIS_IN_END) ** 2)
+  drawEndingIris(context, width, height, camX, launch, wish - LIFTOFF, flightDuration)
+}
+
+const drawEndingIris = (context: Context, width: number, height: number, camX: number, launch: LaunchState, flightSeconds: number, flightDuration: number) => {
+  if (flightSeconds < END_IRIS_START) return
+  const { unit, baseX, baseY } = rocketLayout(width, height, camX)
+  const focusY = baseY - ROCKET_MIDDLE * unit - launch.riseY + launch.camY
+  const windowY = focusY + (WINDOW_Y + ROCKET_MIDDLE) * unit * launch.zoom
+  const focus = 1 - (1 - stageProgress(flightSeconds, END_IRIS_START, END_IRIS_START + END_IRIS_FOCUS)) ** 3
+  const closeStart = Math.max(END_IRIS_START + END_IRIS_FOCUS, flightDuration - END_IRIS_CLOSE)
+  const close = stageProgress(flightSeconds, closeStart, closeStart + END_IRIS_CLOSE)
+  const windowRadius = WINDOW_RADIUS * unit * launch.zoom
+  paintIris(context, width, height, baseX, windowY, mix(Math.hypot(width, height), windowRadius, focus) * (1 - close ** 2))
+  drawToBeContinued(context, width, height, flightSeconds - closeStart - END_IRIS_CLOSE)
+}
+
+const drawToBeContinued = (context: Context, width: number, height: number, sinceBlack: number) => {
+  if (sinceBlack <= 0) return
+  const fontSize = Math.min(width * 0.085, height * 0.14)
+  const letters = [...ENDING_TEXT]
+  context.font = `bold ${fontSize}px "Comic Sans MS", "Comic Sans", cursive`
+  context.textBaseline = "middle"
+  context.textAlign = "center"
+  context.lineJoin = "round"
+  context.lineWidth = fontSize * 0.12
+  const widths = letters.map((letter) => context.measureText(letter).width)
+  const totalWidth = widths.reduce((sum, letterWidth) => sum + letterWidth, 0)
+  let slotX = width / 2 - totalWidth / 2
+  letters.forEach((letter, index) => {
+    const targetX = slotX + widths[index] / 2
+    slotX += widths[index]
+    if (letter === " ") return
+    const targetY = height / 2
+    const landAt = ENDING_ASSEMBLE_START + index * ENDING_LETTER_GAP + ENDING_FLIGHT
+    const flight = stageProgress(sinceBlack, landAt - ENDING_FLIGHT, landAt)
+    const lit = stageProgress(sinceBlack, landAt - 0.05, landAt + 0.2)
+    const beat = sinceBlack * 4.2 + index * 0.9
+    const dance = 1 - easeOut(flight)
+    const hop = Math.abs(Math.sin(beat)) * fontSize * 0.35
+    const scatterX = mix(0.1, 0.9, seededRandom(index, 161)) * width + Math.cos(beat * 0.5) * fontSize * 0.4
+    const scatterY = mix(0.18, 0.82, seededRandom(index, 162)) * height - hop
+    const x = mix(scatterX, targetX, easeOutBack(flight))
+    const y = mix(scatterY, targetY, easeOutBack(flight))
+    const shakeX = Math.sin(sinceBlack * 47 + index * 2.3) * fontSize * 0.025 * lit
+    const shakeY = Math.cos(sinceBlack * 53 + index * 1.7) * fontSize * 0.035 * lit
+    const rotation = Math.sin(beat) * 0.45 * dance + Math.sin(sinceBlack * 9 + index) * 0.08 * lit
+    const squash = 1 + Math.max(0, Math.cos(beat * 2)) * 0.15 * dance
+    const color = RAINBOW[Math.floor(index + sinceBlack * 3) % RAINBOW.length]
+    context.save()
+    context.globalAlpha = clampToUnit(sinceBlack / ENDING_FADE_IN)
+    context.translate(x + shakeX, y + shakeY)
+    context.rotate(rotation)
+    context.scale(1 / squash, squash)
+    const burst = stageProgress(sinceBlack, landAt, landAt + 0.45)
+    if (burst > 0 && burst < 1) paintLine(context, `rgba(255, 255, 255, ${0.8 * (1 - burst)})`, fontSize * 0.05, ellipsePath(0, 0, fontSize * (0.3 + burst * 0.7), fontSize * (0.3 + burst * 0.7)))
+    context.strokeStyle = OUTLINE
+    context.strokeText(letter, 0, 0)
+    context.shadowColor = color
+    context.shadowBlur = fontSize * 0.45 * lit
+    context.fillStyle = mixColor(ENDING_DIM_COLOR, color, lit)
+    context.fillText(letter, 0, 0)
+    context.restore()
+  })
 }
