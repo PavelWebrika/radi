@@ -1,6 +1,7 @@
 import { drawKiraFront, drawKiraSide } from "@/characters/kira"
 import { drawRadi, UNICORN_LILAC, type RadiLook } from "@/characters/radi"
 import { drawRadiSide } from "@/characters/radiSide"
+import { drawShadesDudeFront, drawShadesDudeSide } from "@/characters/shadesDude"
 
 type RadiConcept = {
   name: string
@@ -188,6 +189,7 @@ const conceptPanels: ConceptPanel[] = [
     drawSide: (context, feetX, feetY, scale) => drawRadiSide(context, look, feetX, feetY, scale),
   })),
   { name: "Kira", background: "#ffb3c7", heightUnits: 80, sideShadowUnits: 40, drawFront: drawKiraFront, drawSide: drawKiraSide },
+  { name: "Shades Dude", background: "#f2c14e", heightUnits: 105, sideShadowUnits: 22, drawFront: drawShadesDudeFront, drawSide: drawShadesDudeSide },
 ]
 
 const FRONT_HALF_WIDTH_UNITS = 58

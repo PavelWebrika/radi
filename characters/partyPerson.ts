@@ -6,10 +6,10 @@ type PartyEyes = "dot" | "round" | "sleepy" | "lashes"
 type PartyTop = "tee" | "tank" | "shirt" | "crop" | "hoodie" | "blazer" | "folkShirt" | "sukman"
 type PartyBottom = "jeans" | "shorts" | "skirt" | "folkTrousers" | "folkSkirt"
 type PartyShoes = "sneakers" | "boots" | "heels" | "loafers" | "tsarvuli"
-type PartyBuild = "slim" | "broad" | "curvy"
+type PartyBuild = "slim" | "broad" | "curvy" | "chubby"
 type PartyFace = "smile" | "laugh" | "vibing" | "amazed"
 type PartyExtra = "beard" | "stubble" | "mustache" | "glasses" | "sunglasses" | "cap" | "earrings" | "chain" | "drink" | "sequins" | "kalpak" | "flowerCrown" | "sash" | "folkApron" | "handkerchief"
-type BuildShape = { torso: number; hip: number }
+type BuildShape = { torso: number; hip: number; leg: number; stance: number }
 
 export type PartyPerson = {
   skin: string
@@ -33,9 +33,10 @@ export type PartyPose = { hands: readonly [Point, Point]; bounce: number; sway: 
 
 const SIDES = [-1, 1] as const
 const BUILDS: Record<PartyBuild, BuildShape> = {
-  slim: { torso: 8.5, hip: 8.5 },
-  broad: { torso: 10.5, hip: 10 },
-  curvy: { torso: 9, hip: 10.5 },
+  slim: { torso: 8.5, hip: 8.5, leg: 6, stance: 5 },
+  broad: { torso: 10.5, hip: 10, leg: 6, stance: 5 },
+  curvy: { torso: 9, hip: 10.5, leg: 6, stance: 5 },
+  chubby: { torso: 17.5, hip: 16, leg: 10, stance: 8 },
 }
 const TORSO_TOP = -49
 const TORSO_BOTTOM = -30
@@ -150,19 +151,20 @@ const shoePainters: Record<PartyShoes, (context: Context, color: string) => void
   },
 }
 
-const drawLegs = (context: Context, person: PartyPerson, pose: PartyPose) => {
+const drawLegs = (context: Context, person: PartyPerson, { leg, stance }: BuildShape, pose: PartyPose) => {
   SIDES.forEach((side, index) => {
     const footLift = pose.footLifts[index]
-    const hip: Point = [side * 5 + pose.sway, -22 + pose.bounce]
-    const foot: Point = [side * 6, -5 - footLift]
-    const knee = jointBetween(hip, foot, LEG_SEGMENT, side)
+    const hip: Point = [side * stance + pose.sway, -22 + pose.bounce]
+    const foot: Point = [side * (stance + 1), -5 - (leg - 6) - footLift]
+    const knee = jointBetween(hip, foot, LEG_SEGMENT - (leg - 6) / 2, side)
     const legColor = person.bottom === "jeans" || person.bottom === "folkTrousers" ? person.bottomColor : person.bottom === "folkSkirt" ? WHITE : person.skin
-    paintTube(context, legColor, 6, limbPath(hip, knee, foot))
-    if (person.bottom === "shorts") paintTube(context, person.bottomColor, 7.5, linePath(...hip, ...pointAlong(hip, knee, 0.8)))
-    if (person.shoes === "boots") paintTube(context, person.shoeColor, 8, linePath(...knee, ...foot))
+    paintTube(context, legColor, leg, limbPath(hip, knee, foot))
+    if (person.bottom === "shorts") paintTube(context, person.bottomColor, leg + 1.5, linePath(...hip, ...pointAlong(hip, knee, 0.8)))
+    if (person.shoes === "boots") paintTube(context, person.shoeColor, leg + 2, linePath(...knee, ...foot))
     context.save()
-    context.translate(side * 6, -footLift)
-    context.scale(side, 1)
+    context.translate(side * (stance + 1), -footLift)
+    context.scale((side * leg) / 6, leg / 6)
+    context.lineWidth = (OUTLINE_WIDTH * 6) / leg
     shoePainters[person.shoes](context, person.shoeColor)
     context.restore()
   })
@@ -561,7 +563,7 @@ export const drawPartyPerson = (context: Context, person: PartyPerson, feetX: nu
   context.lineCap = "round"
   context.lineWidth = OUTLINE_WIDTH
   context.strokeStyle = OUTLINE
-  drawLegs(context, person, pose)
+  drawLegs(context, person, build, pose)
   context.translate(pose.sway, pose.bounce)
   withHeadTilt(() => drawHairBack(context, person))
   if (person.top === "hoodie") paintShape(context, person.topColor, ellipsePath(0, -47, 15, 6))
