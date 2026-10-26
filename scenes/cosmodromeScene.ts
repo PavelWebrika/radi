@@ -58,9 +58,9 @@ const CANDLE_COLORS = ["#4cc9f0", "#ffd23f", "#ff5d8f"] as const
 const EXCITED_HOPS_START = 1.8
 const EXCITED_HOPS = 2
 const EXCITED_HOP_SECONDS = 0.32
-const SMOKE_START = 2.4
+export const SMOKE_START = 2.4
 const SMOKE_FULL = 2.9
-const SUIT_AT = 3.1
+export const SUIT_AT = 3.1
 const SMOKE_CLEAR = 3.4
 const SMOKE_END = 4.1
 const CHEER_END = 4.4
@@ -135,12 +135,15 @@ const ACCEL_SECONDS = 4
 const DECEL_SHARE = 0.25
 const FLIGHT_HEIGHTS = 16
 export const DEFAULT_FLIGHT_SECONDS = 60
-const END_IRIS_START = 47
+const END_IRIS_START = 44
+const END_IRIS_HOLD = 0.6
 const WINDOW_Y = -74
 const WINDOW_RADIUS = 10
 const WINDOW_KIRA_SIZE = 0.3
-const END_IRIS_FOCUS = 2.5
-const END_IRIS_CLOSE = 0.7
+const END_IRIS_FOCUS = 1.8
+const END_IRIS_CLOSE = 0.4
+const WINDOW_KIRA_SLIDE = 0.7
+const WINDOW_KIRA_START_X = -16
 const ENDING_TEXT = "TO BE CONTINUED..."
 const ENDING_FADE_IN = 0.4
 const ENDING_ASSEMBLE_START = 2
@@ -188,6 +191,10 @@ const AURORA_RIBBONS = [
   [0.16, 0.03, "155, 93, 229", 3.1],
 ] as const
 const SPEED_LINES = 14
+const LIFT_SMOKE_PUFFS = 18
+const LIFT_SMOKE_REACH = 260
+const LIFT_SMOKE_FADE_START = 3
+const LIFT_SMOKE_FADE_END = 5
 const FIRE_TINT = { shadow: "200, 90, 40", body: "255, 160, 80", light: "255, 232, 160" }
 const CLOUD_BANKS = Array.from({ length: CLOUD_BANK_COUNT }, (_, index) => ({
   x: seededRandom(index, 111),
@@ -839,7 +846,7 @@ const drawDoor = (context: Context, open: number) => {
   paintLine(context, DARK_METAL, 1.6, doorPath)
 }
 
-const drawRocketShip = (context: Context, time: number, door: number, showKira: boolean) => {
+const drawRocketShip = (context: Context, time: number, door: number, kiraSlide: number) => {
   const glow = 0.6 + 0.4 * Math.sin(time * 23) * Math.sin(time * 7)
   paintFill(context, `rgba(255, 170, 60, ${0.45 * glow})`, ellipsePath(0, 12, 16, 5))
   paintShape(context, DARK_METAL, (path) => {
@@ -872,8 +879,8 @@ const drawRocketShip = (context: Context, time: number, door: number, showKira: 
   paintShape(context, "#4cc9f0", ellipsePath(0, WINDOW_Y, 7.2, 7.2), {
     decorateInside: (glassContext) => {
       paintFill(glassContext, "#2b8cc4", ellipsePath(2.5, WINDOW_Y + 2.5, 6, 6))
-      if (!showKira) return
-      drawKiraFront(glassContext, 0, WINDOW_Y + 52 * WINDOW_KIRA_SIZE + 1, WINDOW_KIRA_SIZE)
+      if (kiraSlide <= 0) return
+      drawKiraFront(glassContext, mix(WINDOW_KIRA_START_X, 0, kiraSlide), WINDOW_Y + 52 * WINDOW_KIRA_SIZE + 1, WINDOW_KIRA_SIZE)
       paintFill(glassContext, "rgba(76, 201, 240, 0.22)", ellipsePath(0, WINDOW_Y, 7.2, 7.2))
     },
   })
@@ -998,6 +1005,20 @@ const paintTintedPuff = (context: Context, tint: { shadow: string; body: string;
   paintFill(context, `rgba(${tint.light}, ${alpha * 0.75})`, ellipsePath(x - radius * 0.3, y - radius * 0.3, radius * 0.4, radius * 0.3))
 }
 
+const drawLiftSmoke = (context: Context, time: number, rocketY: number, flame: number, flightSeconds: number) => {
+  const amount = clampToUnit(flightSeconds / 0.3) * (1 - easeInOut(stageProgress(flightSeconds, LIFT_SMOKE_FADE_START, LIFT_SMOKE_FADE_END)))
+  if (amount <= 0) return
+  const top = rocketY + 9 + 30 * flame
+  const bottom = Math.max(top + 20, Math.min(14, top + LIFT_SMOKE_REACH))
+  for (let puff = LIFT_SMOKE_PUFFS - 1; puff >= 0; puff -= 1) {
+    const along = clampToUnit(puff / (LIFT_SMOKE_PUFFS - 1) + (seededRandom(puff, 171) - 0.5) * 0.08)
+    const sway = (seededRandom(puff, 172) - 0.5) * (8 + along * 30) + Math.sin(time * 1.4 + puff * 2.1) * 3 * along
+    const radius = (9 + along * 24) * mix(0.7, 1.3, seededRandom(puff, 173))
+    const tint = along < 0.18 ? FIRE_TINT : SMOKE_TINTS[puff % 2 === 0 ? 0 : 2]
+    paintTintedPuff(context, tint, sway, mix(top, bottom, along), radius, 0.85 * amount * (1 - along * 0.35))
+  }
+}
+
 const drawLaunchExplosion = (context: Context, time: number, wishSeconds: number | null) => {
   if (wishSeconds === null || wishSeconds < IGNITION_START) return
   const linger = 1 - stageProgress(wishSeconds, LIFTOFF + 4, LIFTOFF + 8)
@@ -1027,11 +1048,14 @@ const drawLaunchRocket = (context: Context, width: number, height: number, time:
   drawLaunchTower(context, time)
   paintLaunchPuffs(context, time, true)
   context.save()
-  const tremble = 1 + launch.flame * 1.5
+  const flightSeconds = (wishSeconds ?? -1) - LIFTOFF
+  drawLiftSmoke(context, time, rocketY, launch.flame, flightSeconds)
+  const calm = stageProgress(flightSeconds, END_IRIS_START + END_IRIS_FOCUS * 0.5, END_IRIS_START + END_IRIS_FOCUS)
+  const tremble = (1 + launch.flame * 1.5) * (1 - calm)
   context.translate((Math.sin(time * 47) * 0.9 + Math.sin(time * 31) * 0.6) * tremble, rocketY + Math.sin(time * 53) * 0.5 * tremble)
   drawRocketFlame(context, time, launch.flame)
   context.lineWidth = 3 / unit
-  drawRocketShip(context, time, doorOpenAmount(wishSeconds), (wishSeconds ?? -1) >= KIRA_ENTER_END)
+  drawRocketShip(context, time, doorOpenAmount(wishSeconds), easeOutBack(stageProgress(flightSeconds, END_IRIS_START, END_IRIS_START + WINDOW_KIRA_SLIDE)))
   context.restore()
   paintShape(context, "#9ea4b0", (path) => path.rect(-52, 12, 110, (height - baseY) / unit), {
     decorateInside: (platformContext) => {
@@ -1290,16 +1314,16 @@ export const drawCosmodromeScene = (context: Context, width: number, height: num
   }
   context.restore()
   if (sceneSeconds < IRIS_IN_END) paintIris(context, width, height, width / 2, feetY - 60 * scale, Math.hypot(width, height) * clampToUnit(sceneSeconds / IRIS_IN_END) ** 2)
-  drawEndingIris(context, width, height, camX, launch, wish - LIFTOFF, flightDuration)
+  drawEndingIris(context, width, height, camX, launch, wish - LIFTOFF)
 }
 
-const drawEndingIris = (context: Context, width: number, height: number, camX: number, launch: LaunchState, flightSeconds: number, flightDuration: number) => {
+const drawEndingIris = (context: Context, width: number, height: number, camX: number, launch: LaunchState, flightSeconds: number) => {
   if (flightSeconds < END_IRIS_START) return
   const { unit, baseX, baseY } = rocketLayout(width, height, camX)
   const focusY = baseY - ROCKET_MIDDLE * unit - launch.riseY + launch.camY
   const windowY = focusY + (WINDOW_Y + ROCKET_MIDDLE) * unit * launch.zoom
   const focus = 1 - (1 - stageProgress(flightSeconds, END_IRIS_START, END_IRIS_START + END_IRIS_FOCUS)) ** 3
-  const closeStart = Math.max(END_IRIS_START + END_IRIS_FOCUS, flightDuration - END_IRIS_CLOSE)
+  const closeStart = END_IRIS_START + END_IRIS_FOCUS + END_IRIS_HOLD
   const close = stageProgress(flightSeconds, closeStart, closeStart + END_IRIS_CLOSE)
   const windowRadius = WINDOW_RADIUS * unit * launch.zoom
   paintIris(context, width, height, baseX, windowY, mix(Math.hypot(width, height), windowRadius, focus) * (1 - close ** 2))

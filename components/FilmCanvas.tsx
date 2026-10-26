@@ -22,7 +22,7 @@ import {
   type JokeChoice,
   type LibraryQuizPhase,
 } from "@/scenes/libraryScene"
-import { cosmodromeKiraSteps, cosmodromeWalkSteps, DEFAULT_FLIGHT_SECONDS, drawCosmodromeScene, dudeWalkSteps, ENGINE_FADE_END, ENGINE_FADE_START, IGNITION_START, KIRA_COSMO_WOOF, LIFTOFF, wishButtonLayout } from "@/scenes/cosmodromeScene"
+import { cosmodromeKiraSteps, cosmodromeWalkSteps, DEFAULT_FLIGHT_SECONDS, drawCosmodromeScene, dudeWalkSteps, ENGINE_FADE_END, ENGINE_FADE_START, IGNITION_START, KIRA_COSMO_WOOF, LIFTOFF, SMOKE_START, SUIT_AT, wishButtonLayout } from "@/scenes/cosmodromeScene"
 import { drawNatureScene, HORO_DANCE_START, HORO_START, NATURE_SCENE_END } from "@/scenes/natureScene"
 import { drawOpeningScene, greetingButtonLayout, kiraWalkSteps, KIRA_SCENE_END, openingWalkSteps, startButtonLayout, WAVE_START, type BubbleButtonLayout } from "@/scenes/openingScene"
 import { createBackgroundPlaylist } from "@/audio/backgroundPlaylist"
@@ -32,6 +32,7 @@ import { createFootsteps } from "@/audio/footsteps"
 import { createHeroReveal } from "@/audio/heroReveal"
 import { createLibraryCrash } from "@/audio/libraryCrash"
 import { createRocketLaunch } from "@/audio/rocketLaunch"
+import { createSpaceReveal } from "@/audio/spaceReveal"
 import { useFilmStore } from "@/store/film"
 
 const resizeCanvas = (canvas: HTMLCanvasElement, context: CanvasRenderingContext2D) => {
@@ -191,6 +192,7 @@ export const FilmCanvas = () => {
     const kiraWoof = createKiraWoof()
     const cosmodromeWoof = createKiraWoof()
     const rocketLaunch = createRocketLaunch(IGNITION_START, LIFTOFF, ENGINE_FADE_START, ENGINE_FADE_END)
+    const spaceReveal = createSpaceReveal(SMOKE_START, SUIT_AT)
     const libraryCrash = createLibraryCrash(LIBRARY_FALL_START, LIBRARY_LANDING_SECONDS)
     const heroReveal = createHeroReveal(LIBRARY_HERO_REVEAL)
     let arrivalStartMilliseconds: number | null = null
@@ -467,6 +469,7 @@ export const FilmCanvas = () => {
       kiraWoof.sync(drive?.kiraSeconds ?? null, KIRA_WOOF_START)
       cosmodromeWoof.sync(isShowingConcepts || cosmodromeSeconds === null ? null : wishSeconds, KIRA_COSMO_WOOF)
       rocketLaunch.sync(isShowingConcepts || cosmodromeSeconds === null ? null : wishSeconds)
+      spaceReveal.sync(isShowingConcepts || cosmodromeSeconds === null ? null : wishSeconds)
       libraryCrash.sync(isShowingConcepts ? null : librarySeconds, libraryRoofBreakSeconds(window.innerWidth, window.innerHeight))
       heroReveal.sync(
         librarySeconds === null ? null : exitSeconds,
@@ -500,6 +503,7 @@ export const FilmCanvas = () => {
     }
     const makeWish = () => {
       wishStartMilliseconds ??= performance.now()
+      spaceReveal.prime()
     }
     const startDancing = () => {
       if (letsDanceStartMilliseconds !== null) return
@@ -772,6 +776,7 @@ export const FilmCanvas = () => {
       kiraWoof.stop()
       cosmodromeWoof.stop()
       rocketLaunch.stop()
+      spaceReveal.stop()
       libraryCrash.stop()
       heroReveal.stop()
     }
