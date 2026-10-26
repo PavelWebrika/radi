@@ -1,7 +1,7 @@
 const CLIPS = ["/footsteps/softstep000.ogg", "/footsteps/softstep001.ogg", "/footsteps/softstep002.ogg", "/footsteps/softstep003.ogg"]
 const VOLUME = 0.425
 
-export const createFootsteps = () => {
+export const createFootsteps = (rateScale = 1) => {
   const clips = CLIPS.map((src) => {
     const clip = new Audio(src)
     clip.preload = "auto"
@@ -13,7 +13,7 @@ export const createFootsteps = () => {
 
   const playStep = () => {
     const clip = clips[clipIndex % clips.length]
-    const rate = clipIndex % 2 === 0 ? 0.96 : 1.05
+    const rate = (clipIndex % 2 === 0 ? 0.96 : 1.05) * rateScale
     clipIndex += 1
     clip.playbackRate = rate
     clip.volume = VOLUME

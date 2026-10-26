@@ -22,7 +22,7 @@ import {
   type JokeChoice,
   type LibraryQuizPhase,
 } from "@/scenes/libraryScene"
-import { cosmodromeWalkSteps, drawCosmodromeScene, wishButtonLayout } from "@/scenes/cosmodromeScene"
+import { cosmodromeKiraSteps, cosmodromeWalkSteps, DEFAULT_FLIGHT_SECONDS, drawCosmodromeScene, dudeWalkSteps, ENGINE_FADE_END, ENGINE_FADE_START, IGNITION_START, KIRA_COSMO_WOOF, LIFTOFF, wishButtonLayout } from "@/scenes/cosmodromeScene"
 import { drawNatureScene, HORO_DANCE_START, HORO_START, NATURE_SCENE_END } from "@/scenes/natureScene"
 import { drawOpeningScene, greetingButtonLayout, kiraWalkSteps, KIRA_SCENE_END, openingWalkSteps, startButtonLayout, WAVE_START, type BubbleButtonLayout } from "@/scenes/openingScene"
 import { createBackgroundPlaylist } from "@/audio/backgroundPlaylist"
@@ -31,6 +31,7 @@ import { createKiraWoof } from "@/audio/kiraWoof"
 import { createFootsteps } from "@/audio/footsteps"
 import { createHeroReveal } from "@/audio/heroReveal"
 import { createLibraryCrash } from "@/audio/libraryCrash"
+import { createRocketLaunch } from "@/audio/rocketLaunch"
 import { useFilmStore } from "@/store/film"
 
 const resizeCanvas = (canvas: HTMLCanvasElement, context: CanvasRenderingContext2D) => {
@@ -159,6 +160,14 @@ export const FilmCanvas = () => {
     }
     let horoDanceStarted = false
     let horoDanceFadeStartedAt: number | null = null
+    const endSong = new Audio("/endsong.mp3")
+    endSong.preload = "auto"
+    let endSongStarted = false
+    const stopEndSong = () => {
+      endSongStarted = false
+      endSong.pause()
+      if (endSong.currentTime > 0) endSong.currentTime = 0
+    }
     const horoDanceSong = new Audio("/horodance.webm")
     const stopHoroDanceSong = () => {
       horoDanceSong.volume = 0
@@ -177,8 +186,11 @@ export const FilmCanvas = () => {
     const backgroundPlaylist = createBackgroundPlaylist()
     const footsteps = createFootsteps()
     const kiraFootsteps = createFootsteps()
+    const dudeFootsteps = createFootsteps(0.8)
     const engineRev = createEngineRev()
     const kiraWoof = createKiraWoof()
+    const cosmodromeWoof = createKiraWoof()
+    const rocketLaunch = createRocketLaunch(IGNITION_START, LIFTOFF, ENGINE_FADE_START, ENGINE_FADE_END)
     const libraryCrash = createLibraryCrash(LIBRARY_FALL_START, LIBRARY_LANDING_SECONDS)
     const heroReveal = createHeroReveal(LIBRARY_HERO_REVEAL)
     let arrivalStartMilliseconds: number | null = null
@@ -281,6 +293,14 @@ export const FilmCanvas = () => {
       const cosmodromeSeconds = secondsSince(cosmodromeStartMilliseconds)
       if (cosmodromeSeconds === null) wishStartMilliseconds = null
       const wishSeconds = secondsSince(wishStartMilliseconds)
+      const hasLiftedOff = !isShowingConcepts && cosmodromeSeconds !== null && wishSeconds !== null && wishSeconds >= LIFTOFF
+      if (!hasLiftedOff && endSongStarted) stopEndSong()
+      if (hasLiftedOff && !endSongStarted) {
+        endSongStarted = true
+        endSong.currentTime = 0
+        void endSong.play().catch(() => {})
+      }
+      const flightDuration = Number.isFinite(endSong.duration) ? endSong.duration : DEFAULT_FLIGHT_SECONDS
       if (natureSeconds === null) {
         horoSongStarted = false
         horoDanceStarted = false
@@ -315,7 +335,7 @@ export const FilmCanvas = () => {
       const hasLandedInLibrary = librarySeconds !== null && librarySeconds >= LIBRARY_LANDING_SECONDS
       const hasExitedAsHero = exitStartMilliseconds !== null && (finalChoice === "batman" || finalChoice === "unicorn")
       const holdBackground = (natureSeconds !== null && cosmodromeSeconds === null) || hasExitedAsHero || (!hasLandedInLibrary && (hasLeftTheCar || clubSeconds !== null || librarySeconds !== null))
-      backgroundPlaylist.update(timeMilliseconds, songFadeDirection !== null || danceFadeDirection !== null || holdBackground)
+      backgroundPlaylist.update(timeMilliseconds, songFadeDirection !== null || danceFadeDirection !== null || endSongStarted || holdBackground)
       pinnedScrollY = !isShowingConcepts && cosmodromeSeconds === null && natureSeconds !== null && natureSeconds >= HORO_START ? (pinnedScrollY ?? window.scrollY) : null
       horoSteps += (horoTargetSteps - horoSteps) * (1 - Math.exp(-elapsedSeconds * 5))
       if (pinnedScrollY !== null) horoIdleSteps += elapsedSeconds * HORO_IDLE_STEPS_PER_SECOND * Math.max(0, 1 - Math.abs(horoTargetSteps - horoSteps) * 4)
@@ -325,7 +345,7 @@ export const FilmCanvas = () => {
         context.fillRect(0, 0, window.innerWidth, window.innerHeight)
         drawRadiConcepts(context, window.innerWidth, window.innerHeight)
       } else if (cosmodromeSeconds !== null) {
-        drawCosmodromeScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, cosmodromeSeconds, wishSeconds)
+        drawCosmodromeScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, cosmodromeSeconds, wishSeconds, flightDuration)
       } else if (natureSeconds !== null) {
         drawNatureScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, natureSeconds, horoSteps, horoSteps + horoIdleSteps, !hasScrolledHoro)
       } else if (librarySeconds !== null) {
@@ -430,7 +450,7 @@ export const FilmCanvas = () => {
       const walkSteps = isShowingConcepts
         ? null
         : cosmodromeSeconds !== null
-          ? cosmodromeWalkSteps(cosmodromeSeconds)
+          ? cosmodromeWalkSteps(cosmodromeSeconds, wishSeconds)
           : natureSeconds !== null
             ? null
             : librarySeconds !== null
@@ -441,9 +461,12 @@ export const FilmCanvas = () => {
                   ? cityWalkSteps(drive?.arrivalSeconds ?? null, anywaySeconds)
                   : openingWalkSteps(shownProgress, meetingSeconds)
       footsteps.sync(walkSteps)
-      kiraFootsteps.sync(isShowingConcepts ? null : kiraWalkSteps(meetingSeconds))
+      kiraFootsteps.sync(isShowingConcepts ? null : cosmodromeSeconds !== null ? cosmodromeKiraSteps(wishSeconds) : kiraWalkSteps(meetingSeconds))
+      dudeFootsteps.sync(isShowingConcepts || cosmodromeSeconds === null ? null : dudeWalkSteps(cosmodromeSeconds))
       engineRev.syncEntrance(citySeconds === null ? null : anywaySeconds, CAR_ENTRANCE_SOUND)
       kiraWoof.sync(drive?.kiraSeconds ?? null, KIRA_WOOF_START)
+      cosmodromeWoof.sync(isShowingConcepts || cosmodromeSeconds === null ? null : wishSeconds, KIRA_COSMO_WOOF)
+      rocketLaunch.sync(isShowingConcepts || cosmodromeSeconds === null ? null : wishSeconds)
       libraryCrash.sync(isShowingConcepts ? null : librarySeconds, libraryRoofBreakSeconds(window.innerWidth, window.innerHeight))
       heroReveal.sync(
         librarySeconds === null ? null : exitSeconds,
@@ -740,11 +763,15 @@ export const FilmCanvas = () => {
       stopDanceSong()
       stopHoroSong()
       stopHoroDanceSong()
+      stopEndSong()
       backgroundPlaylist.stop()
       footsteps.stop()
       kiraFootsteps.stop()
+      dudeFootsteps.stop()
       engineRev.stop()
       kiraWoof.stop()
+      cosmodromeWoof.stop()
+      rocketLaunch.stop()
       libraryCrash.stop()
       heroReveal.stop()
     }

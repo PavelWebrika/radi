@@ -141,6 +141,20 @@ const polishedGaidaConcept = polishConcept(gaidaConcept, { hair: "tucked", extra
 export const gaidaRadiLook = polishedGaidaConcept.look
 export const sunnyRadiLook = polishConcept(sunnyConcept).look
 
+export const astronautRadiLook = polishConcept({
+  name: "Astronaut Radi",
+  background: "#23245e",
+  look: {
+    hair: "bun",
+    expression: "grin",
+    pose: "wave",
+    top: { color: "#f4f6fb" },
+    bottom: { kind: "shorts", color: "#f4f6fb" },
+    extras: ["astronaut"],
+    shoes: "boots",
+  },
+}).look
+
 const folkDanceConcept = polishConcept({
   name: "Folk Dance Radi",
   background: "#7cc8ff",

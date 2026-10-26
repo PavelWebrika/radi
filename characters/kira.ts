@@ -24,6 +24,18 @@ export type KiraMotion = {
   tongueWind: number
   tonguePhase: number
   showTail: boolean
+  spaceHelmet: boolean
+}
+
+const drawSpaceHelmet = (context: Context) => {
+  paintLine(context, OUTLINE, 1.2, linePath(22, -71, 24, -79))
+  paintShape(context, "#e63946", ellipsePath(24.3, -80.5, 2, 2))
+  const glass = ellipsePath(21, -52, 25, 20.5)
+  paintFill(context, "rgba(190, 225, 255, 0.24)", glass)
+  paintLine(context, OUTLINE, OUTLINE_WIDTH * 1.3, glass)
+  paintLine(context, "rgba(255, 255, 255, 0.85)", 2, (path) => path.ellipse(21, -52, 20.5, 16.5, 0, Math.PI * 1.12, Math.PI * 1.42))
+  paintFill(context, "rgba(255, 255, 255, 0.7)", ellipsePath(37, -40, 1.8, 1.2))
+  paintTube(context, "#d5d9de", 3.2, (path) => path.ellipse(2.5, -51, 3.5, 13, 0.15, 0, Math.PI * 2))
 }
 
 export const drawTreat = (context: Context, centerX: number, centerY: number, size: number, angle: number) => {
@@ -180,7 +192,7 @@ export const drawKiraSide = (
   feetX: number,
   feetY: number,
   scale: number,
-  { sit = 0, legSwing = 0, tailWag = 0, headReach = 0, lick = 0, treatInMouth = 0, tongueWind = 0, tonguePhase = 0, showTail = true }: Partial<KiraMotion> = {},
+  { sit = 0, legSwing = 0, tailWag = 0, headReach = 0, lick = 0, treatInMouth = 0, tongueWind = 0, tonguePhase = 0, showTail = true, spaceHelmet = false }: Partial<KiraMotion> = {},
 ) => {
   const tongueSwing = tongueWind * (1.1 + 0.25 * Math.sin(tonguePhase))
   const tilt = sittingTilt(sit)
@@ -214,6 +226,7 @@ export const drawKiraSide = (
       drawTongue(headContext, 33, -43.6, 8 + lick * 7 + Math.abs(tongueWind) * 5, tongueSwing - lick * 1.2)
       paintLine(headContext, OUTLINE, 0.9, curvesPath([[38.5, -45.5, 33, -41.5, 26, -43.5]]))
       drawTreat(headContext, TREAT_IN_MOUTH.x, TREAT_IN_MOUTH.y, treatInMouth, 0)
+      if (spaceHelmet) drawSpaceHelmet(headContext)
     })
   })
 }

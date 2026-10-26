@@ -29,6 +29,8 @@ const HORN_SPIRAL = "#f0a83a"
 const EAR_PINK = "#ffb3d9"
 export const RAINBOW = ["#ff5f7e", "#ffa94d", "#ffe066", "#69db7c", "#4dabf7", "#b197fc"] as const
 export const SHADE = "rgba(90, 40, 30, 0.22)"
+const ASTRONAUT_TRIM = "#ff8c42"
+const ASTRONAUT_GLOVE = "#4d7cc9"
 const SIDES = [-1, 1] as const
 
 type RadiPattern = "mandala" | "flowers" | "comic" | "tieDye" | "folk" | "lace" | "sukman" | "tropical"
@@ -48,6 +50,7 @@ type RadiExtra =
   | "hairFlower"
   | "batman"
   | "unicorn"
+  | "astronaut"
 export type RadiHair = "ponytail" | "sideTail" | "loose" | "tucked" | "braid" | "bun" | "bob"
 export type RadiExpression = "grin" | "tongue" | "puff" | "surprised" | "angry" | "thinking"
 type RadiPose = "wave" | "peace" | "hold"
@@ -936,8 +939,9 @@ export const drawKalpak = (context: Context, isPolished: boolean) => {
 
 const drawArms = (context: Context, look: RadiLook, hands: RadiHands, elbowBends: PerSide, isPolished: boolean) => {
   const isBatman = look.extras.includes("batman")
-  const sleeveColor = look.extras.includes("denimJacket") ? DENIM : isBatman ? look.top.color : activeColors.skin
-  const handColor = isBatman ? BLACK_FABRIC : activeColors.skin
+  const isAstronaut = look.extras.includes("astronaut")
+  const sleeveColor = look.extras.includes("denimJacket") ? DENIM : isBatman || isAstronaut ? look.top.color : activeColors.skin
+  const handColor = isBatman ? BLACK_FABRIC : isAstronaut ? ASTRONAUT_GLOVE : activeColors.skin
   SIDES.forEach((side, index) => {
     const [handX, handY] = hands[index]
     const shoulderX = side * 8.5
@@ -950,6 +954,14 @@ const drawArms = (context: Context, look: RadiLook, hands: RadiHands, elbowBends
       path.lineTo(elbowX, elbowY)
       path.lineTo(handX, handY)
     }, isPolished)
+    if (isAstronaut) {
+      paintTube(context, ASTRONAUT_TRIM, 4.7, linePath(
+        elbowX + (handX - elbowX) * 0.62,
+        elbowY + (handY - elbowY) * 0.62,
+        elbowX + (handX - elbowX) * 0.74,
+        elbowY + (handY - elbowY) * 0.74,
+      ), isPolished)
+    }
     if (isBatman) {
       paintTube(context, BLACK_FABRIC, 4.7, linePath(
         elbowX + (handX - elbowX) * 0.55,
@@ -1053,6 +1065,52 @@ const drawBatmanChest = (context: Context, isPolished: boolean) => {
   paintShape(context, FOLK_YELLOW, (path) => path.roundRect(-10.5, -33.4, 21, 4.2, 1.4), shadeIf(isPolished))
   paintShape(context, BLACK_FABRIC, ellipsePath(0, -31.3, 1.7, 1.7))
   for (const pouchX of [-6.2, 6.2]) paintShape(context, BLACK_FABRIC, (path) => path.roundRect(pouchX - 1.3, -33, 2.6, 3.2, 0.6))
+}
+
+const drawAstronautBackpack = (context: Context, isPolished: boolean) => {
+  paintShape(context, SILVER, (path) => path.roundRect(-13.5, -51, 27, 23, 4), shadeIf(isPolished))
+  for (const side of SIDES) paintShape(context, ASTRONAUT_TRIM, (path) => path.roundRect(side * 11 - 2, -48, 4, 6, 1.2))
+}
+
+const drawAstronautSuit = (context: Context, color: string, isPolished: boolean) => {
+  paintShape(context, color, (path) => {
+    path.moveTo(-4, -49)
+    path.quadraticCurveTo(-12, -49, -9.6, -43)
+    path.lineTo(-10, -24)
+    path.lineTo(10, -24)
+    path.lineTo(9.6, -43)
+    path.quadraticCurveTo(12, -49, 4, -49)
+    path.closePath()
+  }, {
+    ...shadeIf(isPolished),
+    decorateInside: isPolished ? (suitContext) => paintFill(suitContext, SHADE, ellipsePath(0, -47.5, 8, 3)) : undefined,
+  })
+  paintShape(context, SILVER, (path) => path.roundRect(-10.5, -31, 21, 3.6, 1.2), shadeIf(isPolished))
+  paintShape(context, ASTRONAUT_TRIM, (path) => path.roundRect(-2.2, -31.4, 4.4, 4.4, 1))
+}
+
+const drawAstronautChest = (context: Context, isPolished: boolean) => {
+  paintShape(context, SILVER, (path) => path.roundRect(-6, -42, 12, 7.5, 1.6), shadeIf(isPolished))
+  for (const [buttonX, buttonColor] of [[-3.4, "#e63946"], [0, "#4cc9f0"], [3.4, FOLK_YELLOW]] as const) {
+    paintFill(context, buttonColor, ellipsePath(buttonX, -39.4, 1.2, 1.2))
+  }
+  paintLine(context, OUTLINE, 0.6, linePath(-3.5, -36.6, 3.5, -36.6))
+  paintShape(context, WHITE, (path) => path.rect(-9, -47, 5.4, 3.6), {
+    decorateInside: (flagContext) => {
+      paintFill(flagContext, "#00966e", (path) => path.rect(-9, -45.8, 5.4, 1.2))
+      paintFill(flagContext, "#d62612", (path) => path.rect(-9, -44.6, 5.4, 1.2))
+    },
+  })
+}
+
+const drawAstronautHelmet = (context: Context) => {
+  paintShape(context, SILVER, (path) => path.roundRect(-14, -49, 28, 6, 3))
+  const glass: BuildPath = (path) => path.ellipse(0, -73, 31, 32, 0, 0, Math.PI * 2)
+  paintFill(context, "rgba(190, 225, 255, 0.22)", glass)
+  paintLine(context, OUTLINE, OUTLINE_WIDTH * 1.3, glass)
+  paintLine(context, "rgba(255, 255, 255, 0.85)", 2.4, (path) => path.arc(0, -73, 26, Math.PI * 1.08, Math.PI * 1.38))
+  paintLine(context, "rgba(255, 255, 255, 0.6)", 1.6, (path) => path.arc(0, -73, 26, Math.PI * 1.45, Math.PI * 1.52))
+  paintFill(context, "rgba(255, 255, 255, 0.7)", ellipsePath(18, -58, 2.2, 1.4))
 }
 
 const drawBatmanCowl = (context: Context, isPolished: boolean) => {
@@ -1175,6 +1233,8 @@ export const drawRadi = (context: Context, look: RadiLook, feetX: number, feetY:
   const isPolished = look.polished === true
   const isBatman = hasExtra("batman")
   const isUnicorn = hasExtra("unicorn")
+  const isAstronaut = hasExtra("astronaut")
+  const hasSuit = isBatman || isAstronaut
   const { faceTurn = 0, legLifts = [0, 0], kneeBends = [0, 0], hands = HAND_POSITIONS[look.pose], elbowBends = [0, 0], hideLegs = false, headTilt = 0 } = motion
   const drawWithHeadTilt = (drawPiece: () => void) => {
     context.save()
@@ -1200,13 +1260,16 @@ export const drawRadi = (context: Context, look: RadiLook, feetX: number, feetY:
     drawHairBack(context, look.hair, isPolished)
     if (isUnicorn) drawUnicornBackMane(context)
   })
-  if (!hideLegs) drawLegs(context, look.shoes ?? "sneakers", legLifts, kneeBends, isPolished, isBatman ? look.top.color : undefined, isBatman ? -24 : undefined)
+  if (isAstronaut) drawAstronautBackpack(context, isPolished)
+  if (!hideLegs) drawLegs(context, look.shoes ?? "sneakers", legLifts, kneeBends, isPolished, hasSuit ? look.top.color : undefined, hasSuit ? -24 : undefined)
   if (isBatman) drawBatmanJumpsuit(context, look.top.color, isPolished)
-  if (!isBatman) {
+  if (isAstronaut) drawAstronautSuit(context, look.top.color, isPolished)
+  if (!hasSuit) {
     drawBottom(context, look.bottom, isPolished)
     drawTorso(context, look.top, isPolished)
   }
   if (isBatman) drawBatmanChest(context, isPolished)
+  if (isAstronaut) drawAstronautChest(context, isPolished)
   if (hasExtra("apron")) drawApron(context, isPolished)
   if (hasExtra("pafti")) drawPafti(context, isPolished)
   if (hasExtra("denimJacket")) drawDenimJacket(context, isPolished)
@@ -1229,6 +1292,7 @@ export const drawRadi = (context: Context, look: RadiLook, feetX: number, feetY:
     if (hasExtra("kalpak")) drawKalpak(context, isPolished)
     if (hasExtra("hairFlower")) drawHairFlower(context, isPolished)
     if (isUnicorn) drawUnicornHeadpiece(context, isPolished)
+    if (isAstronaut) drawAstronautHelmet(context)
   })
   if (hasExtra("readingGlasses")) drawReadingGlasses(context, headTilt, faceTurn)
   drawArms(context, look, hands, elbowBends, isPolished)
