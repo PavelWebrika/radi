@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react"
 import { drawRadiConcepts } from "@/characters/radiConcepts"
 import { anywayButtonLayout, CAR_ENTRANCE_SOUND, cityWalkSteps, CITY_SCENE_END, drawCityScene, DRIVE_CRUISE_SECONDS, DRIVE_MAX_BOOST, DRIVE_READY_SECONDS, KIRA_POP_PROGRESS, KIRA_WOOF_START, RADI_EXIT_START } from "@/scenes/cityScene"
-import { CLUB_SCENE_END, clubWalkSteps, drawClubScene, LAUNCH_START, letsDanceButtonLayout, playedClubSeconds } from "@/scenes/clubScene"
+import { CLUB_SCENE_END, clubWalkSteps, drawClubScene, isSmoothMovesOpen, LAUNCH_START, letsDanceButtonLayout, playedClubSeconds, smoothMovesButtonLayout, SPECIAL_MOVE_SECONDS, type SpecialMoveKind } from "@/scenes/clubScene"
 import { FILM_SCENES } from "@/scenes/filmScenes"
 import {
   drawLibraryScene,
@@ -105,6 +105,7 @@ export const FilmCanvas = () => {
   const anywayButtonRef = useRef<HTMLButtonElement>(null)
   const letsDanceButtonRef = useRef<HTMLButtonElement>(null)
   const wishButtonRef = useRef<HTMLButtonElement>(null)
+  const smoothMovesButtonRef = useRef<HTMLButtonElement>(null)
   const endingMenuRef = useRef<HTMLDivElement>(null)
   const nemoButtonRef = useRef<HTMLButtonElement>(null)
   const americaButtonRef = useRef<HTMLButtonElement>(null)
@@ -271,6 +272,10 @@ export const FilmCanvas = () => {
     let natureStartMilliseconds: number | null = null
     let cosmodromeStartMilliseconds: number | null = null
     let wishStartMilliseconds: number | null = null
+    let smoothMovesPresses = 0
+    let specialMoveKind: SpecialMoveKind = 0
+    let specialMoveStartMilliseconds: number | null = null
+    let isSmoothMovesShown = false
     let horoTargetSteps = 0
     let horoSteps = 0
     let horoIdleSteps = 0
@@ -332,6 +337,16 @@ export const FilmCanvas = () => {
       const clubSeconds = secondsSince(clubStartMilliseconds)
       if (clubSeconds === null) letsDanceStartMilliseconds = null
       const letsDanceSeconds = secondsSince(letsDanceStartMilliseconds)
+      if (letsDanceSeconds === null) {
+        smoothMovesPresses = 0
+        specialMoveStartMilliseconds = null
+      }
+      let specialMoveSeconds = secondsSince(specialMoveStartMilliseconds)
+      if (specialMoveSeconds !== null && specialMoveSeconds >= SPECIAL_MOVE_SECONDS[specialMoveKind]) {
+        specialMoveStartMilliseconds = null
+        specialMoveSeconds = null
+      }
+      const specialMove = specialMoveSeconds === null ? null : { kind: specialMoveKind, seconds: specialMoveSeconds }
       const playedClub = clubSeconds === null ? null : playedClubSeconds(clubSeconds, letsDanceSeconds)
       if (playedClub !== null && playedClub >= CLUB_SCENE_END) libraryStartMilliseconds ??= timeMilliseconds
       if (letsDanceStartMilliseconds === null) {
@@ -454,7 +469,7 @@ export const FilmCanvas = () => {
           secondsSince(boringShakeStartMilliseconds),
         )
       } else if (clubSeconds !== null) {
-        drawClubScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, clubSeconds, letsDanceSeconds)
+        drawClubScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, clubSeconds, letsDanceSeconds, specialMove)
       } else if (citySeconds !== null) {
         drawCityScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, citySeconds, anywaySeconds, drive)
       } else {
@@ -472,6 +487,10 @@ export const FilmCanvas = () => {
       if (letsDanceButtonRef.current) placeBubbleButton(letsDanceButtonRef.current, letsDanceLayout)
       const wishLayout = isShowingConcepts || cosmodromeSeconds === null ? null : wishButtonLayout(window.innerWidth, window.innerHeight, cosmodromeSeconds, wishSeconds)
       if (wishButtonRef.current) placeBubbleButton(wishButtonRef.current, wishLayout)
+      isSmoothMovesShown = !isShowingConcepts && clubSeconds !== null && librarySeconds === null && natureSeconds === null && cosmodromeSeconds === null && isSmoothMovesOpen(clubSeconds, letsDanceSeconds)
+      const smoothMovesButton = smoothMovesButtonRef.current
+      if (smoothMovesButton) placeBubbleButton(smoothMovesButton, isSmoothMovesShown ? smoothMovesButtonLayout(window.innerWidth, window.innerHeight) : null)
+      if (smoothMovesButton && smoothMovesButton.dataset.busy !== String(specialMove !== null)) smoothMovesButton.dataset.busy = String(specialMove !== null)
       const showEndingMenu = !isShowingConcepts && cosmodromeSeconds !== null && wishSeconds !== null && wishSeconds >= ENDING_MENU_AT
       if (endingMenuRef.current && endingMenuRef.current.dataset.visible !== String(showEndingMenu)) endingMenuRef.current.dataset.visible = String(showEndingMenu)
       if (librarySeconds === null) {
@@ -558,6 +577,12 @@ export const FilmCanvas = () => {
       }).catch(() => {
         driveSong.muted = false
       })
+    }
+    const doSmoothMoves = () => {
+      if (!isSmoothMovesShown || specialMoveStartMilliseconds !== null) return
+      specialMoveKind = (smoothMovesPresses % 3) as SpecialMoveKind
+      smoothMovesPresses += 1
+      specialMoveStartMilliseconds = performance.now()
     }
     const makeWish = () => {
       wishStartMilliseconds ??= performance.now()
@@ -652,6 +677,8 @@ export const FilmCanvas = () => {
       exitStartMilliseconds = null
       boringShakeStartMilliseconds = null
       letsDanceStartMilliseconds = null
+      smoothMovesPresses = 0
+      specialMoveStartMilliseconds = null
     })
     const updateProgress = () => {
       useFilmStore.getState().setProgress(readScrollProgress())
@@ -704,6 +731,8 @@ export const FilmCanvas = () => {
     letsDanceButton?.addEventListener("click", startDancing)
     const wishButton = wishButtonRef.current
     wishButton?.addEventListener("click", makeWish)
+    const smoothMovesButton = smoothMovesButtonRef.current
+    smoothMovesButton?.addEventListener("click", doSmoothMoves)
     const startJokeQuiz = (librarySeconds: number) => {
       libraryQuizPhase = "joke"
       jokeQuizStartSeconds = librarySeconds
@@ -811,6 +840,7 @@ export const FilmCanvas = () => {
       anywayButton?.removeEventListener("click", startCoolRadi)
       letsDanceButton?.removeEventListener("click", startDancing)
       wishButton?.removeEventListener("click", makeWish)
+      smoothMovesButton?.removeEventListener("click", doSmoothMoves)
       nemoButton?.removeEventListener("click", chooseQuizA)
       americaButton?.removeEventListener("click", chooseQuizB)
       janewayButton?.removeEventListener("click", chooseQuizC)
@@ -858,6 +888,9 @@ export const FilmCanvas = () => {
       </button>
       <button ref={wishButtonRef} type="button" className="more-button" data-visible="false" tabIndex={-1}>
         Make a wish
+      </button>
+      <button ref={smoothMovesButtonRef} type="button" className="smooth-moves-button" data-visible="false" data-busy="false" tabIndex={-1}>
+        Smooth moves
       </button>
       <div ref={endingMenuRef} className="ending-menu" data-visible="false">
         <button type="button" className="ending-button" onClick={startOver}>
