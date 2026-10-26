@@ -56,6 +56,7 @@ const DRIVE_BOOST_PER_PIXEL = 0.006
 const HORO_STEPS_PER_PIXEL = 0.006
 const HORO_IDLE_STEPS_PER_SECOND = 1.6
 const WHEEL_LINE_PIXELS = 16
+const OUTRO_CROSSFADE_SECONDS = 3
 
 const placeQuizButton = (button: HTMLButtonElement, layout: { centerX: number; centerY: number; width: number; height: number } | null, chosen: boolean) => {
   button.dataset.visible = String(layout !== null)
@@ -164,11 +165,47 @@ export const FilmCanvas = () => {
     const endSong = new Audio("/endsong.mp3")
     endSong.preload = "auto"
     let endSongStarted = false
+    const outroSongs = ["/song1.mp3", "/song2.mp3"].map((src) => {
+      const song = new Audio(src)
+      song.preload = "auto"
+      return song
+    })
+    const outroChain = [endSong, ...outroSongs]
+    let outroIndex = 0
     const stopEndSong = () => {
       endSongStarted = false
-      endSong.pause()
-      if (endSong.currentTime > 0) endSong.currentTime = 0
+      outroIndex = 0
+      for (const song of outroChain) {
+        song.pause()
+        song.volume = 1
+        if (song.currentTime > 0) song.currentTime = 0
+      }
     }
+    const crossfadeOutro = () => {
+      if (!endSongStarted) return
+      const current = outroChain[outroIndex]
+      const next = outroChain[outroIndex + 1]
+      if (next && Number.isFinite(current.duration) && current.currentTime >= current.duration - OUTRO_CROSSFADE_SECONDS) {
+        outroIndex += 1
+        next.volume = 0
+        next.currentTime = 0
+        void next.play().catch(() => {})
+      }
+      outroChain.forEach((song, index) => {
+        if (song.paused || !Number.isFinite(song.duration)) return
+        const fadeIn = index === 0 ? 1 : song.currentTime / OUTRO_CROSSFADE_SECONDS
+        const fadeOut = (song.duration - song.currentTime) / OUTRO_CROSSFADE_SECONDS
+        song.volume = Math.min(1, Math.max(0, Math.min(fadeIn, fadeOut)))
+      })
+    }
+    const resetToStart = () => {
+      if (!endSongStarted) return
+      window.history.scrollRestoration = "manual"
+      window.scrollTo(0, 0)
+      window.location.reload()
+    }
+    const lastOutroSong = outroChain[outroChain.length - 1]
+    lastOutroSong.addEventListener("ended", resetToStart)
     const horoDanceSong = new Audio("/horodance.webm")
     const stopHoroDanceSong = () => {
       horoDanceSong.volume = 0
@@ -302,6 +339,7 @@ export const FilmCanvas = () => {
         endSong.currentTime = 0
         void endSong.play().catch(() => {})
       }
+      crossfadeOutro()
       const flightDuration = Number.isFinite(endSong.duration) ? endSong.duration : DEFAULT_FLIGHT_SECONDS
       if (natureSeconds === null) {
         horoSongStarted = false
@@ -768,6 +806,7 @@ export const FilmCanvas = () => {
       stopHoroSong()
       stopHoroDanceSong()
       stopEndSong()
+      lastOutroSong.removeEventListener("ended", resetToStart)
       backgroundPlaylist.stop()
       footsteps.stop()
       kiraFootsteps.stop()

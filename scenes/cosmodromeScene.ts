@@ -2,7 +2,7 @@ import { ellipsePath, linePath, paintFill, paintLine, paintShape, type BuildPath
 import { drawKiraFront, drawKiraSide } from "@/characters/kira"
 import { type PartyPose } from "@/characters/partyPerson"
 import { drawRadi, drawStarSparkle, RAINBOW, type Point, type RadiExpression } from "@/characters/radi"
-import { astronautRadiLook, sunnyRadiLook } from "@/characters/radiConcepts"
+import { astronautRadiLook, sunnyRadiLook, unicornRadiLook } from "@/characters/radiConcepts"
 import { drawShadesDudeFront } from "@/characters/shadesDude"
 import { easeInOut, seededRandom } from "@/scenes/libraryScene"
 import { bounce, clampToUnit, drawCloud, easeOut, easeOutBack, heartPath, mix, mixPoint, paintComicBubble, paintIris, radiScale, stageProgress, type BubbleButtonLayout } from "@/scenes/openingScene"
@@ -150,6 +150,9 @@ const ENDING_ASSEMBLE_START = 2
 const ENDING_LETTER_GAP = 0.09
 const ENDING_FLIGHT = 0.6
 const ENDING_DIM_COLOR = "#3d3a5c"
+const ENDING_UNICORN_AT = ENDING_ASSEMBLE_START + (ENDING_TEXT.length - 1) * ENDING_LETTER_GAP + ENDING_FLIGHT + 0.2
+const ENDING_DANCE_BEATS_PER_SECOND = 2.2
+const ENDING_SPARKLES = Array.from({ length: 7 }, (_, index) => [(index / 7) * Math.PI * 2, mix(48, 70, seededRandom(index, 191))] as const)
 const CAMERA_LOCK = 0.05
 const ZOOM_START = 1.5
 const ZOOM_END = 4
@@ -178,6 +181,14 @@ const NEBULA_CLOUDS = [
   [0.62, 0.6, 0.34, "76, 201, 240"],
   [0.3, 0.7, 0.24, "255, 159, 28"],
 ] as const
+type FlybyKind = "plane" | "starship" | "satellite" | "asteroids"
+const FLYBYS: readonly { kind: FlybyKind; from: number; to: number; startX: number; endX: number; size: number; tilt: number }[] = [
+  { kind: "plane", from: 1, to: 2.6, startX: 1.2, endX: -0.2, size: 1.6, tilt: 0.05 },
+  { kind: "starship", from: 5.8, to: 7.2, startX: -0.3, endX: 1.3, size: 1.5, tilt: 0.08 },
+  { kind: "satellite", from: 10.8, to: 12.6, startX: 1.15, endX: -0.15, size: 1.4, tilt: 0 },
+  { kind: "asteroids", from: 8.2, to: 9.8, startX: 1.2, endX: -0.25, size: 1.5, tilt: 0 },
+]
+const ASTEROIDS = [[0, 0, 1.6, 0.6], [-34, 22, 1, -0.9], [28, -26, 0.8, 1.2], [-12, -38, 0.55, -1.5]] as const
 const SUNRISE_GLOWS = [
   [0.12, 0.8, 0.7, 0.28, "255, 210, 120", 0.55, 0],
   [0.34, 0.86, 0.9, 0.22, "255, 150, 120", 0.4, 1.4],
@@ -394,6 +405,168 @@ const drawEarth = (context: Context, width: number, height: number, altitude: nu
       paintFill(earthContext, "rgba(255, 255, 255, 0.18)", ellipsePath(centerX, top + height * 0.01, radius * 0.9, height * 0.02))
     },
   })
+}
+
+const drawPlane = (context: Context, time: number) => {
+  const isOn = Math.sin(time * 6) > 0.3
+  paintShape(context, "#b9c1d6", (path) => {
+    path.moveTo(-2, 2)
+    path.lineTo(8, 2)
+    path.lineTo(26, -12)
+    path.lineTo(21, -12)
+    path.closePath()
+  })
+  paintShape(context, "#b9c1d6", (path) => {
+    path.moveTo(38, -1)
+    path.lineTo(44, -1)
+    path.lineTo(50, -6)
+    path.lineTo(47, -6)
+    path.closePath()
+  })
+  paintShape(context, "#e63946", (path) => {
+    path.moveTo(36, -3)
+    path.lineTo(46, -3)
+    path.lineTo(52, -19)
+    path.lineTo(46, -19)
+    path.closePath()
+  })
+  paintShape(context, WHITE, (path) => {
+    path.moveTo(-38, 1)
+    path.quadraticCurveTo(-38, -4, -30, -4.5)
+    path.lineTo(40, -4.5)
+    path.quadraticCurveTo(50, -4, 52, -1.5)
+    path.lineTo(44, 3.5)
+    path.lineTo(-30, 4.5)
+    path.quadraticCurveTo(-37, 4.5, -38, 1)
+    path.closePath()
+  }, {
+    decorateInside: (bodyContext) => {
+      paintFill(bodyContext, "#2f6fd6", (path) => path.rect(-40, 1.2, 95, 1.4))
+      paintFill(bodyContext, "rgba(40, 60, 100, 0.12)", (path) => path.rect(-40, 2.6, 95, 4))
+      for (let windowX = -22; windowX <= 36; windowX += 3.2) paintFill(bodyContext, "#2b4a7a", (path) => path.roundRect(windowX, -2.2, 1.6, 1.8, 0.6))
+      paintFill(bodyContext, "#2b4a7a", (path) => {
+        path.moveTo(-35, -1.2)
+        path.lineTo(-30.5, -2.6)
+        path.lineTo(-27.5, -2.6)
+        path.lineTo(-27.5, -0.8)
+        path.closePath()
+      })
+    },
+  })
+  paintShape(context, "#c9cfe0", (path) => {
+    path.moveTo(-4, 1)
+    path.lineTo(7, 1)
+    path.lineTo(24, 11)
+    path.lineTo(19, 11)
+    path.closePath()
+  })
+  paintShape(context, "#8e94a3", (path) => path.roundRect(4, 4, 9, 3.6, 1.8))
+  paintFill(context, OUTLINE, ellipsePath(4.2, 5.8, 0.9, 1.5))
+  paintFill(context, isOn ? "#3ddc97" : "#1f6b4a", ellipsePath(24, 11, 1.2, 1.2))
+  paintFill(context, isOn ? "#ff2d2d" : "#7a1f1f", ellipsePath(52, -19, 1.2, 1.2))
+  if (!isOn) return
+  paintFill(context, "rgba(255, 255, 255, 0.9)", ellipsePath(26, -12, 1, 1))
+}
+
+const drawStarship = (context: Context, time: number) => {
+  for (let streak = 0; streak < 5; streak += 1) {
+    const streakY = -12 + streak * 6
+    paintLine(context, `rgba(150, 220, 255, ${0.5 - streak * 0.06})`, 1.2, linePath(-62 - streak * 4, streakY, -110 - streak * 10, streakY))
+  }
+  for (const pylonX of [-22, -10]) paintLine(context, OUTLINE, 2.4, linePath(pylonX, 9, pylonX - 6, -8))
+  const glow = 0.7 + 0.3 * Math.sin(time * 8)
+  for (const nacelleY of [-13, -8]) {
+    paintShape(context, "#c9cfe0", (path) => path.roundRect(-58, nacelleY - 2.5, 42, 5, 2.5), {
+      decorateInside: (nacelleContext) => paintFill(nacelleContext, `rgba(76, 201, 240, ${glow})`, (path) => path.rect(-54, nacelleY - 0.6, 34, 1.2)),
+    })
+    paintFill(context, `rgba(255, 70, 70, ${glow})`, ellipsePath(-16, nacelleY, 2.6, 2.4))
+  }
+  paintShape(context, "#dfe5f0", (path) => {
+    path.moveTo(2, 3)
+    path.lineTo(9, 3)
+    path.lineTo(-2, 11)
+    path.lineTo(-9, 11)
+    path.closePath()
+  })
+  paintShape(context, "#dfe5f0", (path) => path.roundRect(-36, 8, 42, 7, 3.5))
+  paintFill(context, `rgba(255, 170, 60, ${glow})`, ellipsePath(6, 11.5, 2.6, 2.6))
+  paintShape(context, "#eef1f8", ellipsePath(14, 0, 25, 4.8), {
+    decorateInside: (saucerContext) => paintFill(saucerContext, "#c9cfe0", (path) => path.rect(-12, 1.5, 52, 4)),
+  })
+  paintShape(context, "#c9cfe0", ellipsePath(14, -4, 6, 2.4))
+}
+
+const drawSatellite = (context: Context, time: number) => {
+  context.rotate(time * 0.25)
+  paintLine(context, OUTLINE, 1.6, linePath(-24, 0, 24, 0))
+  for (const side of [-1, 1]) {
+    paintShape(context, "#2f5fb3", (path) => path.rect(side === -1 ? -40 : 12, -6, 28, 12), {
+      decorateInside: (panelContext) => {
+        for (let gridX = -40; gridX <= 40; gridX += 5) paintLine(panelContext, "#6fa3ff", 0.6, linePath(gridX, -6, gridX, 6))
+        paintLine(panelContext, "#6fa3ff", 0.6, linePath(-40, 0, 40, 0))
+      },
+    })
+  }
+  paintShape(context, "#e9b949", (path) => path.roundRect(-7, -7, 14, 14, 2), {
+    decorateInside: (bodyContext) => {
+      for (let foil = -6; foil <= 6; foil += 3) paintLine(bodyContext, "#c98f1c", 0.6, linePath(-7, foil, 7, foil + 2))
+    },
+  })
+  paintLine(context, OUTLINE, 1, linePath(0, 7, 0, 13))
+  paintShape(context, WHITE, (path) => path.ellipse(0, 15, 6, 2.6, 0, 0, Math.PI))
+  paintLine(context, OUTLINE, 1, linePath(0, -7, 2, -15))
+  paintFill(context, "#e63946", ellipsePath(2, -15.5, 1.3, 1.3))
+}
+
+const asteroidPath = (seed: number): BuildPath => (path) => {
+  for (let point = 0; point < 10; point += 1) {
+    const angle = (point / 10) * Math.PI * 2
+    const radius = 10 * mix(0.75, 1.15, seededRandom(point, seed))
+    if (point === 0) path.moveTo(Math.cos(angle) * radius, Math.sin(angle) * radius)
+    else path.lineTo(Math.cos(angle) * radius, Math.sin(angle) * radius)
+  }
+  path.closePath()
+}
+
+const drawAsteroids = (context: Context, time: number) => {
+  ASTEROIDS.forEach(([offsetX, offsetY, size, spin], index) => {
+    context.save()
+    context.translate(offsetX, offsetY)
+    context.rotate(time * spin)
+    context.scale(size, size)
+    context.lineWidth /= size
+    paintShape(context, index % 2 === 0 ? "#8a7f78" : "#a0928a", asteroidPath(181 + index), {
+      shade: "rgba(40, 20, 20, 0.25)",
+      decorateInside: (rockContext) => {
+        for (const [craterX, craterY, craterSize] of [[-3, -2, 2.4], [3.5, 2.5, 1.8], [1, -5, 1.3]] as const) paintFill(rockContext, "rgba(60, 40, 35, 0.35)", ellipsePath(craterX, craterY, craterSize, craterSize * 0.8))
+      },
+    })
+    context.restore()
+  })
+}
+
+const FLYBY_DRAWINGS: Record<FlybyKind, (context: Context, time: number) => void> = {
+  plane: drawPlane,
+  starship: drawStarship,
+  satellite: drawSatellite,
+  asteroids: drawAsteroids,
+}
+
+const drawFlybys = (context: Context, width: number, height: number, altitude: number, time: number) => {
+  const unit = Math.min(width, height) * 0.004
+  for (const { kind, from, to, startX, endX, size, tilt } of FLYBYS) {
+    const pass = (altitude - from) / (to - from)
+    if (pass <= 0 || pass >= 1) continue
+    const scale = unit * size
+    context.save()
+    context.translate(mix(startX, endX, pass) * width, mix(-0.15, 1.15, pass) * height + Math.sin(time * 2) * scale * 2)
+    context.rotate(tilt)
+    context.scale(scale, scale)
+    context.lineWidth = 2.4 / scale
+    context.strokeStyle = OUTLINE
+    FLYBY_DRAWINGS[kind](context, time)
+    context.restore()
+  }
 }
 
 const drawCloudBanks = (context: Context, width: number, height: number, horizonY: number, camY: number, isFront: boolean) => {
@@ -644,7 +817,7 @@ const wishBubbleGeometry = (width: number, height: number) => {
   const feetY = height * RADI_FEET
   const radiX = width / 2
   const bubbleWidth = bubbleWidthFor(width)
-  const bubbleHeight = bubbleWidth * 0.75
+  const bubbleHeight = bubbleWidth * 0.65
   return {
     bubbleWidth,
     bubbleHeight,
@@ -656,13 +829,13 @@ const wishBubbleGeometry = (width: number, height: number) => {
 export const wishButtonLayout = (width: number, height: number, sceneSeconds: number, wishSeconds: number | null): BubbleButtonLayout => {
   if (sceneSeconds < WISH_POP_END || wishSeconds !== null) return null
   const { bubbleWidth, bubbleHeight, centerX, centerY } = wishBubbleGeometry(width, height)
-  return { centerX, centerY: centerY + bubbleHeight * 0.24, width: bubbleWidth * 0.7, fontSize: Math.max(14, bubbleWidth * 0.1) }
+  return { centerX, centerY: centerY + bubbleHeight * 0.17, width: bubbleWidth * 0.7, fontSize: Math.max(14, bubbleWidth * 0.1) }
 }
 
 const drawWishBubble = (context: Context, width: number, height: number, sceneSeconds: number, wishSeconds: number | null) => {
   const { bubbleWidth, bubbleHeight, centerX, centerY } = wishBubbleGeometry(width, height)
   const pop = easeOutBack(stageProgress(sceneSeconds, WISH_START, WISH_POP_END)) * (1 - easeOut(clampToUnit((wishSeconds ?? 0) / WISH_CLOSE_SECONDS)))
-  drawBubble(context, centerX, centerY, bubbleWidth, bubbleHeight, pop, WISH_LINES, -bubbleHeight * 0.14)
+  drawBubble(context, centerX, centerY, bubbleWidth, bubbleHeight, pop, WISH_LINES, -bubbleHeight * 0.16)
 }
 
 const drawCake = (context: Context, time: number, wishSeconds: number | null) => {
@@ -1276,6 +1449,7 @@ export const drawCosmodromeScene = (context: Context, width: number, height: num
   drawAurora(context, width, height, launch.altitude, time)
   drawEarth(context, width, height, launch.altitude)
   drawCloudBanks(context, width, height, horizonY, launch.camY, false)
+  drawFlybys(context, width, height, launch.altitude, time)
   context.save()
   context.translate(0, launch.camY)
   if (launch.zoom < 1) {
@@ -1328,6 +1502,7 @@ const drawEndingIris = (context: Context, width: number, height: number, camX: n
   const windowRadius = WINDOW_RADIUS * unit * launch.zoom
   paintIris(context, width, height, baseX, windowY, mix(Math.hypot(width, height), windowRadius, focus) * (1 - close ** 2))
   drawToBeContinued(context, width, height, flightSeconds - closeStart - END_IRIS_CLOSE)
+  drawEndingUnicorn(context, width, height, flightSeconds - closeStart - END_IRIS_CLOSE)
 }
 
 const drawToBeContinued = (context: Context, width: number, height: number, sinceBlack: number) => {
@@ -1350,17 +1525,17 @@ const drawToBeContinued = (context: Context, width: number, height: number, sinc
     const landAt = ENDING_ASSEMBLE_START + index * ENDING_LETTER_GAP + ENDING_FLIGHT
     const flight = stageProgress(sinceBlack, landAt - ENDING_FLIGHT, landAt)
     const lit = stageProgress(sinceBlack, landAt - 0.05, landAt + 0.2)
-    const beat = sinceBlack * 4.2 + index * 0.9
+    const beat = sinceBlack * 7 + index * 0.9
     const dance = 1 - easeOut(flight)
-    const hop = Math.abs(Math.sin(beat)) * fontSize * 0.35
-    const scatterX = mix(0.1, 0.9, seededRandom(index, 161)) * width + Math.cos(beat * 0.5) * fontSize * 0.4
-    const scatterY = mix(0.18, 0.82, seededRandom(index, 162)) * height - hop
+    const hop = Math.abs(Math.sin(beat)) * fontSize * 0.8
+    const scatterX = mix(0.1, 0.9, seededRandom(index, 161)) * width + Math.cos(beat * 0.5) * fontSize * 0.9 + Math.sin(sinceBlack * 1.3 + index) * width * 0.04
+    const scatterY = mix(0.2, 0.85, seededRandom(index, 162)) * height - hop + Math.sin(beat * 0.25) * fontSize * 0.3
     const x = mix(scatterX, targetX, easeOutBack(flight))
     const y = mix(scatterY, targetY, easeOutBack(flight))
-    const shakeX = Math.sin(sinceBlack * 47 + index * 2.3) * fontSize * 0.025 * lit
-    const shakeY = Math.cos(sinceBlack * 53 + index * 1.7) * fontSize * 0.035 * lit
-    const rotation = Math.sin(beat) * 0.45 * dance + Math.sin(sinceBlack * 9 + index) * 0.08 * lit
-    const squash = 1 + Math.max(0, Math.cos(beat * 2)) * 0.15 * dance
+    const shakeX = Math.sin(sinceBlack * 19 + index * 2.3) * fontSize * 0.02 * lit
+    const shakeY = Math.cos(sinceBlack * 23 + index * 1.7) * fontSize * 0.028 * lit
+    const rotation = Math.sin(beat) * 0.8 * dance + Math.sin(sinceBlack * 4 + index) * 0.07 * lit
+    const squash = 1 + Math.max(0, Math.cos(beat * 2)) * 0.3 * dance
     const color = RAINBOW[Math.floor(index + sinceBlack * 3) % RAINBOW.length]
     context.save()
     context.globalAlpha = clampToUnit(sinceBlack / ENDING_FADE_IN)
@@ -1377,4 +1552,40 @@ const drawToBeContinued = (context: Context, width: number, height: number, sinc
     context.fillText(letter, 0, 0)
     context.restore()
   })
+}
+
+const drawEndingUnicorn = (context: Context, width: number, height: number, sinceBlack: number) => {
+  const sinceEntrance = sinceBlack - ENDING_UNICORN_AT
+  if (sinceEntrance <= 0) return
+  const pop = easeOutBack(clampToUnit(sinceEntrance / 0.45))
+  const feetY = height * 0.95
+  const scale = Math.min((height * 0.33) / 125, (width * 0.5) / 125)
+  const beat = sinceEntrance * ENDING_DANCE_BEATS_PER_SECOND
+  const hopPhase = beat - Math.floor(beat)
+  const { lift, stretchY } = bounce(hopPhase)
+  const swing = Math.sin(beat * Math.PI)
+  const leadSide = Math.floor(beat) % 2 === 0 ? 1 : -1
+  const highHand: Point = [26, -64 + Math.sin(sinceEntrance * 9) * 3]
+  const lowHand: Point = [17, -36 + swing * 4]
+  const hands: readonly [Point, Point] = leadSide === 1
+    ? [[-lowHand[0], lowHand[1]], highHand]
+    : [[-highHand[0], highHand[1]], lowHand]
+  ENDING_SPARKLES.forEach(([angle, reach], index) => {
+    const twinkle = Math.max(0, Math.sin(sinceEntrance * 5 + index * 1.7))
+    if (twinkle <= 0) return
+    const sparkleX = width / 2 + Math.cos(angle + sinceEntrance * 0.6) * reach * scale
+    const sparkleY = feetY - 60 * scale + Math.sin(angle + sinceEntrance * 0.6) * reach * 0.8 * scale
+    drawStarSparkle(context, sparkleX, sparkleY, 6 * scale * twinkle * pop, RAINBOW[index % RAINBOW.length])
+  })
+  context.save()
+  context.translate(width / 2, feetY - lift * 12 * scale)
+  context.rotate(swing * 0.07)
+  context.scale(pop / stretchY, pop * stretchY)
+  drawRadi(context, unicornRadiLook, 0, 0, scale, {
+    faceTurn: Math.sin(beat * Math.PI * 0.5) * 0.4,
+    legLifts: leadSide === 1 ? [lift * 6, 0] : [0, lift * 6],
+    kneeBends: leadSide === 1 ? [lift * 4, 0] : [0, lift * 4],
+    hands,
+  })
+  context.restore()
 }

@@ -463,13 +463,16 @@ export const LEG_COVERS: Partial<Record<RadiShoes, string>> = { tsarvuli: WOOL_W
 const drawLegs = (context: Context, shoes: RadiShoes, legLifts: PerSide, kneeBends: PerSide, isPolished: boolean, legColor = LEG_COVERS[shoes] ?? activeColors.skin, hipY = -19) => {
   SIDES.forEach((side, index) => {
     const legX = side * 5
-    context.save()
-    context.translate(0, -legLifts[index])
+    const lift = legLifts[index]
+    const kneeY = -12.5 - lift * 0.5
+    const kneeBend = kneeY < hipY ? Math.min(kneeBends[index], 5) : kneeBends[index]
     paintTube(context, legColor, 6, (path) => {
-      path.moveTo(legX, hipY)
-      path.lineTo(legX + side * kneeBends[index], -12.5)
-      path.lineTo(legX, -6)
+      path.moveTo(legX, hipY - lift * 0.5)
+      path.lineTo(legX + side * kneeBend, kneeY)
+      path.lineTo(legX, -6 - lift)
     }, isPolished)
+    context.save()
+    context.translate(0, -lift)
     shoePainters[shoes](context, side, isPolished)
     context.restore()
   })
