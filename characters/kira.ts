@@ -35,7 +35,6 @@ const drawSpaceHelmet = (context: Context) => {
   paintLine(context, OUTLINE, OUTLINE_WIDTH * 1.3, glass)
   paintLine(context, "rgba(255, 255, 255, 0.85)", 2, (path) => path.ellipse(21, -52, 20.5, 16.5, 0, Math.PI * 1.12, Math.PI * 1.42))
   paintFill(context, "rgba(255, 255, 255, 0.7)", ellipsePath(37, -40, 1.8, 1.2))
-  paintTube(context, "#d5d9de", 3.2, (path) => path.ellipse(2.5, -51, 3.5, 13, 0.15, 0, Math.PI * 2))
 }
 
 export const drawTreat = (context: Context, centerX: number, centerY: number, size: number, angle: number) => {

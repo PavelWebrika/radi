@@ -1,5 +1,5 @@
 import { ellipsePath, paintFill, paintLine, paintShape, type Context } from "@/characters/paint"
-import { earthRiseFlightSeconds, LIFTOFF } from "@/scenes/cosmodromeScene"
+import { CALM_FLIGHT, earthRiseFlightSeconds, LIFTOFF, rocketMiddleOnScreen, type FlightThrill } from "@/scenes/cosmodromeScene"
 import { clampToUnit, easeOutBack, mix, stageProgress } from "@/scenes/openingScene"
 
 export const QUICK_TIME_KEYS = ["R", "A", "D", "I"] as const
@@ -9,8 +9,8 @@ const FIRST_FLIGHT_SECONDS = 3
 const EARTH_LEAD_SECONDS = 1.5
 const POP_IN_SECONDS = 0.25
 const CLOSE_SECONDS = 1.6
-const GOOD_EARLY_SECONDS = 0.3
-const GOOD_LATE_SECONDS = 0.18
+const GOOD_EARLY_SECONDS = 0.6
+const GOOD_LATE_SECONDS = 0.45
 const RESULT_SECONDS = 0.7
 const RING_START_SCALE = 3.4
 const KEY_SIZE = 0.09
@@ -43,11 +43,11 @@ export const drawRocketQuickTime = (
   wishSeconds: number | null,
   starts: readonly number[],
   results: readonly (QuickTimeResult | null)[],
+  flightDuration: number,
 ) => {
   if (wishSeconds === null) return
   const keySize = Math.min(width, height) * KEY_SIZE
-  const centerX = width * 0.76
-  const centerY = height * 0.5
+  const { x: centerX, y: centerY } = rocketMiddleOnScreen(width, height, wishSeconds, flightDuration)
   starts.forEach((start, index) => {
     const result = results[index]
     const sinceResult = result ? wishSeconds - result.atSeconds : 0
@@ -84,4 +84,29 @@ export const drawRocketQuickTime = (
     context.fillText(QUICK_TIME_KEYS[index], 0, -depth * 0.3)
     context.restore()
   })
+}
+
+const BOOST_SECONDS = 2.6
+const BOOST_RAMP_IN = 0.2
+const BOOST_RAMP_OUT = 0.8
+const WOBBLE_SECONDS = 1.1
+const WOBBLE_RAMP_IN = 0.08
+const WOBBLE_RAMP_OUT = 0.5
+
+const envelope = (since: number, total: number, rampIn: number, rampOut: number) =>
+  since < 0 || since >= total ? 0 : Math.min(clampToUnit(since / rampIn), clampToUnit((total - since) / rampOut))
+
+const latestResult = (results: readonly (QuickTimeResult | null)[], hit: boolean) =>
+  results.reduce<QuickTimeResult | null>((latest, result) => (result && result.hit === hit && (!latest || result.atSeconds > latest.atSeconds) ? result : latest), null)
+
+export const quickTimeThrill = (wishSeconds: number | null, results: readonly (QuickTimeResult | null)[]): FlightThrill => {
+  if (wishSeconds === null) return CALM_FLIGHT
+  const hit = latestResult(results, true)
+  const miss = latestResult(results, false)
+  const rushSeconds = hit ? wishSeconds - hit.atSeconds : 0
+  return {
+    boost: hit ? envelope(rushSeconds, BOOST_SECONDS, BOOST_RAMP_IN, BOOST_RAMP_OUT) : 0,
+    rushSeconds,
+    wobble: miss ? envelope(wishSeconds - miss.atSeconds, WOBBLE_SECONDS, WOBBLE_RAMP_IN, WOBBLE_RAMP_OUT) : 0,
+  }
 }

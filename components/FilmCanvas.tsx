@@ -5,7 +5,7 @@ import { drawRadiConcepts } from "@/characters/radiConcepts"
 import { anywayButtonLayout, CAR_ENTRANCE_SOUND, cityWalkSteps, CITY_SCENE_END, drawCityScene, DRIVE_CRUISE_SECONDS, DRIVE_MAX_BOOST, DRIVE_READY_SECONDS, KIRA_POP_PROGRESS, KIRA_WOOF_START, RADI_EXIT_START } from "@/scenes/cityScene"
 import { CLUB_SCENE_END, clubWalkSteps, drawClubScene, isSmoothMovesOpen, LAUNCH_START, letsDanceButtonLayout, playedClubSeconds, smoothMovesButtonLayout, SPECIAL_MOVE_SECONDS, type SpecialMoveKind } from "@/scenes/clubScene"
 import { FILM_SCENES } from "@/scenes/filmScenes"
-import { activeQuickTime, drawRocketQuickTime, isInGoodWindow, missedQuickTime, QUICK_TIME_KEYS, quickTimeStarts, type QuickTimeResult } from "@/scenes/rocketQuickTime"
+import { activeQuickTime, drawRocketQuickTime, isInGoodWindow, missedQuickTime, QUICK_TIME_KEYS, quickTimeStarts, quickTimeThrill, type QuickTimeResult } from "@/scenes/rocketQuickTime"
 import {
   drawLibraryScene,
   libraryWalkSteps,
@@ -23,7 +23,7 @@ import {
   type JokeChoice,
   type LibraryQuizPhase,
 } from "@/scenes/libraryScene"
-import { cosmodromeKiraSteps, cosmodromeWalkSteps, DEFAULT_FLIGHT_SECONDS, drawCosmodromeScene, dudeWalkSteps, ENDING_MENU_AT, ENGINE_FADE_END, ENGINE_FADE_START, IGNITION_START, KIRA_COSMO_WOOF, LIFTOFF, SMOKE_START, SUIT_AT, wishButtonLayout } from "@/scenes/cosmodromeScene"
+import { cosmodromeKiraSteps, cosmodromeWalkSteps, DEFAULT_FLIGHT_SECONDS, drawCosmodromeScene, dudeWalkSteps, ENDING_MENU_AT, ENGINE_FADE_END, ENGINE_FADE_START, IGNITION_START, KIRA_COSMO_WOOF, LIFTOFF, SMOKE_START, SUIT_AT, WISH_START, wishButtonLayout } from "@/scenes/cosmodromeScene"
 import { releaseLayersExcept } from "@/scenes/layerCache"
 import { drawNatureScene, HORO_DANCE_START, HORO_START, NATURE_SCENE_END } from "@/scenes/natureScene"
 import { drawOpeningScene, greetingButtonLayout, kiraWalkSteps, KIRA_SCENE_END, openingWalkSteps, startButtonLayout, WAVE_START, type BubbleButtonLayout } from "@/scenes/openingScene"
@@ -431,8 +431,8 @@ export const FilmCanvas = () => {
         context.fillRect(0, 0, window.innerWidth, window.innerHeight)
         drawRadiConcepts(context, window.innerWidth, window.innerHeight)
       } else if (cosmodromeSeconds !== null) {
-        drawCosmodromeScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, cosmodromeSeconds, wishSeconds, flightDuration)
-        drawRocketQuickTime(context, window.innerWidth, window.innerHeight, quickTimeSeconds, quickTimeStartList, quickTimeResults)
+        drawCosmodromeScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, cosmodromeSeconds, wishSeconds, flightDuration, quickTimeThrill(quickTimeSeconds, quickTimeResults))
+        drawRocketQuickTime(context, window.innerWidth, window.innerHeight, quickTimeSeconds, quickTimeStartList, quickTimeResults, flightDuration)
       } else if (natureSeconds !== null) {
         drawNatureScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, natureSeconds, horoSteps, horoSteps + horoIdleSteps, !hasScrolledHoro)
       } else if (librarySeconds !== null) {
@@ -670,8 +670,9 @@ export const FilmCanvas = () => {
       clubStartMilliseconds = sceneSelection.sceneId === "nightClub" ? performance.now() : null
       libraryStartMilliseconds = sceneSelection.sceneId === "library" ? performance.now() : null
       natureStartMilliseconds = sceneSelection.sceneId === "nature" ? performance.now() : null
-      cosmodromeStartMilliseconds = sceneSelection.sceneId === "cosmodrome" ? performance.now() : null
-      wishStartMilliseconds = null
+      const isRocketLaunch = sceneSelection.sceneId === "rocketLaunch"
+      cosmodromeStartMilliseconds = sceneSelection.sceneId === "cosmodrome" ? performance.now() : isRocketLaunch ? performance.now() - (WISH_START + LIFTOFF) * 1000 : null
+      wishStartMilliseconds = isRocketLaunch ? performance.now() - LIFTOFF * 1000 : null
       horoTargetSteps = 0
       horoSteps = 0
       horoIdleSteps = 0

@@ -44,7 +44,7 @@ const KISS_LEAVE = 12.4
 const KISS_END = 12.8
 const HEART_SECONDS = 1.6
 const KISS_HEARTS = [[-14, 30, 0.8], [0, 45, 1], [14, 34, 0.85], [-6, 55, 0.6], [9, 60, 0.65]] as const
-const WISH_START = 13
+export const WISH_START = 13
 const WISH_POP_END = WISH_START + 0.35
 const WISH_LINES = ["Happy birthday,", "Radi!"] as const
 const WISH_CLOSE_SECONDS = 0.3
@@ -1233,6 +1233,12 @@ export const earthRiseFlightSeconds = (flightDuration: number) => {
   return high
 }
 
+export const rocketMiddleOnScreen = (width: number, height: number, wishSeconds: number | null, flightDuration: number) => {
+  const { unit, baseX, baseY } = rocketLayout(width, height, cameraX(width, wishSeconds))
+  const launch = launchState(height, wishSeconds, flightDuration)
+  return { x: baseX, y: baseY - ROCKET_MIDDLE * unit - launch.riseY + launch.camY }
+}
+
 const launchState = (height: number, wishSeconds: number | null, flightDuration: number): LaunchState => {
   const wish = wishSeconds ?? -1
   const flightSeconds = Math.max(0, wish - LIFTOFF)
@@ -1307,7 +1313,52 @@ const drawLaunchExplosion = (context: Context, time: number, wishSeconds: number
   }
 }
 
-const drawLaunchRocket = (context: Context, width: number, height: number, time: number, camX: number, wishSeconds: number | null, launch: LaunchState) => {
+export type FlightThrill = { boost: number; rushSeconds: number; wobble: number }
+export const CALM_FLIGHT: FlightThrill = { boost: 0, rushSeconds: 0, wobble: 0 }
+const BOOST_FLAME = 0.8
+const BOOST_TRAIL_PUFFS = 14
+const BOOST_TRAIL_REACH = 230
+const RUSH_CLOUDS = 7
+const RUSH_LINES = 22
+const WOBBLE_TILT = 0.11
+const WOBBLE_SWAY = 7
+
+const drawBoostTrail = (context: Context, time: number, boost: number, flame: number) => {
+  if (boost <= 0) return
+  const top = 12 + 40 * flame
+  for (let puff = BOOST_TRAIL_PUFFS - 1; puff >= 0; puff -= 1) {
+    const along = (seededRandom(puff, 241) + time * 2.4) % 1
+    const sway = (seededRandom(puff, 242) - 0.5) * (6 + along * 34)
+    const radius = (7 + along * 22) * mix(0.75, 1.25, seededRandom(puff, 243))
+    const tint = along < 0.15 ? FIRE_TINT : SMOKE_TINTS[puff % 2 === 0 ? 0 : 2]
+    paintTintedPuff(context, tint, sway, top + along * BOOST_TRAIL_REACH, radius, 0.8 * boost * (1 - along))
+  }
+}
+
+const drawBoostRush = (context: Context, width: number, height: number, thrill: FlightThrill, space: number) => {
+  if (thrill.boost <= 0) return
+  const travel = thrill.rushSeconds * height * 2.6
+  const lineSpan = height * 1.4
+  for (let line = 0; line < RUSH_LINES; line += 1) {
+    const lineX = seededRandom(line, 251) * width
+    const lineY = (seededRandom(line, 252) * lineSpan + travel * 1.5) % lineSpan - height * 0.2
+    paintLine(context, `rgba(255, 255, 255, ${0.6 * thrill.boost})`, 2.5, linePath(lineX, lineY, lineX, lineY + height * 0.2))
+  }
+  const cloudAlpha = thrill.boost * (1 - space * 0.75)
+  if (cloudAlpha <= 0) return
+  const unit = Math.min(width, height) * 0.08
+  const cloudSpan = height + unit * 8
+  context.globalAlpha = cloudAlpha
+  for (let cloud = 0; cloud < RUSH_CLOUDS; cloud += 1) {
+    const side = cloud % 2 === 0 ? -1 : 1
+    const cloudX = width / 2 + side * width * mix(0.18, 0.45, seededRandom(cloud, 253))
+    const cloudY = (seededRandom(cloud, 254) * cloudSpan + travel) % cloudSpan - unit * 4
+    drawCloud(context, cloudX, cloudY, unit * mix(0.8, 1.4, seededRandom(cloud, 255)))
+  }
+  context.globalAlpha = 1
+}
+
+const drawLaunchRocket = (context: Context, width: number, height: number, time: number, camX: number, wishSeconds: number | null, launch: LaunchState, thrill: FlightThrill) => {
   const { unit, baseX, baseY } = rocketLayout(width, height, camX)
   if (baseX - 60 * unit > width) return
   const rocketY = -launch.riseY / unit
@@ -1323,8 +1374,17 @@ const drawLaunchRocket = (context: Context, width: number, height: number, time:
   drawLiftSmoke(context, time, rocketY, launch.flame, flightSeconds)
   const calm = stageProgress(flightSeconds, END_IRIS_START + END_IRIS_FOCUS * 0.5, END_IRIS_START + END_IRIS_FOCUS)
   const tremble = (1 + launch.flame * 1.5) * (1 - calm)
-  context.translate((Math.sin(time * 47) * 0.9 + Math.sin(time * 31) * 0.6) * tremble, rocketY + Math.sin(time * 53) * 0.5 * tremble)
-  drawRocketFlame(context, time, launch.flame)
+  const wobbleSway = thrill.wobble * (Math.sin(time * 7) + Math.sin(time * 17) * 0.4) * WOBBLE_SWAY
+  context.translate((Math.sin(time * 47) * 0.9 + Math.sin(time * 31) * 0.6) * tremble + wobbleSway, rocketY + Math.sin(time * 53) * 0.5 * tremble)
+  if (thrill.wobble > 0) {
+    context.translate(0, -ROCKET_MIDDLE)
+    context.rotate(thrill.wobble * (Math.sin(time * 9) + Math.sin(time * 23) * 0.45) * WOBBLE_TILT)
+    context.translate(0, ROCKET_MIDDLE)
+  }
+  const sputter = 1 - thrill.wobble * 0.4 * (0.5 + 0.5 * Math.sin(time * 29))
+  const flame = launch.flame * (1 + BOOST_FLAME * thrill.boost) * sputter
+  drawBoostTrail(context, time, thrill.boost, flame)
+  drawRocketFlame(context, time, flame)
   context.lineWidth = 3 / unit
   drawRocketShip(context, time, doorOpenAmount(wishSeconds), easeOutBack(stageProgress(flightSeconds, END_IRIS_START, END_IRIS_START + WINDOW_KIRA_SLIDE)))
   context.restore()
@@ -1528,7 +1588,7 @@ const drawSkippingRadi = (context: Context, width: number, height: number, baseS
   context.restore()
 }
 
-export const drawCosmodromeScene = (context: Context, width: number, height: number, time: number, sceneSeconds: number, wishSeconds: number | null, flightDuration: number) => {
+export const drawCosmodromeScene = (context: Context, width: number, height: number, time: number, sceneSeconds: number, wishSeconds: number | null, flightDuration: number, thrill: FlightThrill = CALM_FLIGHT) => {
   const horizonY = height * 0.62
   const feetY = height * RADI_FEET
   const scale = radiScale(width, height)
@@ -1539,7 +1599,8 @@ export const drawCosmodromeScene = (context: Context, width: number, height: num
   context.lineCap = "round"
   context.strokeStyle = OUTLINE
   context.save()
-  context.translate(Math.sin(time * 61) * 7 * launch.shake, Math.cos(time * 57) * 5 * launch.shake)
+  const shake = launch.shake + thrill.wobble * 0.35
+  context.translate(Math.sin(time * 61) * 7 * shake, Math.cos(time * 57) * 5 * shake)
   drawSky(context, width, height, horizonY, time, launch.altitude, space, launch.camY)
   drawNebula(context, width, height, space, time)
   drawShootingStars(context, width, height, space, time)
@@ -1558,7 +1619,7 @@ export const drawCosmodromeScene = (context: Context, width: number, height: num
     context.translate(-baseX, -focusY)
   }
   drawCosmodrome(context, width, height, horizonY, time, camX)
-  drawLaunchRocket(context, width, height, time, camX, wishSeconds, launch)
+  drawLaunchRocket(context, width, height, time, camX, wishSeconds, launch, thrill)
   const radiX = radiWorldX(width, scale, sceneSeconds, wishSeconds) - camX
   const standingX = width / 2
   const isNearDude = sceneSeconds >= DUDE_WALK_START && (wishSeconds === null || wishSeconds < SUIT_AT)
@@ -1578,6 +1639,7 @@ export const drawCosmodromeScene = (context: Context, width: number, height: num
   context.restore()
   drawCloudBanks(context, width, height, horizonY, launch.camY, true)
   drawSpeedLines(context, width, height, launch.camY, launch.speed, space)
+  drawBoostRush(context, width, height, thrill, space)
   const wish = wishSeconds ?? -1
   const flash = 0.55 * (1 - stageProgress(wish, LIFTOFF, LIFTOFF + 0.7)) * (wish >= LIFTOFF ? 1 : 0) + 0.25 * (1 - stageProgress(wish, IGNITION_START, IGNITION_START + 0.4)) * (wish >= IGNITION_START ? 1 : 0)
   if (flash > 0) {
