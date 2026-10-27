@@ -34,6 +34,7 @@ import { createFootsteps } from "@/audio/footsteps"
 import { createHeroReveal } from "@/audio/heroReveal"
 import { createLibraryCrash } from "@/audio/libraryCrash"
 import { createRocketLaunch } from "@/audio/rocketLaunch"
+import { createQuickTimeBoost } from "@/audio/quickTimeBoost"
 import { createSpaceReveal } from "@/audio/spaceReveal"
 import { SceneSelect } from "@/components/SceneSelect"
 import { useFilmStore } from "@/store/film"
@@ -258,6 +259,7 @@ export const FilmCanvas = () => {
     const kiraWoof = createKiraWoof()
     const cosmodromeWoof = createKiraWoof()
     const rocketLaunch = createRocketLaunch(IGNITION_START, LIFTOFF, ENGINE_FADE_START, ENGINE_FADE_END)
+    const quickTimeBoost = createQuickTimeBoost()
     const spaceReveal = createSpaceReveal(SMOKE_START, SUIT_AT)
     const libraryCrash = createLibraryCrash(LIBRARY_FALL_START, LIBRARY_LANDING_SECONDS)
     const heroReveal = createHeroReveal(LIBRARY_HERO_REVEAL)
@@ -397,6 +399,7 @@ export const FilmCanvas = () => {
           if (quickTimeResults[index] === null && missedQuickTime(seconds, start)) quickTimeResults[index] = { hit: false, atSeconds: seconds }
         })
       }
+      const thrill = quickTimeThrill(quickTimeSeconds, quickTimeResults)
       if (natureSeconds === null) {
         horoSongStarted = false
         horoDanceStarted = false
@@ -441,7 +444,7 @@ export const FilmCanvas = () => {
         context.fillRect(0, 0, window.innerWidth, window.innerHeight)
         drawRadiConcepts(context, window.innerWidth, window.innerHeight)
       } else if (cosmodromeSeconds !== null) {
-        drawCosmodromeScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, cosmodromeSeconds, wishSeconds, flightDuration, quickTimeThrill(quickTimeSeconds, quickTimeResults))
+        drawCosmodromeScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, cosmodromeSeconds, wishSeconds, flightDuration, thrill)
         drawRocketQuickTime(context, window.innerWidth, window.innerHeight, quickTimeSeconds, quickTimeStartList, quickTimeResults, flightDuration)
       } else if (natureSeconds !== null) {
         drawNatureScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, natureSeconds, horoSteps, horoSteps + horoIdleSteps, !hasScrolledHoro)
@@ -571,6 +574,7 @@ export const FilmCanvas = () => {
       kiraWoof.sync(drive?.kiraSeconds ?? null, KIRA_WOOF_START)
       cosmodromeWoof.sync(isShowingConcepts || cosmodromeSeconds === null ? null : wishSeconds, KIRA_COSMO_WOOF)
       rocketLaunch.sync(isShowingConcepts || cosmodromeSeconds === null ? null : wishSeconds)
+      quickTimeBoost.sync(thrill.boost)
       spaceReveal.sync(isShowingConcepts || cosmodromeSeconds === null ? null : wishSeconds)
       libraryCrash.sync(isShowingConcepts ? null : librarySeconds, libraryRoofBreakSeconds(window.innerWidth, window.innerHeight))
       heroReveal.sync(
@@ -902,6 +906,7 @@ export const FilmCanvas = () => {
       kiraWoof.stop()
       cosmodromeWoof.stop()
       rocketLaunch.stop()
+      quickTimeBoost.stop()
       spaceReveal.stop()
       libraryCrash.stop()
       heroReveal.stop()
