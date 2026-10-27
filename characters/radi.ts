@@ -1,4 +1,5 @@
 import { ellipsePath, linePath, paintFill, paintLine, paintShade, paintShape, type BuildPath, type Context, type DecorateInside } from "@/characters/paint"
+import { paintSprite, snapToPixel, type SpriteBounds } from "@/characters/sprites"
 
 export const OUTLINE = "#2b1d1a"
 export const OUTLINE_WIDTH = 1.6
@@ -922,13 +923,16 @@ export const drawKalpak = (context: Context, isPolished: boolean) => {
     ...shadeIf(isPolished),
     decorateInside: (hatContext) => {
       paintFill(hatContext, "rgba(255, 255, 255, 0.08)", ellipsePath(-12, -98, 7, 16))
-      for (let row = 0; row < 8; row += 1) {
-        for (let column = 0; column < 11; column += 1) {
-          const curlX = -25 + column * 5 + (row % 2) * 2.5
-          const curlY = -112 + row * 4.3
-          paintLine(hatContext, "#45424d", 0.7, (path) => path.arc(curlX, curlY, 1.2, Math.PI * 0.9, Math.PI * 2.3))
+      paintLine(hatContext, "#45424d", 0.7, (path) => {
+        for (let row = 0; row < 8; row += 1) {
+          for (let column = 0; column < 11; column += 1) {
+            const curlX = -25 + column * 5 + (row % 2) * 2.5
+            const curlY = -112 + row * 4.3
+            path.moveTo(curlX + Math.cos(Math.PI * 0.9) * 1.2, curlY + Math.sin(Math.PI * 0.9) * 1.2)
+            path.arc(curlX, curlY, 1.2, Math.PI * 0.9, Math.PI * 2.3)
+          }
         }
-      }
+      })
     },
   })
 }
@@ -1224,7 +1228,17 @@ const drawUnicornHeadpiece = (context: Context, isPolished: boolean) => {
   drawStarSparkle(context, 27, -100, 2.4, WHITE)
 }
 
-export const drawRadi = (context: Context, look: RadiLook, feetX: number, feetY: number, scale: number, motion: Partial<RadiMotion> = {}) => {
+const RADI_HAIR_BACK_BOUNDS: SpriteBounds = [-45, -140, 45, 5]
+const RADI_BODY_BOUNDS: SpriteBounds = [-50, -75, 50, 5]
+const RADI_HEAD_BOUNDS: SpriteBounds = [-45, -130, 45, -20]
+const RADI_HEAD_FRONT_BOUNDS: SpriteBounds = [-50, -150, 50, -10]
+
+export const drawRadi = (context: Context, look: RadiLook, feetX: number, feetY: number, scale: number, motion: Partial<RadiMotion> = {}, spriteScene?: string) => {
+  const spriteKey = spriteScene && `${spriteScene}:radi:${JSON.stringify(look)}`
+  const paintPart = (part: string, bounds: SpriteBounds, drawPart: (partContext: Context) => void) => {
+    if (spriteKey) paintSprite(context, `${spriteKey}:${part}`, 0, 0, bounds, drawPart)
+    else drawPart(context)
+  }
   const hasExtra = (extra: RadiExtra) => look.extras.includes(extra)
   const isPolished = look.polished === true
   const isBatman = hasExtra("batman")
@@ -1243,7 +1257,7 @@ export const drawRadi = (context: Context, look: RadiLook, feetX: number, feetY:
 
   activeColors = look.colors ?? RADI_COLORS
   context.save()
-  context.translate(feetX, feetY)
+  context.translate(...(spriteKey ? snapToPixel(context, feetX, feetY) : [feetX, feetY] as const))
   context.scale(scale, scale)
   context.lineJoin = "round"
   context.lineCap = "round"
@@ -1252,44 +1266,46 @@ export const drawRadi = (context: Context, look: RadiLook, feetX: number, feetY:
 
   if (isUnicorn) paintRainbowTail(context, [8, -30, 32, -42, 31, -18], [-1.8, 2.9])
   if (isBatman) drawBatmanCape(context, isPolished)
-  else drawWithHeadTilt(() => {
-    drawHairBack(context, look.hair, isPolished)
-    if (isUnicorn) drawUnicornBackMane(context)
-  })
+  else drawWithHeadTilt(() => paintPart("hairBack", RADI_HAIR_BACK_BOUNDS, (partContext) => {
+    drawHairBack(partContext, look.hair, isPolished)
+    if (isUnicorn) drawUnicornBackMane(partContext)
+  }))
   if (isAstronaut) drawAstronautBackpack(context, isPolished)
   if (!hideLegs) drawLegs(context, look.shoes ?? "sneakers", legLifts, kneeBends, isPolished, hasSuit ? look.top.color : undefined, hasSuit ? -24 : undefined)
-  if (isBatman) drawBatmanJumpsuit(context, look.top.color, isPolished)
-  if (isAstronaut) drawAstronautSuit(context, look.top.color, isPolished)
-  if (!hasSuit) {
-    drawBottom(context, look.bottom, isPolished)
-    drawTorso(context, look.top, isPolished)
-  }
-  if (isBatman) drawBatmanChest(context, isPolished)
-  if (isAstronaut) drawAstronautChest(context, isPolished)
-  if (hasExtra("apron")) drawApron(context, isPolished)
-  if (hasExtra("pafti")) drawPafti(context, isPolished)
-  if (hasExtra("denimJacket")) drawDenimJacket(context, isPolished)
-  if (hasExtra("pendant")) drawPendant(context, isPolished)
-  if (hasExtra("heartNecklace")) drawHeartNecklace(context, isPolished)
-  if (hasExtra("gaida")) drawGaida(context, isPolished)
-  drawWithHeadTilt(() => {
-    drawHead(context, look.hair, hasExtra("kalpak"), isPolished)
-    context.save()
-    context.translate(faceTurn * 4, 0)
-    drawFace(context, look.expression, isPolished)
-    if (hasExtra("sunglasses")) drawSunglasses(context)
-    context.restore()
+  paintPart("body", RADI_BODY_BOUNDS, (partContext) => {
+    if (isBatman) drawBatmanJumpsuit(partContext, look.top.color, isPolished)
+    if (isAstronaut) drawAstronautSuit(partContext, look.top.color, isPolished)
+    if (!hasSuit) {
+      drawBottom(partContext, look.bottom, isPolished)
+      drawTorso(partContext, look.top, isPolished)
+    }
+    if (isBatman) drawBatmanChest(partContext, isPolished)
+    if (isAstronaut) drawAstronautChest(partContext, isPolished)
+    if (hasExtra("apron")) drawApron(partContext, isPolished)
+    if (hasExtra("pafti")) drawPafti(partContext, isPolished)
+    if (hasExtra("denimJacket")) drawDenimJacket(partContext, isPolished)
+    if (hasExtra("pendant")) drawPendant(partContext, isPolished)
+    if (hasExtra("heartNecklace")) drawHeartNecklace(partContext, isPolished)
+    if (hasExtra("gaida")) drawGaida(partContext, isPolished)
   })
+  drawWithHeadTilt(() => paintPart(`head ${faceTurn}`, RADI_HEAD_BOUNDS, (partContext) => {
+    drawHead(partContext, look.hair, hasExtra("kalpak"), isPolished)
+    partContext.save()
+    partContext.translate(faceTurn * 4, 0)
+    drawFace(partContext, look.expression, isPolished)
+    if (hasExtra("sunglasses")) drawSunglasses(partContext)
+    partContext.restore()
+  }))
   if (hasExtra("readingGlasses")) drawReadingGlassTemples(context, headTilt, faceTurn)
-  drawWithHeadTilt(() => {
-    if (isBatman) drawBatmanCowl(context, isPolished)
-    else drawHairFront(context, look.hair, isPolished)
-    if (hasExtra("bandana")) drawBandana(context, isPolished)
-    if (hasExtra("kalpak")) drawKalpak(context, isPolished)
-    if (hasExtra("hairFlower")) drawHairFlower(context, isPolished)
-    if (isUnicorn) drawUnicornHeadpiece(context, isPolished)
-    if (isAstronaut) drawAstronautHelmet(context)
-  })
+  drawWithHeadTilt(() => paintPart("headFront", RADI_HEAD_FRONT_BOUNDS, (partContext) => {
+    if (isBatman) drawBatmanCowl(partContext, isPolished)
+    else drawHairFront(partContext, look.hair, isPolished)
+    if (hasExtra("bandana")) drawBandana(partContext, isPolished)
+    if (hasExtra("kalpak")) drawKalpak(partContext, isPolished)
+    if (hasExtra("hairFlower")) drawHairFlower(partContext, isPolished)
+    if (isUnicorn) drawUnicornHeadpiece(partContext, isPolished)
+    if (isAstronaut) drawAstronautHelmet(partContext)
+  }))
   if (hasExtra("readingGlasses")) drawReadingGlasses(context, headTilt, faceTurn)
   drawArms(context, look, hands, elbowBends, isPolished)
   if (hasExtra("puffSleeves")) drawPuffSleeves(context, isPolished)

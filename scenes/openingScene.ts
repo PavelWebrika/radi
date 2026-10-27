@@ -74,18 +74,20 @@ export const drawSun = (context: Context, width: number, height: number, time: n
   glow.addColorStop(0, "rgba(255, 236, 150, 0.6)")
   glow.addColorStop(1, "rgba(255, 236, 150, 0)")
   paintFill(context, glow, ellipsePath(centerX, centerY, radius * 2.4, radius * 2.4))
-  for (let ray = 0; ray < 12; ray += 1) {
-    const angle = (ray * Math.PI) / 6 + time * 0.15
-    const outerRadius = radius * (1.6 + Math.sin(time * 2 + ray) * 0.05)
-    const rayPath = linePath(
-      centerX + Math.cos(angle) * radius * 1.3,
-      centerY + Math.sin(angle) * radius * 1.3,
-      centerX + Math.cos(angle) * outerRadius,
-      centerY + Math.sin(angle) * outerRadius,
-    )
-    paintLine(context, OUTLINE, radius * 0.12 + 6, rayPath)
-    paintLine(context, "#ffb703", radius * 0.12, rayPath)
+  const raysPath: BuildPath = (path) => {
+    for (let ray = 0; ray < 12; ray += 1) {
+      const angle = (ray * Math.PI) / 6 + time * 0.15
+      const outerRadius = radius * (1.6 + Math.sin(time * 2 + ray) * 0.05)
+      linePath(
+        centerX + Math.cos(angle) * radius * 1.3,
+        centerY + Math.sin(angle) * radius * 1.3,
+        centerX + Math.cos(angle) * outerRadius,
+        centerY + Math.sin(angle) * outerRadius,
+      )(path)
+    }
   }
+  paintLine(context, OUTLINE, radius * 0.12 + 6, raysPath)
+  paintLine(context, "#ffb703", radius * 0.12, raysPath)
   context.lineWidth = 4
   paintShape(context, "#ffd23f", ellipsePath(centerX, centerY, radius, radius))
   for (const side of [-1, 1]) {

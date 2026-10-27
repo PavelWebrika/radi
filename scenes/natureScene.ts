@@ -3,6 +3,8 @@ import { drawPartyPerson, type PartyPerson } from "@/characters/partyPerson"
 import { drawRadi, drawStarSparkle, type Point } from "@/characters/radi"
 import { drawKiraSide } from "@/characters/kira"
 import { folkDanceRadiLook, gaidaRadiLook } from "@/characters/radiConcepts"
+import { paintSprite, releaseSprites, type SpriteBounds } from "@/characters/sprites"
+import { onLayersReleased } from "@/scenes/layerCache"
 import { easeInOut, mixHands, seededRandom } from "@/scenes/libraryScene"
 import { bounce, clampToUnit, drawCloud, drawSun, easeOut, easeOutBack, mix, paintComicBubble, paintIris, radiScale, stageProgress } from "@/scenes/openingScene"
 
@@ -30,6 +32,7 @@ const BUSH_PUFFS: readonly Circle[] = [[-22, -14, 16], [0, -24, 20], [22, -14, 1
 const PINE_TIERS = [[-18, 34, 42], [-48, 27, 38], [-74, 19, 34]] as const
 const APPLES = [[-18, -80], [10, -88], [22, -72], [-4, -110]] as const
 const BUSH_BLOSSOMS = [[-20, -16], [4, -32], [18, -10], [-6, -14]] as const
+const COVER_BOUNDS: Record<Cover, SpriteBounds> = { roundTree: [-50, -136, 50, 0], pine: [-42, -97, 42, 0], bush: [-38, -44, 38, 2] }
 const GAIDA_HANDS: Hands = [[5.5, -21], [5.5, -29]]
 const REST_HANDS: Hands = [[-14, -32], [14, -32]]
 const YAY_HANDS: Hands = [[-18, -66], [18, -66]]
@@ -89,7 +92,15 @@ const FOLK_DANCERS: readonly FolkDancer[] = [
   },
 ]
 
+let spriteLayout = ""
+onLayersReleased("nature", () => {
+  releaseSprites("nature:")
+  spriteLayout = ""
+})
+
 const wrapAround = (amount: number, span: number) => ((amount % span) + span) % span
+
+const grownBounds = ([left, top, right, bottom]: SpriteBounds, margin: number): SpriteBounds => [left - margin, top - margin, right + margin, bottom + margin]
 
 const travelUnits = (sceneSeconds: number) => {
   const slowSeconds = clampToUnit((sceneSeconds - WALK_END) / STOP_SECONDS) * STOP_SECONDS
@@ -144,7 +155,8 @@ const drawDriftingClouds = (context: Context, width: number, height: number, tim
   const unit = Math.min(width, height) * 0.07
   const spacing = width * 0.42
   forEachTile(camera * 0.04 + time * 10, spacing, width, unit * 3, (index, tileX) => {
-    drawCloud(context, tileX + seededRandom(index, 1) * spacing * 0.5, height * (0.07 + seededRandom(index, 2) * 0.2), unit * (0.55 + seededRandom(index, 3) * 0.45))
+    const cloudUnit = unit * (0.55 + seededRandom(index, 3) * 0.45)
+    paintSprite(context, `nature:cloud:${index}`, tileX + seededRandom(index, 1) * spacing * 0.5, height * (0.07 + seededRandom(index, 2) * 0.2), grownBounds([-1.9 * cloudUnit, -1.2 * cloudUnit, 1.8 * cloudUnit, 0.9 * cloudUnit], 4), (layer) => drawCloud(layer, 0, 0, cloudUnit))
   })
 }
 
@@ -184,7 +196,8 @@ const drawMountainRange = (context: Context, width: number, height: number, offs
   forEachTile(offset, spacing, width, spacing * 1.5, (index, tileX) => {
     const peakX = tileX + seededRandom(index, salt) * spacing * 0.4
     const peakY = baseY - height * mix(lowestPeak, highestPeak, seededRandom(index, salt + 1))
-    drawMountain(context, peakX, peakY, spacing * (0.8 + seededRandom(index, salt + 2) * 0.35), baseY, color, hasSnow ? height * 0.012 : 0)
+    const half = spacing * (0.8 + seededRandom(index, salt + 2) * 0.35)
+    paintSprite(context, `nature:mountain${salt}:${index}`, peakX, peakY, grownBounds([-half, 0, half, baseY - peakY], 4), (layer) => drawMountain(layer, 0, 0, half, baseY - peakY, color, hasSnow ? height * 0.012 : 0))
   })
 }
 
@@ -383,9 +396,11 @@ const drawWoodland = (context: Context, width: number, height: number, time: num
     context.scale(size, size)
     context.lineWidth = outlineWidth
     if (animal && peek > 0.02) drawPeekingAnimal(context, animal, cover, peek, coverX > width / 2 ? -1 : 1, time + index * 1.3)
-    if (cover === "roundTree") drawRoundTree(context, TREE_GREENS[index % TREE_GREENS.length], outlineWidth, hasExtras)
-    else if (cover === "pine") drawPine(context)
-    else drawBush(context, outlineWidth, hasExtras)
+    paintSprite(context, `nature:tree:${index}`, 0, 0, grownBounds(COVER_BOUNDS[cover], outlineWidth * 2), (layer) => {
+      if (cover === "roundTree") drawRoundTree(layer, TREE_GREENS[index % TREE_GREENS.length], outlineWidth, hasExtras)
+      else if (cover === "pine") drawPine(layer)
+      else drawBush(layer, outlineWidth, hasExtras)
+    })
     context.restore()
   })
 }
@@ -408,7 +423,7 @@ const drawPebbles = (context: Context, width: number, camera: number, topY: numb
     const pebbleX = tileX + seededRandom(index, 40) * spacing
     const pebbleY = mix(topY + 8, bottomY - 8, seededRandom(index, 41))
     const size = (1.6 + seededRandom(index, 42) * 1.6) * scale
-    paintShape(context, "#c9ae73", ellipsePath(pebbleX, pebbleY, size * 1.4, size))
+    paintSprite(context, `nature:pebble:${index}`, pebbleX, pebbleY, grownBounds([-size * 1.4, -size, size * 1.4, size], 2), (layer) => paintShape(layer, "#c9ae73", ellipsePath(0, 0, size * 1.4, size)))
   })
 }
 
@@ -422,6 +437,8 @@ const drawTuft = (context: Context, baseX: number, baseY: number, unit: number, 
     path.quadraticCurveTo(baseX + unit * 3, baseY - unit * 3, baseX + unit * 4.5, baseY - unit * 5)
   })
 }
+
+const tuftBounds = (unit: number) => grownBounds([-4 * unit, -7.5 * unit, 4.5 * unit, 0], unit * 0.6 + 1)
 
 const drawMeadowFlower = (context: Context, baseX: number, baseY: number, unit: number, color: string) => {
   const headY = baseY - unit * 5
@@ -446,8 +463,11 @@ const drawMeadowDetails = (context: Context, width: number, height: number, came
     const spotY = isFront ? mix(trailBottom + 14, height - 6, seededRandom(index, 22)) : mix(backTop, trailTop - 6, seededRandom(index, 22))
     const unit = scale * mix(0.7, 1.4, (spotY - backTop) / (height - backTop))
     const spotX = tileX + seededRandom(index, 20) * spacing
-    if (seededRandom(index, 23) < (index * spacing > fieldStart ? 0.65 : 0.35)) drawMeadowFlower(context, spotX, spotY, unit, FLOWER_COLORS[index % FLOWER_COLORS.length])
-    else drawTuft(context, spotX, spotY, unit, "#3d9a3a")
+    if (seededRandom(index, 23) < (index * spacing > fieldStart ? 0.65 : 0.35)) {
+      paintSprite(context, `nature:flower:${index}`, spotX, spotY, grownBounds([-2.4 * unit, -7.4 * unit, 2.4 * unit, 0], Math.max(1, unit * 0.45) + 1), (layer) => drawMeadowFlower(layer, 0, 0, unit, FLOWER_COLORS[index % FLOWER_COLORS.length]))
+    } else {
+      paintSprite(context, `nature:tuft:${index}`, spotX, spotY, tuftBounds(unit), (layer) => drawTuft(layer, 0, 0, unit, "#3d9a3a"))
+    }
   })
 }
 
@@ -455,7 +475,8 @@ const drawFrontGrass = (context: Context, width: number, height: number, camera:
   const spacing = 90 * scale
   forEachTile(camera * 1.25, spacing, width, 60 * scale, (index, tileX) => {
     if (seededRandom(index, 50) < 0.4) return
-    drawTuft(context, tileX + seededRandom(index, 51) * spacing, height + 6, scale * (2.2 + seededRandom(index, 52)), "#358f35")
+    const unit = scale * (2.2 + seededRandom(index, 52))
+    paintSprite(context, `nature:grass:${index}`, tileX + seededRandom(index, 51) * spacing, height + 6, tuftBounds(unit), (layer) => drawTuft(layer, 0, 0, unit, "#358f35"))
   })
 }
 
@@ -522,7 +543,7 @@ const drawFolkDancers = (context: Context, width: number, rowFeetY: number, rowS
       headTilt: Math.sin(time * 1.5 + phase) * 0.06,
       footLifts: [horo.footLifts[0] * join, horo.footLifts[1] * join],
       lookUp: 0,
-    })
+    }, "nature")
   }
 }
 
@@ -591,7 +612,7 @@ const drawNatureRadi = (context: Context, width: number, feetY: number, rowFeetY
     legLifts: [(leadSide === 0 ? stepLift : 0) + horo.footLifts[0] * join, (leadSide === 1 ? stepLift : 0) + horo.footLifts[1] * join],
     hands,
     headTilt: Math.sin(time * 2.4) * 0.05,
-  })
+  }, speed === 0 && (rowMove === 0 || rowMove === 1) ? "nature" : undefined)
   context.restore()
   const chanterX = (CHANTER_END[0] * radiSize) / stretchY
   const chanterY = CHANTER_END[1] * radiSize * stretchY
@@ -721,6 +742,11 @@ const drawMusicNotes = (context: Context, emitX: number, emitY: number, scale: n
 }
 
 export const drawNatureScene = (context: Context, width: number, height: number, time: number, sceneSeconds: number, horoSteps: number, horoDanceSteps: number, showScrollHint: boolean) => {
+  const layout = `${width} ${height}`
+  if (layout !== spriteLayout) {
+    releaseSprites("nature:")
+    spriteLayout = layout
+  }
   const scale = radiScale(width, height)
   const rowScale = scale * ROW_SCALE
   const horizonY = height * 0.56

@@ -1,5 +1,6 @@
 import { ellipsePath, linePath, paintFill, paintLine, paintShape, type BuildPath, type Context } from "@/characters/paint"
 import { OUTLINE, OUTLINE_WIDTH, WHITE, paintTube, type Point } from "@/characters/radi"
+import { paintSprite, snapToPixel, type SpriteBounds } from "@/characters/sprites"
 
 type PartyHair = "short" | "buzz" | "long" | "curly" | "bob" | "bun" | "ponytail" | "mohawk" | "bald"
 type PartyEyes = "dot" | "round" | "sleepy" | "lashes"
@@ -10,6 +11,8 @@ type PartyBuild = "slim" | "broad" | "curvy" | "chubby"
 type PartyFace = "smile" | "laugh" | "vibing" | "amazed" | "kiss"
 type PartyExtra = "beard" | "stubble" | "mustache" | "glasses" | "sunglasses" | "cap" | "earrings" | "chain" | "drink" | "sequins" | "kalpak" | "flowerCrown" | "sash" | "folkApron" | "handkerchief"
 type BuildShape = { torso: number; hip: number; leg: number; stance: number }
+type Limb = { start: Point; joint: Point; end: Point }
+type PaintPart = (part: string, bounds: SpriteBounds, drawPart: (partContext: Context) => void) => void
 
 export type PartyPerson = {
   skin: string
@@ -50,6 +53,10 @@ const GOLD = "#f2c94c"
 const LONG_SLEEVE_TOPS: readonly PartyTop[] = ["shirt", "hoodie", "blazer", "folkShirt", "sukman"]
 const FOLK_RED = "#d62828"
 const FUR = "#2a1f1a"
+const HAIR_BACK_BOUNDS: SpriteBounds = [-36, -112, 36, -24]
+const BODY_BOUNDS: SpriteBounds = [-26, -56, 26, -6]
+const HEAD_BOUNDS: SpriteBounds = [-30, -116, 36, -28]
+const SHOE_BOUNDS: SpriteBounds = [-7, -17, 9, 3]
 const CROWN_FLOWERS = [[-19, -80, "#ff4d6d"], [-13, -88, WHITE], [-6, -92, "#ffd23f"], [1, -93.5, "#ff4d6d"], [8, -92, WHITE], [14.5, -88, "#ffd23f"], [19.5, -80, "#ff4d6d"]] as const
 
 const hasExtra = (person: PartyPerson, extra: PartyExtra) => person.extras.includes(extra)
@@ -151,21 +158,26 @@ const shoePainters: Record<PartyShoes, (context: Context, color: string) => void
   },
 }
 
-const drawLegs = (context: Context, person: PartyPerson, { leg, stance }: BuildShape, pose: PartyPose) => {
-  SIDES.forEach((side, index) => {
-    const footLift = pose.footLifts[index]
+const eachLimb = (limbs: readonly Limb[], buildLimb: (limb: Limb) => BuildPath): BuildPath => (path) => {
+  for (const limb of limbs) buildLimb(limb)(path)
+}
+
+const drawLegs = (context: Context, person: PartyPerson, { leg, stance }: BuildShape, pose: PartyPose, paintPart: PaintPart) => {
+  const legs = SIDES.map((side, index): Limb => {
     const hip: Point = [side * stance + pose.sway, -22 + pose.bounce]
-    const foot: Point = [side * (stance + 1), -5 - (leg - 6) - footLift]
-    const knee = jointBetween(hip, foot, LEG_SEGMENT - (leg - 6) / 2, side)
-    const legColor = person.bottom === "jeans" || person.bottom === "folkTrousers" ? person.bottomColor : person.bottom === "folkSkirt" ? WHITE : person.skin
-    paintTube(context, legColor, leg, limbPath(hip, knee, foot))
-    if (person.bottom === "shorts") paintTube(context, person.bottomColor, leg + 1.5, linePath(...hip, ...pointAlong(hip, knee, 0.8)))
-    if (person.shoes === "boots") paintTube(context, person.shoeColor, leg + 2, linePath(...knee, ...foot))
+    const foot: Point = [side * (stance + 1), -5 - (leg - 6) - pose.footLifts[index]]
+    return { start: hip, joint: jointBetween(hip, foot, LEG_SEGMENT - (leg - 6) / 2, side), end: foot }
+  })
+  const legColor = person.bottom === "jeans" || person.bottom === "folkTrousers" ? person.bottomColor : person.bottom === "folkSkirt" ? WHITE : person.skin
+  paintTube(context, legColor, leg, eachLimb(legs, ({ start, joint, end }) => limbPath(start, joint, end)))
+  if (person.bottom === "shorts") paintTube(context, person.bottomColor, leg + 1.5, eachLimb(legs, ({ start, joint }) => linePath(...start, ...pointAlong(start, joint, 0.8))))
+  if (person.shoes === "boots") paintTube(context, person.shoeColor, leg + 2, eachLimb(legs, ({ joint, end }) => linePath(...joint, ...end)))
+  SIDES.forEach((side, index) => {
     context.save()
-    context.translate(side * (stance + 1), -footLift)
+    context.translate(side * (stance + 1), -pose.footLifts[index])
     context.scale((side * leg) / 6, leg / 6)
     context.lineWidth = (OUTLINE_WIDTH * 6) / leg
-    shoePainters[person.shoes](context, person.shoeColor)
+    paintPart("shoe", SHOE_BOUNDS, (shoeContext) => shoePainters[person.shoes](shoeContext, person.shoeColor))
     context.restore()
   })
 }
@@ -334,19 +346,33 @@ const drawFolkWaist = (context: Context, person: PartyPerson, { hip }: BuildShap
 }
 
 const drawArms = (context: Context, person: PartyPerson, { torso }: BuildShape, hands: PartyPose["hands"]) => {
-  const hasLongSleeves = LONG_SLEEVE_TOPS.includes(person.top)
-  SIDES.forEach((side, index) => {
+  const sleeveColor = person.top === "sukman" ? WHITE : LONG_SLEEVE_TOPS.includes(person.top) ? person.topColor : person.skin
+  const isFolkTop = person.top === "folkShirt" || person.top === "sukman"
+  const arms = SIDES.map((side, index): Limb => {
     const shoulder: Point = [side * (torso - 0.5), SHOULDER_Y]
-    const hand = hands[index]
-    const elbow = jointBetween(shoulder, hand, ARM_SEGMENT, side)
-    const isFolkTop = person.top === "folkShirt" || person.top === "sukman"
-    if (index === 1 && hasExtra(person, "drink")) drawCup(context, hand)
-    if (index === 1 && hasExtra(person, "handkerchief")) drawHandkerchief(context, hand)
-    paintTube(context, person.top === "sukman" ? WHITE : hasLongSleeves ? person.topColor : person.skin, 4.5, limbPath(shoulder, elbow, hand))
-    if (person.top === "tee") paintTube(context, person.topColor, 6.5, linePath(...shoulder, ...pointAlong(shoulder, elbow, 0.6)))
-    if (isFolkTop) paintTube(context, person.accentColor, 4.6, linePath(...pointAlong(elbow, hand, 0.62), ...pointAlong(elbow, hand, 0.8)))
-    paintShape(context, person.skin, ellipsePath(hand[0], hand[1], 2.8, 2.8))
+    return { start: shoulder, joint: jointBetween(shoulder, hands[index], ARM_SEGMENT, side), end: hands[index] }
   })
+  const paintArms = (armsToPaint: readonly Limb[]) => {
+    paintTube(context, sleeveColor, 4.5, eachLimb(armsToPaint, ({ start, joint, end }) => limbPath(start, joint, end)))
+    if (person.top === "tee") paintTube(context, person.topColor, 6.5, eachLimb(armsToPaint, ({ start, joint }) => linePath(...start, ...pointAlong(start, joint, 0.6))))
+    if (isFolkTop) paintTube(context, person.accentColor, 4.6, eachLimb(armsToPaint, ({ joint, end }) => linePath(...pointAlong(joint, end, 0.62), ...pointAlong(joint, end, 0.8))))
+    paintShape(context, person.skin, eachLimb(armsToPaint, ({ end: [handX, handY] }) => (path) => {
+      path.moveTo(handX + 2.8, handY)
+      path.ellipse(handX, handY, 2.8, 2.8, 0, 0, Math.PI * 2)
+    }))
+  }
+  const drawHeldItems = () => {
+    if (hasExtra(person, "drink")) drawCup(context, hands[1])
+    if (hasExtra(person, "handkerchief")) drawHandkerchief(context, hands[1])
+  }
+  if (hands[0][0] < -4 && hands[1][0] > 4) {
+    drawHeldItems()
+    paintArms(arms)
+    return
+  }
+  paintArms([arms[0]])
+  drawHeldItems()
+  paintArms([arms[1]])
 }
 
 const drawHairBack = (context: Context, { hair, hairColor, accentColor }: PartyPerson) => {
@@ -554,8 +580,13 @@ const drawHeadwear = (context: Context, person: PartyPerson) => {
   }
 }
 
-export const drawPartyPerson = (context: Context, person: PartyPerson, feetX: number, feetY: number, scale: number, pose: PartyPose) => {
+export const drawPartyPerson = (context: Context, person: PartyPerson, feetX: number, feetY: number, scale: number, pose: PartyPose, spriteScene?: string) => {
   const build = BUILDS[person.build]
+  const spriteKey = spriteScene && `${spriteScene}:${JSON.stringify(person)}`
+  const paintPart: PaintPart = (part, bounds, drawPart) => {
+    if (spriteKey) paintSprite(context, `${spriteKey}:${part}`, 0, 0, bounds, drawPart)
+    else drawPart(context)
+  }
   const withHeadTilt = (drawTilted: () => void) => {
     context.save()
     context.translate(0, NECK_Y)
@@ -565,24 +596,26 @@ export const drawPartyPerson = (context: Context, person: PartyPerson, feetX: nu
     context.restore()
   }
   context.save()
-  context.translate(feetX, feetY)
+  context.translate(...(spriteKey ? snapToPixel(context, feetX, feetY) : [feetX, feetY] as const))
   context.scale(scale, scale)
   context.lineJoin = "round"
   context.lineCap = "round"
   context.lineWidth = OUTLINE_WIDTH
   context.strokeStyle = OUTLINE
-  drawLegs(context, person, build, pose)
-  context.translate(pose.sway, pose.bounce)
-  withHeadTilt(() => drawHairBack(context, person))
-  if (person.top === "hoodie") paintShape(context, person.topColor, ellipsePath(0, -47, 15, 6))
-  drawBottom(context, person, build)
-  drawTop(context, person, build)
-  drawFolkWaist(context, person, build)
-  withHeadTilt(() => {
-    drawFace(context, person, pose.lookUp)
-    drawHairFront(context, person)
-    drawHeadwear(context, person)
+  drawLegs(context, person, build, pose, paintPart)
+  context.translate(...(spriteKey ? snapToPixel(context, pose.sway, pose.bounce) : [pose.sway, pose.bounce] as const))
+  withHeadTilt(() => paintPart("hairBack", HAIR_BACK_BOUNDS, (partContext) => drawHairBack(partContext, person)))
+  paintPart("body", BODY_BOUNDS, (partContext) => {
+    if (person.top === "hoodie") paintShape(partContext, person.topColor, ellipsePath(0, -47, 15, 6))
+    drawBottom(partContext, person, build)
+    drawTop(partContext, person, build)
+    drawFolkWaist(partContext, person, build)
   })
+  withHeadTilt(() => paintPart(`head ${pose.lookUp}`, HEAD_BOUNDS, (partContext) => {
+    drawFace(partContext, person, pose.lookUp)
+    drawHairFront(partContext, person)
+    drawHeadwear(partContext, person)
+  }))
   drawArms(context, person, build, pose.hands)
   context.restore()
 }
