@@ -1,11 +1,10 @@
 import { ellipsePath, paintFill, paintLine, paintShape, type Context } from "@/characters/paint"
-import { CALM_FLIGHT, earthRiseFlightSeconds, LIFTOFF, rocketMiddleOnScreen, type FlightThrill } from "@/scenes/cosmodromeScene"
+import { CALM_FLIGHT, earthRiseFlightSeconds, LIFTOFF, planePassedFlightSeconds, rocketMiddleOnScreen, type FlightThrill } from "@/scenes/cosmodromeScene"
 import { clampToUnit, easeOutBack, mix, stageProgress } from "@/scenes/openingScene"
 
 export const QUICK_TIME_KEYS = ["R", "A", "D", "I"] as const
 export type QuickTimeResult = { hit: boolean; atSeconds: number }
 
-const FIRST_FLIGHT_SECONDS = 3
 const EARTH_LEAD_SECONDS = 1.5
 const POP_IN_SECONDS = 0.25
 const CLOSE_SECONDS = 1.6
@@ -23,7 +22,8 @@ const RING_WHITE = "#ffffff"
 
 export const quickTimeStarts = (flightDuration: number) => {
   const lastStart = earthRiseFlightSeconds(flightDuration) - EARTH_LEAD_SECONDS - CLOSE_SECONDS - GOOD_LATE_SECONDS - RESULT_SECONDS
-  return QUICK_TIME_KEYS.map((_, index) => LIFTOFF + mix(FIRST_FLIGHT_SECONDS, lastStart, index / (QUICK_TIME_KEYS.length - 1)))
+  const firstStart = planePassedFlightSeconds(flightDuration)
+  return QUICK_TIME_KEYS.map((_, index) => LIFTOFF + mix(firstStart, lastStart, index / (QUICK_TIME_KEYS.length - 1)))
 }
 
 const closesAt = (start: number) => start + CLOSE_SECONDS

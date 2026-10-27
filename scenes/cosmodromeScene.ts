@@ -144,7 +144,8 @@ const END_IRIS_FOCUS = 1.8
 const END_IRIS_CLOSE = 0.4
 const WINDOW_KIRA_SLIDE = 0.7
 const WINDOW_KIRA_START_X = -16
-const ENDING_TEXT = "TO BE CONTINUED..."
+const ENDING_TEXT = "HAPPY BIRTHDAY RADI!"
+const ENDING_MAX_WIDTH = 0.92
 const ENDING_FADE_IN = 0.4
 const ENDING_ASSEMBLE_START = 2
 const ENDING_LETTER_GAP = 0.09
@@ -1223,16 +1224,21 @@ const flightProfile = (flightSeconds: number, flightDuration: number) => {
   return { rise: FLIGHT_HEIGHTS, speedShare: 0 }
 }
 
-export const earthRiseFlightSeconds = (flightDuration: number) => {
+const flightSecondsAtAltitude = (altitude: number, flightDuration: number) => {
   let low = 0
   let high = flightDuration
   for (let step = 0; step < 30; step += 1) {
     const middle = (low + high) / 2
-    if (flightProfile(middle, flightDuration).rise < EARTH_FROM + CAMERA_LOCK) low = middle
+    if (flightProfile(middle, flightDuration).rise < altitude + CAMERA_LOCK) low = middle
     else high = middle
   }
   return high
 }
+
+const PLANE_PASSED_ALTITUDE = FLYBYS.find(({ kind }) => kind === "plane")?.to ?? 0
+
+export const earthRiseFlightSeconds = (flightDuration: number) => flightSecondsAtAltitude(EARTH_FROM, flightDuration)
+export const planePassedFlightSeconds = (flightDuration: number) => flightSecondsAtAltitude(PLANE_PASSED_ALTITUDE, flightDuration)
 
 export const rocketMiddleOnScreen = (width: number, height: number, wishSeconds: number | null, flightDuration: number) => {
   const { unit, baseX, baseY } = rocketLayout(width, height, cameraX(width, wishSeconds))
@@ -1662,14 +1668,17 @@ const drawEndingIris = (context: Context, width: number, height: number, camX: n
   const close = stageProgress(flightSeconds, closeStart, closeStart + END_IRIS_CLOSE)
   const windowRadius = WINDOW_RADIUS * unit * launch.zoom
   paintIris(context, width, height, baseX, windowY, mix(Math.hypot(width, height), windowRadius, focus) * (1 - close ** 2))
-  drawToBeContinued(context, width, height, flightSeconds - closeStart - END_IRIS_CLOSE)
+  drawEndingTitle(context, width, height, flightSeconds - closeStart - END_IRIS_CLOSE)
   drawEndingUnicorn(context, width, height, flightSeconds - closeStart - END_IRIS_CLOSE)
 }
 
-const drawToBeContinued = (context: Context, width: number, height: number, sinceBlack: number) => {
+const drawEndingTitle = (context: Context, width: number, height: number, sinceBlack: number) => {
   if (sinceBlack <= 0) return
-  const fontSize = Math.min(width * 0.085, height * 0.14)
   const letters = [...ENDING_TEXT]
+  let fontSize = Math.min(width * 0.085, height * 0.14)
+  context.font = `bold ${fontSize}px "Comic Sans MS", "Comic Sans", cursive`
+  const naturalWidth = context.measureText(ENDING_TEXT).width
+  if (naturalWidth > width * ENDING_MAX_WIDTH) fontSize *= (width * ENDING_MAX_WIDTH) / naturalWidth
   context.font = `bold ${fontSize}px "Comic Sans MS", "Comic Sans", cursive`
   context.textBaseline = "middle"
   context.textAlign = "center"
