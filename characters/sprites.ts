@@ -14,10 +14,19 @@ const forgetSprite = (key: string, { canvas }: Sprite) => {
   sprites.delete(key)
 }
 
-export const releaseSprites = (prefix: string) => {
+const sceneLayouts = new Map<string, string>()
+
+export const releaseSceneSprites = (scene: string) => {
   for (const [key, sprite] of sprites) {
-    if (key.startsWith(prefix)) forgetSprite(key, sprite)
+    if (key.startsWith(`${scene}:`)) forgetSprite(key, sprite)
   }
+  sceneLayouts.delete(scene)
+}
+
+export const prepareSceneSprites = (scene: string, layout: string) => {
+  if (sceneLayouts.get(scene) === layout) return
+  releaseSceneSprites(scene)
+  sceneLayouts.set(scene, layout)
 }
 
 const toSubpixel = (deviceValue: number) => Math.round(deviceValue * SUBPIXEL_STEPS) / SUBPIXEL_STEPS

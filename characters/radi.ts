@@ -1288,14 +1288,16 @@ export const drawRadi = (context: Context, look: RadiLook, feetX: number, feetY:
     if (hasExtra("heartNecklace")) drawHeartNecklace(partContext, isPolished)
     if (hasExtra("gaida")) drawGaida(partContext, isPolished)
   })
-  drawWithHeadTilt(() => paintPart(`head ${faceTurn}`, RADI_HEAD_BOUNDS, (partContext) => {
-    drawHead(partContext, look.hair, hasExtra("kalpak"), isPolished)
-    partContext.save()
-    partContext.translate(faceTurn * 4, 0)
-    drawFace(partContext, look.expression, isPolished)
-    if (hasExtra("sunglasses")) drawSunglasses(partContext)
-    partContext.restore()
-  }))
+  drawWithHeadTilt(() => {
+    paintPart("head", RADI_HEAD_BOUNDS, (partContext) => drawHead(partContext, look.hair, hasExtra("kalpak"), isPolished))
+    context.save()
+    context.translate(faceTurn * 4, 0)
+    paintPart("face", RADI_HEAD_BOUNDS, (partContext) => {
+      drawFace(partContext, look.expression, isPolished)
+      if (hasExtra("sunglasses")) drawSunglasses(partContext)
+    })
+    context.restore()
+  })
   if (hasExtra("readingGlasses")) drawReadingGlassTemples(context, headTilt, faceTurn)
   drawWithHeadTilt(() => paintPart("headFront", RADI_HEAD_FRONT_BOUNDS, (partContext) => {
     if (isBatman) drawBatmanCowl(partContext, isPolished)

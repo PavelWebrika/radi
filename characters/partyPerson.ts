@@ -611,11 +611,15 @@ export const drawPartyPerson = (context: Context, person: PartyPerson, feetX: nu
     drawTop(partContext, person, build)
     drawFolkWaist(partContext, person, build)
   })
-  withHeadTilt(() => paintPart(`head ${pose.lookUp}`, HEAD_BOUNDS, (partContext) => {
-    drawFace(partContext, person, pose.lookUp)
-    drawHairFront(partContext, person)
-    drawHeadwear(partContext, person)
-  }))
+  withHeadTilt(() => {
+    const drawHeadFront = (partContext: Context) => {
+      drawFace(partContext, person, pose.lookUp)
+      drawHairFront(partContext, person)
+      drawHeadwear(partContext, person)
+    }
+    if (pose.lookUp === 0 || pose.lookUp === 1) paintPart(`head ${pose.lookUp}`, HEAD_BOUNDS, drawHeadFront)
+    else drawHeadFront(context)
+  })
   drawArms(context, person, build, pose.hands)
   context.restore()
 }

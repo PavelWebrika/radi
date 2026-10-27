@@ -3,7 +3,7 @@ import { drawPartyPerson, type PartyPerson } from "@/characters/partyPerson"
 import { drawRadi, drawStarSparkle, type Point } from "@/characters/radi"
 import { drawKiraSide } from "@/characters/kira"
 import { folkDanceRadiLook, gaidaRadiLook } from "@/characters/radiConcepts"
-import { paintSprite, releaseSprites, type SpriteBounds } from "@/characters/sprites"
+import { paintSprite, prepareSceneSprites, releaseSceneSprites, type SpriteBounds } from "@/characters/sprites"
 import { onLayersReleased } from "@/scenes/layerCache"
 import { easeInOut, mixHands, seededRandom } from "@/scenes/libraryScene"
 import { bounce, clampToUnit, drawCloud, drawSun, easeOut, easeOutBack, mix, paintComicBubble, paintIris, radiScale, stageProgress } from "@/scenes/openingScene"
@@ -92,11 +92,7 @@ const FOLK_DANCERS: readonly FolkDancer[] = [
   },
 ]
 
-let spriteLayout = ""
-onLayersReleased("nature", () => {
-  releaseSprites("nature:")
-  spriteLayout = ""
-})
+onLayersReleased("nature", () => releaseSceneSprites("nature"))
 
 const wrapAround = (amount: number, span: number) => ((amount % span) + span) % span
 
@@ -742,11 +738,7 @@ const drawMusicNotes = (context: Context, emitX: number, emitY: number, scale: n
 }
 
 export const drawNatureScene = (context: Context, width: number, height: number, time: number, sceneSeconds: number, horoSteps: number, horoDanceSteps: number, showScrollHint: boolean) => {
-  const layout = `${width} ${height}`
-  if (layout !== spriteLayout) {
-    releaseSprites("nature:")
-    spriteLayout = layout
-  }
+  prepareSceneSprites("nature", `${width} ${height}`)
   const scale = radiScale(width, height)
   const rowScale = scale * ROW_SCALE
   const horizonY = height * 0.56

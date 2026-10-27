@@ -3,7 +3,9 @@ import { OUTLINE, OUTLINE_WIDTH, SILVER, drawRadi, type Point, type RadiLook } f
 import { drawKiraFront } from "@/characters/kira"
 import { drawPartyPerson, type PartyPerson, type PartyPose } from "@/characters/partyPerson"
 import { nightClubRadiLook } from "@/characters/radiConcepts"
+import { prepareSceneSprites, releaseSceneSprites } from "@/characters/sprites"
 import { drawExhaust } from "@/scenes/cityScene"
+import { onLayersReleased } from "@/scenes/layerCache"
 import { partyColor } from "@/scenes/nightClub"
 import { easeOut, easeOutBack, mix, mixPoint, paintComicBubble, paintIris, radiScale, stageProgress, type BubbleButtonLayout } from "@/scenes/openingScene"
 
@@ -178,6 +180,8 @@ const DANCERS: readonly Dancer[] = [
     person: { skin: "#d9a77c", hair: "bun", hairColor: "#2a1f1a", eyes: "sleepy", eyeColor: "#6b4a2e", build: "curvy", face: "laugh", top: "crop", topColor: "#8f5bff", accentColor: "#ff3fa4", bottom: "jeans", bottomColor: "#e8e8f0", shoes: "heels", shoeColor: "#d4af37", extras: ["sunglasses", "earrings"] },
   },
 ]
+
+onLayersReleased("club", () => releaseSceneSprites("club"))
 
 const SMILING_RADI_LOOK: RadiLook = { ...nightClubRadiLook, expression: "grin" }
 
@@ -358,7 +362,7 @@ const drawClubRadi = (context: Context, radiX: number, feetY: number, scale: num
       hands: isWalkingIn ? [[-15, -31 - trailingLift], [15, -31 - leadingLift]] : RESTING_HANDS,
       legLifts: [leadingLift, trailingLift],
       kneeBends: [leadingLift * 0.7, trailingLift * 0.7],
-    })
+    }, "club")
     return
   }
   const { hop, motion } = radiDanceMotion(danceMotionSeconds(clubSeconds), 1 - stageProgress(clubSeconds, DANCE_STOP_START, DANCE_STOP_END))
@@ -372,7 +376,7 @@ const drawClubRadi = (context: Context, radiX: number, feetY: number, scale: num
   context.save()
   context.translate(radiX, bodyFeetY)
   context.scale(1 + crouch * 0.12 - stretch * 0.5, 1 - crouch * 0.18 + stretch)
-  drawRadi(context, look, 0, 0, scale, { ...motion, legLifts, kneeBends: [motion.kneeBends[0] + crouch * 3, motion.kneeBends[1] + crouch * 3], hands })
+  drawRadi(context, look, 0, 0, scale, { ...motion, legLifts, kneeBends: [motion.kneeBends[0] + crouch * 3, motion.kneeBends[1] + crouch * 3], hands }, crouch === 0 && stretch === 0 ? "club" : undefined)
   context.restore()
 }
 
@@ -443,7 +447,7 @@ const drawCrowd = (context: Context, width: number, height: number, time: number
       ? dancing
       : { ...dancing, hands: mixHands(dancing.hands, PARTY_ARMS_UP, frame.arms), footLifts: [dancing.footLifts[0] + Math.max(0, frame.slide) * 4, dancing.footLifts[1] + Math.max(0, -frame.slide) * 4] }
     const person: PartyPerson = amazement > 0.5 ? { ...dancer.person, face: "amazed" } : dancer.person
-    withMoveFrame(context, frame, feetX, feetY, BODY_HEIGHT * personScale, () => drawPartyPerson(context, person, feetX, feetY, personScale, pose))
+    withMoveFrame(context, frame, feetX, feetY, BODY_HEIGHT * personScale, () => drawPartyPerson(context, person, feetX, feetY, personScale, pose, "club"))
   })
 }
 
@@ -544,7 +548,7 @@ const drawDjBooth = (context: Context, width: number, height: number, time: numb
     drawRadi(context, DJ_LOOK, width / 2, feetY - beat * 2 * djScale, djScale, {
       faceTurn: Math.sin(time * Math.PI) * 0.3,
       hands: [mixPoint([-24, -33], [-22, -66 + Math.sin(time * GROOVE_RATE * 2) * 3], hype), [24 + Math.sin(time * 10) * 3, -33]],
-    })
+    }, "club")
   })
   inBoothUnits(() => {
     paintShape(context, "#2a2440", (path) => path.rect(-48, -28, 96, 34))
@@ -641,6 +645,7 @@ export const drawClubScene = (context: Context, width: number, height: number, t
   const flash = sinceLaunch >= 0 ? 0.8 * (1 - stageProgress(sinceLaunch, 0, FLASH_SECONDS)) : 0
   const amazement = stageProgress(clubSeconds, CROWD_AMAZED_START, CROWD_AMAZED_END)
   const grooveTime = danceGrooveTime(time, clubSeconds)
+  prepareSceneSprites("club", `${width} ${height}`)
   if (shake > 0) {
     context.fillStyle = "#0d0626"
     context.fillRect(0, 0, width, height)
