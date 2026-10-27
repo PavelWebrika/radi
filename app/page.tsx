@@ -7,6 +7,10 @@ const HomePage = () => {
       <FilmCanvas />
       <SceneSelect />
       <div className="film-scroll" />
+      <div className="rotate-notice" aria-live="polite">
+        <div className="rotate-phone" />
+        <p>Turn your phone sideways to watch</p>
+      </div>
     </>
   )
 }

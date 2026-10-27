@@ -264,3 +264,47 @@ canvas {
       smooth-moves-sway 1.6s ease-in-out infinite;
   }
 }
+
+.rotate-notice {
+  display: none;
+}
+
+@media (orientation: portrait) and (pointer: coarse) {
+  .rotate-notice {
+    display: flex;
+    position: fixed;
+    z-index: 10;
+    inset: 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 28px;
+    padding: 16px;
+    background: #23245e;
+    color: #ffffff;
+    font-size: 22px;
+    font-weight: bold;
+    text-align: center;
+  }
+
+  .rotate-phone {
+    width: 56px;
+    height: 96px;
+    box-sizing: border-box;
+    border: 5px solid #ffffff;
+    border-radius: 12px;
+    background: #ffd23f;
+    animation: rotate-phone 2s ease-in-out infinite;
+  }
+}
+
+@keyframes rotate-phone {
+  0%,
+  20% {
+    transform: rotate(0deg);
+  }
+  60%,
+  100% {
+    transform: rotate(-90deg);
+  }
+}
