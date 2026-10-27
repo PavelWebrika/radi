@@ -537,32 +537,87 @@ const drawPlane = (context: Context, time: number) => {
   paintFill(context, "rgba(255, 255, 255, 0.9)", ellipsePath(26, -12, 1, 1))
 }
 
+const HULL = "#eef1f8"
+const HULL_SHADE = "#c9cfe0"
+const HULL_DARK = "#9aa3b8"
+const NACELLES = [
+  { y: -21, color: HULL_SHADE, isFar: true },
+  { y: -16, color: HULL, isFar: false },
+] as const
+
+const drawNacelle = (context: Context, y: number, color: string, glow: number, isFar: boolean) => {
+  paintShape(context, color, (path) => path.roundRect(-74, y - 3.6, 50, 7.2, 3.6), {
+    decorateInside: (nacelleContext) => {
+      paintFill(nacelleContext, `rgba(76, 201, 240, ${glow * (isFar ? 0.55 : 0.9)})`, (path) => path.roundRect(-68, y - 1, 38, 2.4, 1.2))
+      paintFill(nacelleContext, "rgba(43, 29, 26, 0.12)", (path) => path.rect(-74, y + 1.8, 50, 2))
+    },
+  })
+  paintFill(context, `rgba(255, 90, 60, ${0.35 * glow})`, ellipsePath(-24, y, 7, 6))
+  paintShape(context, isFar ? "#d9503f" : "#ff5d3f", ellipsePath(-24, y, 3.8, 3.6), {
+    decorateInside: (capContext) => paintFill(capContext, `rgba(255, 220, 160, ${glow})`, ellipsePath(-23, y - 1, 1.8, 1.5)),
+  })
+}
+
 const drawStarship = (context: Context, time: number) => {
-  for (let streak = 0; streak < 5; streak += 1) {
-    const streakY = -12 + streak * 6
-    paintLine(context, `rgba(150, 220, 255, ${0.5 - streak * 0.06})`, 1.2, linePath(-62 - streak * 4, streakY, -110 - streak * 10, streakY))
-  }
-  for (const pylonX of [-22, -10]) paintLine(context, OUTLINE, 2.4, linePath(pylonX, 9, pylonX - 6, -8))
   const glow = 0.7 + 0.3 * Math.sin(time * 8)
-  for (const nacelleY of [-13, -8]) {
-    paintShape(context, "#c9cfe0", (path) => path.roundRect(-58, nacelleY - 2.5, 42, 5, 2.5), {
-      decorateInside: (nacelleContext) => paintFill(nacelleContext, `rgba(76, 201, 240, ${glow})`, (path) => path.rect(-54, nacelleY - 0.6, 34, 1.2)),
-    })
-    paintFill(context, `rgba(255, 70, 70, ${glow})`, ellipsePath(-16, nacelleY, 2.6, 2.4))
+  for (const { y } of NACELLES) {
+    for (let streak = 0; streak < 3; streak += 1) {
+      const streakY = y - 2.4 + streak * 2.4
+      paintLine(context, `rgba(150, 220, 255, ${0.55 - streak * 0.12})`, 1.4, linePath(-78 - streak * 6, streakY, -130 - streak * 14, streakY))
+    }
   }
-  paintShape(context, "#dfe5f0", (path) => {
-    path.moveTo(2, 3)
-    path.lineTo(9, 3)
-    path.lineTo(-2, 11)
-    path.lineTo(-9, 11)
+  paintShape(context, HULL_SHADE, (path) => {
+    path.moveTo(-34, 6)
+    path.lineTo(-29, 6)
+    path.lineTo(-38, -14)
+    path.lineTo(-43, -14)
     path.closePath()
   })
-  paintShape(context, "#dfe5f0", (path) => path.roundRect(-36, 8, 42, 7, 3.5))
-  paintFill(context, `rgba(255, 170, 60, ${glow})`, ellipsePath(6, 11.5, 2.6, 2.6))
-  paintShape(context, "#eef1f8", ellipsePath(14, 0, 25, 4.8), {
-    decorateInside: (saucerContext) => paintFill(saucerContext, "#c9cfe0", (path) => path.rect(-12, 1.5, 52, 4)),
+  drawNacelle(context, NACELLES[0].y, NACELLES[0].color, glow, NACELLES[0].isFar)
+  paintShape(context, HULL, (path) => {
+    path.moveTo(-26, 6)
+    path.lineTo(-20, 6)
+    path.lineTo(-30, -13)
+    path.lineTo(-36, -13)
+    path.closePath()
   })
-  paintShape(context, "#c9cfe0", ellipsePath(14, -4, 6, 2.4))
+  drawNacelle(context, NACELLES[1].y, NACELLES[1].color, glow, NACELLES[1].isFar)
+  paintShape(context, HULL, (path) => {
+    path.moveTo(-2, -4)
+    path.lineTo(9, -4)
+    path.lineTo(-1, 8)
+    path.lineTo(-11, 8)
+    path.closePath()
+  })
+  paintShape(context, HULL, (path) => {
+    path.moveTo(-44, 5)
+    path.lineTo(-2, 5)
+    path.quadraticCurveTo(7, 5, 8, 11.5)
+    path.quadraticCurveTo(7, 18, -2, 18)
+    path.lineTo(-40, 18)
+    path.quadraticCurveTo(-46, 17, -46, 11.5)
+    path.quadraticCurveTo(-46, 5, -44, 5)
+    path.closePath()
+  }, {
+    decorateInside: (hullContext) => {
+      paintFill(hullContext, HULL_SHADE, (path) => path.rect(-46, 13.5, 56, 5))
+      for (let port = 0; port < 6; port += 1) paintFill(hullContext, "#ffe38a", ellipsePath(-36 + port * 6, 9.5, 1, 1))
+    },
+  })
+  paintFill(context, `rgba(255, 170, 60, ${0.4 * glow})`, ellipsePath(7, 11.5, 6, 6))
+  paintShape(context, "#ff9f1c", ellipsePath(7, 11.5, 3.4, 3.4), {
+    decorateInside: (dishContext) => paintFill(dishContext, `rgba(255, 240, 190, ${glow})`, ellipsePath(7.6, 10.8, 1.6, 1.6)),
+  })
+  paintShape(context, HULL_SHADE, (path) => path.ellipse(18, -4, 30, 6.5, 0, 0, Math.PI))
+  paintShape(context, HULL, ellipsePath(18, -6.5, 30, 6.2), {
+    decorateInside: (saucerContext) => {
+      paintFill(saucerContext, HULL_SHADE, ellipsePath(18, -8.5, 17, 2.8))
+      for (let port = 0; port < 9; port += 1) paintFill(saucerContext, "#ffe38a", ellipsePath(-3 + port * 5.2, -3.6, 0.9, 0.9))
+    },
+  })
+  paintShape(context, HULL, (path) => path.ellipse(18, -11, 8, 4.2, 0, Math.PI, Math.PI * 2))
+  paintShape(context, HULL_DARK, (path) => path.ellipse(18, -14.6, 3, 1.6, 0, Math.PI, Math.PI * 2))
+  paintFill(context, `rgba(120, 210, 255, ${glow})`, (path) => path.roundRect(21, -13.4, 3.4, 1.4, 0.7))
 }
 
 const drawSatellite = (context: Context, time: number) => {
