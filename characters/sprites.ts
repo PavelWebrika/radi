@@ -82,7 +82,7 @@ export const paintSprite = (context: Context, key: string, anchorX: number, anch
       return
     }
     const oldest = sprites.entries().next().value
-    if (oldest && sprites.size >= MAX_SPRITES) forgetSprite(...oldest)
+    if (oldest && sprites.size >= MAX_SPRITES) forgetSprite(oldest[0], oldest[1])
   }
   sprites.set(fullKey, sprite)
   if (isGridAligned) {
