@@ -1222,6 +1222,17 @@ const flightProfile = (flightSeconds: number, flightDuration: number) => {
   return { rise: FLIGHT_HEIGHTS, speedShare: 0 }
 }
 
+export const earthRiseFlightSeconds = (flightDuration: number) => {
+  let low = 0
+  let high = flightDuration
+  for (let step = 0; step < 30; step += 1) {
+    const middle = (low + high) / 2
+    if (flightProfile(middle, flightDuration).rise < EARTH_FROM + CAMERA_LOCK) low = middle
+    else high = middle
+  }
+  return high
+}
+
 const launchState = (height: number, wishSeconds: number | null, flightDuration: number): LaunchState => {
   const wish = wishSeconds ?? -1
   const flightSeconds = Math.max(0, wish - LIFTOFF)

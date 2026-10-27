@@ -1,5 +1,5 @@
 import { ellipsePath, linePath, paintFill, paintLine, paintShape, type Context } from "@/characters/paint"
-import { OUTLINE, OUTLINE_WIDTH, SILVER, drawRadi, drawStarSparkle, type Point, type RadiLook } from "@/characters/radi"
+import { OUTLINE, OUTLINE_WIDTH, SILVER, drawRadi, type Point, type RadiLook } from "@/characters/radi"
 import { drawKiraFront } from "@/characters/kira"
 import { drawPartyPerson, type PartyPerson, type PartyPose } from "@/characters/partyPerson"
 import { nightClubRadiLook } from "@/characters/radiConcepts"
@@ -59,9 +59,9 @@ export const CLUB_SCENE_END = IRIS_OUT_END
 export const playedClubSeconds = (sceneSeconds: number, letsDanceSeconds: number | null) =>
   letsDanceSeconds === null ? Math.min(sceneSeconds, FUN_BUBBLE_HOLD) : FUN_BUBBLE_HOLD + letsDanceSeconds
 
-export type SpecialMoveKind = 0 | 1 | 2
+export type SpecialMoveKind = 0 | 1
 export type SpecialMove = { kind: SpecialMoveKind; seconds: number }
-export const SPECIAL_MOVE_SECONDS: Record<SpecialMoveKind, number> = { 0: 1.8, 1: 3.2, 2: 1.7 }
+export const SPECIAL_MOVE_SECONDS: Record<SpecialMoveKind, number> = { 0: 3.2, 1: 1.7 }
 const SPECIAL_MOVE_WAVE = 0.36
 const SMOOTH_MOVES_START = DANCE_START + 10
 const SMOOTH_MOVES_END = DANCE_STOP_START - 3.4
@@ -75,12 +75,8 @@ export const isSmoothMovesOpen = (sceneSeconds: number, letsDanceSeconds: number
   return clubSeconds >= SMOOTH_MOVES_START && clubSeconds < SMOOTH_MOVES_END
 }
 
-type MoveFrame = { shiftX: number; lift: number; flip: number; facing: number; lean: number; arms: number; slide: number; whirl: number; spin: number; pop: number }
-const STILL_FRAME: MoveFrame = { shiftX: 0, lift: 0, flip: 0, facing: 1, lean: 0, arms: 0, slide: 0, whirl: 0, spin: 0, pop: 0 }
-const WHIRL_BANDS = [0.22, 0.5, 0.78] as const
-const SPIN_NARROWEST = 0.75
-const POP_SPARKLES = 5
-const BODY_WIDTH = 46
+type MoveFrame = { shiftX: number; lift: number; flip: number; lean: number; arms: number; slide: number }
+const STILL_FRAME: MoveFrame = { shiftX: 0, lift: 0, flip: 0, lean: 0, arms: 0, slide: 0 }
 const MOONWALK_STOPS = [0, -1, 1, 0] as const
 
 const smoothStep = (amount: number) => amount * amount * (3 - 2 * amount)
@@ -91,19 +87,6 @@ const specialMoveFrame = (move: SpecialMove | null, delay: number, reach: number
   if (progress <= 0 || progress >= 1) return STILL_FRAME
   const swell = Math.sin(progress * Math.PI)
   if (move.kind === 0) {
-    const spin = smoothStep(progress) * Math.PI * 4
-    const turn = Math.cos(spin)
-    return {
-      ...STILL_FRAME,
-      lift: swell * jump * 0.25,
-      facing: (turn < 0 ? -1 : 1) * (SPIN_NARROWEST + (1 - SPIN_NARROWEST) * Math.abs(turn)),
-      arms: swell,
-      whirl: Math.min(1, swell * 1.6),
-      spin,
-      pop: stageProgress(progress, 0.78, 1),
-    }
-  }
-  if (move.kind === 1) {
     const legs = progress * 3
     const leg = Math.min(2, Math.floor(legs))
     const along = smoothStep(legs - leg)
@@ -125,47 +108,9 @@ const withMoveFrame = (context: Context, frame: MoveFrame, centerX: number, feet
   context.translate(0, -bodyHeight / 2)
   context.rotate(frame.flip)
   context.translate(0, bodyHeight / 2)
-  context.scale(frame.facing, 1)
   context.translate(-centerX, -feetY)
   draw()
   context.restore()
-}
-
-const whirlStreak = (centerX: number, centerY: number, radiusX: number, radiusY: number, from: number, to: number, thickness: number) => (path: Path2D) => {
-  path.ellipse(centerX, centerY, radiusX, radiusY, 0, from, to)
-  path.ellipse(centerX, centerY + thickness, radiusX * 0.94, radiusY * 0.8, 0, to, from, true)
-  path.closePath()
-}
-
-const drawMoveEffects = (context: Context, frame: MoveFrame, centerX: number, feetY: number, scale: number, seed: number, time: number) => {
-  if (frame.whirl <= 0 && frame.pop <= 0) return
-  const bodyX = centerX + frame.shiftX
-  const bodyFeetY = feetY - frame.lift
-  const radiusX = BODY_WIDTH * 0.75 * scale
-  if (frame.whirl > 0) {
-    WHIRL_BANDS.forEach((band, bandIndex) => {
-      const bandY = bodyFeetY - BODY_HEIGHT * band * scale
-      const bandRadiusX = radiusX * (1 + bandIndex * 0.08)
-      const bandRadiusY = bandRadiusX * 0.28
-      for (const half of [0, Math.PI]) {
-        const from = frame.spin * 1.3 + bandIndex * 1.1 + half
-        const to = from + 1.5
-        const isFront = Math.sin(from + 0.75) > 0
-        const alpha = frame.whirl * (isFront ? 0.85 : 0.3)
-        const thickness = 3.2 * scale
-        paintFill(context, partyColor(seed + bandIndex, time, alpha), whirlStreak(bodyX, bandY, bandRadiusX, bandRadiusY, from, to, thickness))
-        paintFill(context, `rgba(255, 255, 255, ${alpha})`, whirlStreak(bodyX, bandY, bandRadiusX * 0.98, bandRadiusY * 0.98, from + 0.25, to - 0.25, thickness * 0.4))
-      }
-    })
-  }
-  if (frame.pop > 0) {
-    const headY = bodyFeetY - BODY_HEIGHT * 0.7 * scale
-    for (let sparkle = 0; sparkle < POP_SPARKLES; sparkle += 1) {
-      const angle = (sparkle / POP_SPARKLES) * Math.PI * 2 + seed
-      const reach = BODY_WIDTH * scale * (0.5 + frame.pop * 0.9)
-      drawStarSparkle(context, bodyX + Math.cos(angle) * reach, headY + Math.sin(angle) * reach * 0.8, BODY_WIDTH * 0.2 * scale * (1 - frame.pop), partyColor(seed + sparkle, time, 1 - frame.pop * 0.6))
-    }
-  }
 }
 
 
@@ -382,7 +327,12 @@ const radiDanceMotion = (danceSeconds: number, energy: number) => {
 const bubblePopScale = (clubSeconds: number, start: number, end: number) =>
   easeOutBack(stageProgress(clubSeconds, start, start + BUBBLE_POP_SECONDS)) * (1 - stageProgress(clubSeconds, end - BUBBLE_HIDE_SECONDS, end))
 
-const launchHeight = (clubSeconds: number, feetY: number, scale: number) => stageProgress(clubSeconds, LAUNCH_START, LAUNCH_END) ** 2.5 * (feetY + 20 * scale)
+const LAUNCH_CURVE = 2.5
+const launchHeight = (clubSeconds: number, feetY: number, scale: number) => {
+  const distance = feetY + 20 * scale
+  const coast = Math.max(0, clubSeconds - LAUNCH_END) * (LAUNCH_CURVE / (LAUNCH_END - LAUNCH_START))
+  return (stageProgress(clubSeconds, LAUNCH_START, LAUNCH_END) ** LAUNCH_CURVE + coast) * distance
+}
 
 const drawPowerAura = (context: Context, radiX: number, feetY: number, scale: number, time: number, glow: number) => {
   if (glow <= 0) return
@@ -494,7 +444,6 @@ const drawCrowd = (context: Context, width: number, height: number, time: number
       : { ...dancing, hands: mixHands(dancing.hands, PARTY_ARMS_UP, frame.arms), footLifts: [dancing.footLifts[0] + Math.max(0, frame.slide) * 4, dancing.footLifts[1] + Math.max(0, -frame.slide) * 4] }
     const person: PartyPerson = amazement > 0.5 ? { ...dancer.person, face: "amazed" } : dancer.person
     withMoveFrame(context, frame, feetX, feetY, BODY_HEIGHT * personScale, () => drawPartyPerson(context, person, feetX, feetY, personScale, pose))
-    drawMoveEffects(context, frame, feetX, feetY, personScale, dancerIndex, time)
   })
 }
 
@@ -597,7 +546,6 @@ const drawDjBooth = (context: Context, width: number, height: number, time: numb
       hands: [mixPoint([-24, -33], [-22, -66 + Math.sin(time * GROOVE_RATE * 2) * 3], hype), [24 + Math.sin(time * 10) * 3, -33]],
     })
   })
-  drawMoveEffects(context, djFrame, width / 2, feetY, djScale, 7, time)
   inBoothUnits(() => {
     paintShape(context, "#2a2440", (path) => path.rect(-48, -28, 96, 34))
     for (let barIndex = 0; barIndex < 12; barIndex += 1) {
@@ -709,7 +657,6 @@ export const drawClubScene = (context: Context, width: number, height: number, t
   drawSpotlight(context, radiX + radiFrame.shiftX, feetY, scale, grooveTime)
   drawTakeoff(context, radiX, feetY, scale, time, clubSeconds)
   withMoveFrame(context, radiFrame, radiX, feetY, BODY_HEIGHT * scale, () => drawClubRadi(context, radiX, feetY, scale, grooveTime, clubSeconds, radiFrame))
-  drawMoveEffects(context, radiFrame, radiX, feetY, scale, 3, grooveTime)
   drawLightBeams(context, width, height, grooveTime, ballX, ballY)
   drawCrowd(context, width, height, grooveTime, scale, true, amazement, specialMove)
   drawRadiBubble(context, width, radiX, feetY, scale, bubblePopScale(clubSeconds, FUN_BUBBLE_START, FUN_BUBBLE_END), ["And I like to have fun", "and dance!"], FUN_BUBBLE_TEXT_OFFSET)

@@ -5,6 +5,7 @@ import { drawRadiConcepts } from "@/characters/radiConcepts"
 import { anywayButtonLayout, CAR_ENTRANCE_SOUND, cityWalkSteps, CITY_SCENE_END, drawCityScene, DRIVE_CRUISE_SECONDS, DRIVE_MAX_BOOST, DRIVE_READY_SECONDS, KIRA_POP_PROGRESS, KIRA_WOOF_START, RADI_EXIT_START } from "@/scenes/cityScene"
 import { CLUB_SCENE_END, clubWalkSteps, drawClubScene, isSmoothMovesOpen, LAUNCH_START, letsDanceButtonLayout, playedClubSeconds, smoothMovesButtonLayout, SPECIAL_MOVE_SECONDS, type SpecialMoveKind } from "@/scenes/clubScene"
 import { FILM_SCENES } from "@/scenes/filmScenes"
+import { activeQuickTime, drawRocketQuickTime, isInGoodWindow, missedQuickTime, QUICK_TIME_KEYS, quickTimeStarts, type QuickTimeResult } from "@/scenes/rocketQuickTime"
 import {
   drawLibraryScene,
   libraryWalkSteps,
@@ -276,6 +277,9 @@ export const FilmCanvas = () => {
     let specialMoveKind: SpecialMoveKind = 0
     let specialMoveStartMilliseconds: number | null = null
     let isSmoothMovesShown = false
+    let quickTimeSeconds: number | null = null
+    let quickTimeStartList: readonly number[] = []
+    let quickTimeResults: (QuickTimeResult | null)[] = QUICK_TIME_KEYS.map(() => null)
     let horoTargetSteps = 0
     let horoSteps = 0
     let horoIdleSteps = 0
@@ -373,6 +377,16 @@ export const FilmCanvas = () => {
       }
       crossfadeOutro()
       const flightDuration = Number.isFinite(endSong.duration) ? endSong.duration : DEFAULT_FLIGHT_SECONDS
+      quickTimeSeconds = hasLiftedOff ? wishSeconds : null
+      if (quickTimeSeconds === null) {
+        if (quickTimeResults.some((result) => result !== null)) quickTimeResults = QUICK_TIME_KEYS.map(() => null)
+      } else {
+        const seconds = quickTimeSeconds
+        quickTimeStartList = quickTimeStarts(flightDuration)
+        quickTimeStartList.forEach((start, index) => {
+          if (quickTimeResults[index] === null && missedQuickTime(seconds, start)) quickTimeResults[index] = { hit: false, atSeconds: seconds }
+        })
+      }
       if (natureSeconds === null) {
         horoSongStarted = false
         horoDanceStarted = false
@@ -418,6 +432,7 @@ export const FilmCanvas = () => {
         drawRadiConcepts(context, window.innerWidth, window.innerHeight)
       } else if (cosmodromeSeconds !== null) {
         drawCosmodromeScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, cosmodromeSeconds, wishSeconds, flightDuration)
+        drawRocketQuickTime(context, window.innerWidth, window.innerHeight, quickTimeSeconds, quickTimeStartList, quickTimeResults)
       } else if (natureSeconds !== null) {
         drawNatureScene(context, window.innerWidth, window.innerHeight, timeMilliseconds / 1000, natureSeconds, horoSteps, horoSteps + horoIdleSteps, !hasScrolledHoro)
       } else if (librarySeconds !== null) {
@@ -580,7 +595,7 @@ export const FilmCanvas = () => {
     }
     const doSmoothMoves = () => {
       if (!isSmoothMovesShown || specialMoveStartMilliseconds !== null) return
-      specialMoveKind = (smoothMovesPresses % 3) as SpecialMoveKind
+      specialMoveKind = (smoothMovesPresses % 2) as SpecialMoveKind
       smoothMovesPresses += 1
       specialMoveStartMilliseconds = performance.now()
     }
@@ -704,6 +719,16 @@ export const FilmCanvas = () => {
       backgroundPlaylist.nudge()
       const scrollingUp = event.key === "ArrowUp" || event.key === "PageUp" || event.key === "Home" || (event.key === " " && event.shiftKey)
       if (scrollingUp && (event.key === "Home" ? scrollFloorProgress > 0 : blockUpwardScroll())) event.preventDefault()
+      pressQuickTime(event)
+    }
+    const pressQuickTime = (event: KeyboardEvent) => {
+      if (quickTimeSeconds === null || wishStartMilliseconds === null || event.repeat) return
+      const key = event.key.toUpperCase()
+      if (!QUICK_TIME_KEYS.some((quickTimeKey) => quickTimeKey === key)) return
+      const seconds = (performance.now() - wishStartMilliseconds) / 1000
+      const index = activeQuickTime(seconds, quickTimeStartList)
+      if (index === -1 || quickTimeResults[index] !== null) return
+      quickTimeResults[index] = { hit: key === QUICK_TIME_KEYS[index] && isInGoodWindow(seconds, quickTimeStartList[index]), atSeconds: seconds }
     }
     const onResize = () => {
       resizeCanvas(canvas, context)
