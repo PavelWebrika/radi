@@ -981,6 +981,7 @@ const drawBreath = (context: Context, from: Point, to: Point, scale: number, wis
   }
 }
 
+const KISS_PUCKER = 0.25
 const dudeKiss = (sceneSeconds: number) => easeInOut(stageProgress(sceneSeconds, KISS_START, KISS_CONTACT)) * (1 - easeInOut(stageProgress(sceneSeconds, KISS_LEAVE, KISS_END)))
 
 const dudeX = (width: number, radiX: number, scale: number, sceneSeconds: number) =>
@@ -1008,7 +1009,7 @@ const drawShadesDude = (context: Context, width: number, radiX: number, feetY: n
   context.save()
   context.translate(x, feetY)
   context.rotate(-kiss * KISS_LEAN)
-  drawShadesDudeFront(context, 0, 0, dudeScale, pose)
+  drawShadesDudeFront(context, 0, 0, dudeScale, pose, kiss > KISS_PUCKER)
   context.scale(dudeScale, dudeScale)
   context.translate(pose.sway, pose.bounce)
   context.lineJoin = "round"

@@ -7,7 +7,7 @@ type PartyTop = "tee" | "tank" | "shirt" | "crop" | "hoodie" | "blazer" | "folkS
 type PartyBottom = "jeans" | "shorts" | "skirt" | "folkTrousers" | "folkSkirt"
 type PartyShoes = "sneakers" | "boots" | "heels" | "loafers" | "tsarvuli"
 type PartyBuild = "slim" | "broad" | "curvy" | "chubby"
-type PartyFace = "smile" | "laugh" | "vibing" | "amazed"
+type PartyFace = "smile" | "laugh" | "vibing" | "amazed" | "kiss"
 type PartyExtra = "beard" | "stubble" | "mustache" | "glasses" | "sunglasses" | "cap" | "earrings" | "chain" | "drink" | "sequins" | "kalpak" | "flowerCrown" | "sash" | "folkApron" | "handkerchief"
 type BuildShape = { torso: number; hip: number; leg: number; stance: number }
 
@@ -436,6 +436,14 @@ const drawFace = (context: Context, person: PartyPerson, lookUp: number) => {
   })
   if (face === "amazed") {
     paintShape(context, "#7a2230", ellipsePath(0, -51, 3.2, 4.2))
+  } else if (face === "kiss") {
+    paintShape(context, "#7a2230", ellipsePath(0, -51, 1.1, 1.4))
+    for (const side of SIDES) {
+      paintLine(context, OUTLINE, 0.9, (path) => {
+        path.moveTo(side * 3.6, -53)
+        path.quadraticCurveTo(side * 4.6, -51, side * 3.6, -49)
+      })
+    }
   } else if (face === "laugh") {
     paintShape(context, "#7a2230", (path) => {
       path.moveTo(-6, -53)

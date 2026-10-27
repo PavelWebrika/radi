@@ -47,8 +47,10 @@ const drawInUnits = (context: Context, feetX: number, feetY: number, scale: numb
   context.restore()
 }
 
-export const drawShadesDudeFront = (context: Context, feetX: number, feetY: number, scale: number, pose: PartyPose = STANDING) => {
-  drawPartyPerson(context, shadesDude, feetX, feetY, scale, pose)
+const kissingDude: PartyPerson = { ...shadesDude, face: "kiss" }
+
+export const drawShadesDudeFront = (context: Context, feetX: number, feetY: number, scale: number, pose: PartyPose = STANDING, isKissing = false) => {
+  drawPartyPerson(context, isKissing ? kissingDude : shadesDude, feetX, feetY, scale, pose)
   drawInUnits(context, feetX, feetY, scale, () => {
     context.translate(pose.sway, pose.bounce + NECK_Y)
     context.rotate(pose.headTilt)
