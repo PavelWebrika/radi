@@ -33,7 +33,7 @@ const ASTRONAUT_TRIM = "#ff8c42"
 const ASTRONAUT_GLOVE = "#4d7cc9"
 const SIDES = [-1, 1] as const
 
-type RadiPattern = "openBook" | "mandala" | "flowers" | "comic" | "tieDye" | "folk" | "lace" | "sukman" | "tropical"
+type RadiPattern = "sun" | "mandala" | "flowers" | "comic" | "tieDye" | "folk" | "lace" | "sukman" | "tropical"
 type RadiExtra =
   | "denimJacket"
   | "headphones"
@@ -112,18 +112,11 @@ export const paintTube = (context: Context, color: string, thickness: number, bu
 }
 
 const patternPainters: Record<RadiPattern, DecorateInside> = {
-  openBook: (context) => {
-    for (const side of SIDES) {
-      paintFill(context, WHITE, (path) => {
-        path.moveTo(side * 0.6, -36.5)
-        path.quadraticCurveTo(side * 3, -38.2, side * 6.2, -36.8)
-        path.lineTo(side * 6.2, -32.6)
-        path.quadraticCurveTo(side * 3, -34, side * 0.6, -32.4)
-        path.closePath()
-      })
-    }
-    for (const [angle, reach] of [[-Math.PI / 2, 3.4], [-Math.PI * 0.27, 2.8], [-Math.PI * 0.73, 2.8]] as const) {
-      paintLine(context, WHITE, 0.9, linePath(Math.cos(angle) * 4.5, -36.5 + Math.sin(angle) * 4.5, Math.cos(angle) * (4.5 + reach), -36.5 + Math.sin(angle) * (4.5 + reach)))
+  sun: (context) => {
+    paintFill(context, WHITE, ellipsePath(0, -38, 2.1, 2.1))
+    for (let ray = 0; ray < 8; ray += 1) {
+      const angle = (ray * Math.PI) / 4
+      paintLine(context, WHITE, 0.8, linePath(Math.cos(angle) * 3.2, -38 + Math.sin(angle) * 3.2, Math.cos(angle) * 4.6, -38 + Math.sin(angle) * 4.6))
     }
   },
   mandala: (context) => {

@@ -582,7 +582,7 @@ export const drawRadiSide = (context: Context, look: RadiLook, feetX: number, fe
   } else {
     drawSideLegs(context, look.shoes ?? "sneakers", isPolished, stride)
     drawSideBottom(context, look.bottom, isPolished)
-    drawTorso(context, look.top.pattern === "openBook" ? { ...look.top, pattern: undefined } : look.top, isPolished, 7)
+    drawTorso(context, look.top.pattern === "sun" ? { ...look.top, pattern: undefined } : look.top, isPolished, 7)
   }
   drawSideExtrasOnBody(context, look, isPolished)
   if (isBatman) drawSideBatmanChest(context, isPolished)

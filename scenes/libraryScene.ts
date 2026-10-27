@@ -1164,8 +1164,12 @@ const drawSpeechBubble = (context: Context, width: number, radiX: number, floorY
   context.restore()
 }
 
+const HELD_BOOK_WIDTH = 14
+const HELD_BOOK_HEIGHT = 19
+const TOSS_LANDING_BOUNCE = 0.3
+
 const drawHeldBook = (context: Context, centerX: number, centerY: number, scale: number, tilt: number) =>
-  drawBook(context, centerX, centerY, 10 * scale, 14 * scale, READING_BOOK, tilt, "gold")
+  drawBook(context, centerX, centerY, HELD_BOOK_WIDTH * scale, HELD_BOOK_HEIGHT * scale, READING_BOOK, tilt, "gold")
 
 const skipBounce = (phase: number) => {
   const arc = Math.sin(phase * Math.PI)
@@ -2130,15 +2134,18 @@ const drawHeroExit = (
   const drawTossedBook = () => {
     if (bookFly <= 0) return
     const releaseBounce = Math.abs(Math.sin((EXIT_BOOK_START * Math.PI * 2) / 0.34)) * 9 * scale
-    const flyX = mix(landingX, width * 0.68, bookFly)
-    const flyY = mix(floorY - releaseBounce - 7 * scale, floorY - 18 * scale, bookFly) - Math.sin(bookFly * Math.PI) * 120 * scale
-    if (bookFly < 0.92) {
+    const flight = stageProgress(seconds, EXIT_BOOK_START, EXIT_BOOK_END)
+    const landed = stageProgress(seconds, EXIT_BOOK_END, EXIT_BOOK_END + TOSS_LANDING_BOUNCE)
+    const thud = Math.sin(landed * Math.PI) * (1 - landed) * 8 * scale
+    const flyX = mix(landingX, width * 0.68, flight)
+    const flyY = mix(floorY - releaseBounce - 7 * scale, floorY - (HELD_BOOK_WIDTH / 2) * scale, flight) - Math.sin(flight * Math.PI) * 120 * scale - thud
+    if (flight < 0.92) {
       paintLine(context, OUTLINE, 2.2, linePath(flyX - 16 * scale, flyY + 4 * scale, flyX - 42 * scale, flyY + 14 * scale))
       paintLine(context, OUTLINE, 2.2, linePath(flyX - 12 * scale, flyY - 10 * scale, flyX - 36 * scale, flyY - 2 * scale))
     }
     context.save()
     context.translate(flyX, flyY)
-    context.rotate(bookFly * Math.PI * 2.2)
+    context.rotate(flight * Math.PI * 2.5)
     drawReadingBook(context, 0, 0, scale, 1 - easeOut(Math.min(1, bookFly * 2.5)), 0)
     context.restore()
   }

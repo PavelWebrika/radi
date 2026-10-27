@@ -95,7 +95,7 @@ const bookwormConcept = polishConcept({
     hair: "bob",
     expression: "grin",
     pose: "wave",
-    top: { color: "#ff6d8f", pattern: "openBook" },
+    top: { color: "#ff6d8f", pattern: "sun" },
     bottom: { kind: "shorts", color: "#1b2438", pattern: "tropical" },
     extras: ["readingGlasses"],
     shoes: "sneakers",
