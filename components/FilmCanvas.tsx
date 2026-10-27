@@ -61,6 +61,16 @@ const HORO_IDLE_STEPS_PER_SECOND = 1.6
 const WHEEL_LINE_PIXELS = 16
 const OUTRO_CROSSFADE_SECONDS = 3
 
+type LockableOrientation = ScreenOrientation & { lock?: (orientation: "landscape") => Promise<void> }
+
+const lockLandscape = async () => {
+  if (!window.matchMedia("(pointer: coarse)").matches || !document.documentElement.requestFullscreen) return
+  try {
+    if (!document.fullscreenElement) await document.documentElement.requestFullscreen({ navigationUI: "hide" })
+    await (screen.orientation as LockableOrientation).lock?.("landscape")
+  } catch {}
+}
+
 const startOver = () => {
   window.history.scrollRestoration = "manual"
   window.scrollTo(0, 0)
@@ -575,6 +585,7 @@ export const FilmCanvas = () => {
       document.documentElement.dataset.scrollOpen = "true"
       if (startButtonRef.current) startButtonRef.current.dataset.visible = "false"
       backgroundPlaylist.nudge()
+      void lockLandscape()
     }
     const startMeetingKira = () => {
       meetingStartMilliseconds = performance.now()

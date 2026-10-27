@@ -128,7 +128,7 @@ export const drawRadiBack = (context: Context, look: RadiLook, feetX: number, fe
   }
   if (!hideLegs) drawBackLegs(context, legLifts, kneeBends, isPolished)
   drawBackShorts(context, look, isPolished)
-  drawTorso(context, { ...look.top, label: undefined }, isPolished)
+  drawTorso(context, look.top.pattern === "openBook" ? { ...look.top, pattern: undefined } : look.top, isPolished)
   drawBackHead(context, isPolished)
   drawBackHair(context, isPolished)
   if (look.extras.includes("readingGlasses")) drawBackGlasses(context)

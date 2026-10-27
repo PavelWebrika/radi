@@ -33,7 +33,7 @@ const ASTRONAUT_TRIM = "#ff8c42"
 const ASTRONAUT_GLOVE = "#4d7cc9"
 const SIDES = [-1, 1] as const
 
-type RadiPattern = "mandala" | "flowers" | "comic" | "tieDye" | "folk" | "lace" | "sukman" | "tropical"
+type RadiPattern = "openBook" | "mandala" | "flowers" | "comic" | "tieDye" | "folk" | "lace" | "sukman" | "tropical"
 type RadiExtra =
   | "denimJacket"
   | "headphones"
@@ -56,7 +56,7 @@ export type RadiExpression = "grin" | "tongue" | "puff" | "surprised" | "angry" 
 type RadiPose = "wave" | "peace" | "hold"
 export type RadiShoes = "sneakers" | "highTops" | "tsarvuli" | "partyHeels" | "folkFlats" | "boots" | "hooves"
 type DrawShoe = (context: Context, side: number, isPolished: boolean) => void
-type RadiTop = { color: string; pattern?: RadiPattern; label?: string }
+type RadiTop = { color: string; pattern?: RadiPattern }
 export type RadiBottom = { kind: "skirt" | "shorts"; color: string; pattern?: RadiPattern }
 type CurveLine = readonly [number, number, number, number, number, number]
 export type Point = readonly [number, number]
@@ -112,6 +112,20 @@ export const paintTube = (context: Context, color: string, thickness: number, bu
 }
 
 const patternPainters: Record<RadiPattern, DecorateInside> = {
+  openBook: (context) => {
+    for (const side of SIDES) {
+      paintFill(context, WHITE, (path) => {
+        path.moveTo(side * 0.6, -36.5)
+        path.quadraticCurveTo(side * 3, -38.2, side * 6.2, -36.8)
+        path.lineTo(side * 6.2, -32.6)
+        path.quadraticCurveTo(side * 3, -34, side * 0.6, -32.4)
+        path.closePath()
+      })
+    }
+    for (const [angle, reach] of [[-Math.PI / 2, 3.4], [-Math.PI * 0.27, 2.8], [-Math.PI * 0.73, 2.8]] as const) {
+      paintLine(context, WHITE, 0.9, linePath(Math.cos(angle) * 4.5, -36.5 + Math.sin(angle) * 4.5, Math.cos(angle) * (4.5 + reach), -36.5 + Math.sin(angle) * (4.5 + reach)))
+    }
+  },
   mandala: (context) => {
     for (const radius of [3, 6]) paintLine(context, WHITE, 0.6, ellipsePath(0, -39, radius, radius))
     for (let ray = 0; ray < 12; ray += 1) {
@@ -501,19 +515,6 @@ const drawBottom = (context: Context, bottom: RadiBottom, isPolished: boolean) =
   }, { ...shadeIf(isPolished), decorateInside: decorationFor(bottom.pattern) })
 }
 
-const drawShirtLabel = (context: Context, label: string, halfWidth: number) => {
-  if (halfWidth < 9) return
-  const maxWidth = halfWidth * 1.35
-  context.font = `bold ${halfWidth * 0.62}px "Comic Sans MS", "Comic Sans", cursive`
-  const measured = context.measureText(label).width
-  const fontSize = halfWidth * 0.62 * (measured > maxWidth ? maxWidth / measured : 1)
-  context.fillStyle = WHITE
-  context.textAlign = "center"
-  context.textBaseline = "middle"
-  context.font = `bold ${fontSize}px "Comic Sans MS", "Comic Sans", cursive`
-  context.fillText(label, 0, -38.5)
-}
-
 export const drawTorso = (context: Context, top: RadiTop, isPolished: boolean, halfWidth = 9) => {
   const pattern = decorationFor(top.pattern)
   paintShape(context, top.color, (path) => path.roundRect(-halfWidth, -49, halfWidth * 2, 19, 5), {
@@ -525,7 +526,6 @@ export const drawTorso = (context: Context, top: RadiTop, isPolished: boolean, h
         torsoContext.restore()
       }
       if (isPolished) paintFill(torsoContext, SHADE, ellipsePath(0, -47.5, 8, 3))
-      if (top.label) drawShirtLabel(torsoContext, top.label, halfWidth)
     },
   })
 }
