@@ -1,5 +1,5 @@
 import { ellipsePath, linePath, paintFill, paintLine, paintShade, paintShape, type BuildPath, type Context, type DecorateInside } from "@/characters/paint"
-import { paintSprite, snapToPixel, type SpriteBounds } from "@/characters/sprites"
+import { paintSprite, snapToSubpixel, type SpriteBounds } from "@/characters/sprites"
 
 export const OUTLINE = "#2b1d1a"
 export const OUTLINE_WIDTH = 1.6
@@ -1257,7 +1257,7 @@ export const drawRadi = (context: Context, look: RadiLook, feetX: number, feetY:
 
   activeColors = look.colors ?? RADI_COLORS
   context.save()
-  context.translate(...(spriteKey ? snapToPixel(context, feetX, feetY) : [feetX, feetY] as const))
+  context.translate(...(spriteKey ? snapToSubpixel(context, feetX, feetY) : [feetX, feetY] as const))
   context.scale(scale, scale)
   context.lineJoin = "round"
   context.lineCap = "round"

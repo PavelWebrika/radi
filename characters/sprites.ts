@@ -1,10 +1,11 @@
 import type { Context } from "@/characters/paint"
 
 export type SpriteBounds = readonly [left: number, top: number, right: number, bottom: number]
-type Sprite = { canvas: HTMLCanvasElement; layer: Context; left: number; top: number; scale: number }
+type Sprite = { canvas: HTMLCanvasElement; layer: Context; scale: number }
 
 const SPRITE_PAD_PIXELS = 2
-const MAX_SPRITES = 400
+const SUBPIXEL_STEPS = 4
+const MAX_SPRITES = 1200
 const sprites = new Map<string, Sprite>()
 
 const forgetSprite = (key: string, { canvas }: Sprite) => {
@@ -19,37 +20,49 @@ export const releaseSprites = (prefix: string) => {
   }
 }
 
-export const snapToPixel = (context: Context, x: number, y: number): readonly [number, number] => {
+const toSubpixel = (deviceValue: number) => Math.round(deviceValue * SUBPIXEL_STEPS) / SUBPIXEL_STEPS
+
+export const snapToSubpixel = (context: Context, x: number, y: number): readonly [number, number] => {
   const { a, b, c, d, e, f } = context.getTransform()
   if (b !== 0 || c !== 0 || a === 0 || d === 0) return [x, y]
-  return [x + (Math.round(a * x + e) - (a * x + e)) / a, y + (Math.round(d * y + f) - (d * y + f)) / d]
+  return [x + (toSubpixel(a * x + e) - (a * x + e)) / a, y + (toSubpixel(d * y + f) - (d * y + f)) / d]
 }
 
-const isLayerLost =(layer: Context) => (layer as Context & { isContextLost?: () => boolean }).isContextLost?.() === true
+const isLayerLost = (layer: Context) => (layer as Context & { isContextLost?: () => boolean }).isContextLost?.() === true
 
-const buildSprite = (context: Context, scale: number, [left, top, right, bottom]: SpriteBounds, draw: (layer: Context) => void): Sprite | null => {
+const buildSprite = (context: Context, scale: number, [left, top, right, bottom]: SpriteBounds, shiftX: number, shiftY: number, draw: (layer: Context) => void): Sprite | null => {
   const canvas = document.createElement("canvas")
-  canvas.width = Math.ceil((right - left) * scale) + SPRITE_PAD_PIXELS * 2
-  canvas.height = Math.ceil((bottom - top) * scale) + SPRITE_PAD_PIXELS * 2
+  canvas.width = Math.ceil((right - left) * scale) + SPRITE_PAD_PIXELS * 2 + 1
+  canvas.height = Math.ceil((bottom - top) * scale) + SPRITE_PAD_PIXELS * 2 + 1
   const layer = canvas.getContext("2d")
   if (!layer) return null
-  layer.setTransform(scale, 0, 0, scale, SPRITE_PAD_PIXELS - left * scale, SPRITE_PAD_PIXELS - top * scale)
+  layer.setTransform(scale, 0, 0, scale, SPRITE_PAD_PIXELS + shiftX - left * scale, SPRITE_PAD_PIXELS + shiftY - top * scale)
   layer.strokeStyle = context.strokeStyle
   layer.lineWidth = context.lineWidth
   layer.lineJoin = context.lineJoin
   layer.lineCap = context.lineCap
   draw(layer)
-  return { canvas, layer, left: left - SPRITE_PAD_PIXELS / scale, top: top - SPRITE_PAD_PIXELS / scale, scale }
+  return { canvas, layer, scale }
+}
+
+const placeOnGrid = (deviceStart: number, direction: number) => {
+  const place = toSubpixel(deviceStart) * direction
+  return { origin: Math.floor(place) * direction, shift: place - Math.floor(place) }
 }
 
 export const paintSprite = (context: Context, key: string, anchorX: number, anchorY: number, bounds: SpriteBounds, draw: (layer: Context) => void) => {
   const { a, b, c, d, e, f } = context.getTransform()
   const scale = Math.round(Math.hypot(a, b) * 1000) / 1000
-  const fullKey = `${key} ${scale} ${context.strokeStyle} ${context.lineWidth} ${context.lineJoin} ${context.lineCap}`
+  const left = anchorX + bounds[0] - SPRITE_PAD_PIXELS / scale
+  const top = anchorY + bounds[1] - SPRITE_PAD_PIXELS / scale
+  const isGridAligned = b === 0 && c === 0 && Math.abs(a) === Math.abs(d)
+  const column = isGridAligned ? placeOnGrid(a * left + e, Math.sign(a)) : { origin: 0, shift: 0 }
+  const row = isGridAligned ? placeOnGrid(d * top + f, Math.sign(d)) : { origin: 0, shift: 0 }
+  const fullKey = `${key} ${scale} ${column.shift} ${row.shift} ${context.strokeStyle} ${context.lineWidth} ${context.lineJoin} ${context.lineCap}`
   let sprite = sprites.get(fullKey)
   if (sprite) sprites.delete(fullKey)
   if (!sprite || isLayerLost(sprite.layer)) {
-    sprite = buildSprite(context, scale, bounds, draw) ?? undefined
+    sprite = buildSprite(context, scale, bounds, column.shift, row.shift, draw) ?? undefined
     if (!sprite) {
       context.save()
       context.translate(anchorX, anchorY)
@@ -61,11 +74,9 @@ export const paintSprite = (context: Context, key: string, anchorX: number, anch
     if (oldest && sprites.size >= MAX_SPRITES) forgetSprite(...oldest)
   }
   sprites.set(fullKey, sprite)
-  const left = anchorX + sprite.left
-  const top = anchorY + sprite.top
-  if (b === 0 && c === 0 && Math.abs(a) === Math.abs(d)) {
+  if (isGridAligned) {
     context.save()
-    context.setTransform(Math.sign(a), 0, 0, Math.sign(d), Math.round(a * left + e), Math.round(d * top + f))
+    context.setTransform(Math.sign(a), 0, 0, Math.sign(d), column.origin, row.origin)
     context.drawImage(sprite.canvas, 0, 0)
     context.restore()
     return

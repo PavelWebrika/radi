@@ -1,6 +1,6 @@
 import { ellipsePath, linePath, paintFill, paintLine, paintShape, type BuildPath, type Context } from "@/characters/paint"
 import { OUTLINE, OUTLINE_WIDTH, WHITE, paintTube, type Point } from "@/characters/radi"
-import { paintSprite, snapToPixel, type SpriteBounds } from "@/characters/sprites"
+import { paintSprite, snapToSubpixel, type SpriteBounds } from "@/characters/sprites"
 
 type PartyHair = "short" | "buzz" | "long" | "curly" | "bob" | "bun" | "ponytail" | "mohawk" | "bald"
 type PartyEyes = "dot" | "round" | "sleepy" | "lashes"
@@ -596,14 +596,14 @@ export const drawPartyPerson = (context: Context, person: PartyPerson, feetX: nu
     context.restore()
   }
   context.save()
-  context.translate(...(spriteKey ? snapToPixel(context, feetX, feetY) : [feetX, feetY] as const))
+  context.translate(...(spriteKey ? snapToSubpixel(context, feetX, feetY) : [feetX, feetY] as const))
   context.scale(scale, scale)
   context.lineJoin = "round"
   context.lineCap = "round"
   context.lineWidth = OUTLINE_WIDTH
   context.strokeStyle = OUTLINE
   drawLegs(context, person, build, pose, paintPart)
-  context.translate(...(spriteKey ? snapToPixel(context, pose.sway, pose.bounce) : [pose.sway, pose.bounce] as const))
+  context.translate(...(spriteKey ? snapToSubpixel(context, pose.sway, pose.bounce) : [pose.sway, pose.bounce] as const))
   withHeadTilt(() => paintPart("hairBack", HAIR_BACK_BOUNDS, (partContext) => drawHairBack(partContext, person)))
   paintPart("body", BODY_BOUNDS, (partContext) => {
     if (person.top === "hoodie") paintShape(partContext, person.topColor, ellipsePath(0, -47, 15, 6))
