@@ -6,6 +6,8 @@ type Sprite = { canvas: HTMLCanvasElement; layer: Context; scale: number }
 const SPRITE_PAD_PIXELS = 2
 const SUBPIXEL_STEPS = 4
 const MAX_SPRITES = 1200
+// Tilted sprites are resampled when pasted, so they are drawn sharper to stay crisp.
+const ROTATED_DETAIL = 2
 const sprites = new Map<string, Sprite>()
 
 const forgetSprite = (key: string, { canvas }: Sprite) => {
@@ -61,10 +63,10 @@ const placeOnGrid = (deviceStart: number, direction: number) => {
 
 export const paintSprite = (context: Context, key: string, anchorX: number, anchorY: number, bounds: SpriteBounds, draw: (layer: Context) => void) => {
   const { a, b, c, d, e, f } = context.getTransform()
-  const scale = Math.round(Math.hypot(a, b) * 1000) / 1000
+  const isGridAligned = b === 0 && c === 0 && Math.abs(a) === Math.abs(d)
+  const scale = Math.round(Math.hypot(a, b) * 1000) / 1000 * (isGridAligned ? 1 : ROTATED_DETAIL)
   const left = anchorX + bounds[0] - SPRITE_PAD_PIXELS / scale
   const top = anchorY + bounds[1] - SPRITE_PAD_PIXELS / scale
-  const isGridAligned = b === 0 && c === 0 && Math.abs(a) === Math.abs(d)
   const column = isGridAligned ? placeOnGrid(a * left + e, Math.sign(a)) : { origin: 0, shift: 0 }
   const row = isGridAligned ? placeOnGrid(d * top + f, Math.sign(d)) : { origin: 0, shift: 0 }
   const fullKey = `${key} ${scale} ${column.shift} ${row.shift} ${context.strokeStyle} ${context.lineWidth} ${context.lineJoin} ${context.lineCap}`
